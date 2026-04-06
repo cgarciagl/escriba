@@ -1,0 +1,23 @@
+# Compilación PyInstaller
+build/
+dist/
+*.spec.bak
+
+# Config generado en runtime
+config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
