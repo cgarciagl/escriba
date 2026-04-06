@@ -83,15 +83,23 @@ AI_ACTIONS = [
         "bootstyle": "secondary-outline",
     },
     {
+        "label":     "🌐  Traducir al español",
+        "prompt":    "Traduce el siguiente texto al español. "
+                     "Devuelve ÚNICAMENTE la traducción, sin explicaciones ni comentarios.",
+        "bootstyle": "warning-outline",
+    },
+    {
         "label":     "🗄️  Fix SQL",
         "prompt":    "Actúa como experto en bases de datos. Formatea la siguiente consulta SQL "
                      "con un Formato Compacto Estructurado y Seccionado. Solo devuelve el código SQL.",
         "bootstyle": "danger-outline",
+        "section":   "Para desarrolladores",
     },
     {
         "label":     "🔍  Explicar Código",
         "prompt":    "Analiza el siguiente código y explica su lógica paso a paso.",
         "bootstyle": "primary-outline",
+        "section":   "Para desarrolladores",
     },
 ]
 
@@ -578,7 +586,15 @@ class FloatingMenu:
                  font=("Segoe UI", 9, "italic"),
                  bootstyle="secondary", wraplength=285).pack(fill=X, pady=(0, 8))
 
+        current_section = None
         for action in AI_ACTIONS:
+            sec = action.get("section")
+            if sec and sec != current_section:
+                current_section = sec
+                tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(6, 2))
+                tb.Label(inner, text=sec,
+                         font=("Segoe UI", 8, "bold"),
+                         bootstyle="secondary").pack(anchor=W, pady=(0, 4))
             tb.Button(inner, text=action["label"],
                       bootstyle=action["bootstyle"], width=28,
                       command=lambda a=action: self._on_action(a, selected_text)
