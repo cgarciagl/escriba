@@ -109,7 +109,11 @@ class ConfigManager:
                     return json.load(f)
             except Exception:
                 pass
-        return {"api_key": "", "autostart": False}
+        # Primer arranque: crear config con autostart activado
+        default = {"api_key": "", "autostart": True}
+        ConfigManager.save(default)
+        StartupManager.enable()
+        return default
 
     @staticmethod
     def save(data: dict):
@@ -268,6 +272,36 @@ class GeminiClient:
                 last_error = f"{model}: {e}"
 
         raise RuntimeError(f"Error de API — {last_error}")
+
+
+# ─────────────────────────────────────────────────────────────
+# Cliente gratuito — Pollinations AI (sin API Key)
+# ─────────────────────────────────────────────────────────────────────────────
+class FreeAIClient:
+    _ENDPOINT = "https://text.pollinations.ai/"
+
+    @staticmethod
+    def generate(prompt: str, text: str) -> str:
+        full_prompt = f"{prompt}\n\n---\n\n{text}"
+        payload = {
+            "messages": [{"role": "user", "content": full_prompt}],
+            "model": "openai",
+            "private": True,
+        }
+        try:
+            r = requests.post(
+                FreeAIClient._ENDPOINT,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=60,
+            )
+            r.raise_for_status()
+            result = r.text.strip()
+            if not result:
+                raise RuntimeError("La respuesta fue vacía.")
+            return result
+        except Exception as e:
+            raise RuntimeError(f"Pollinations AI: {e}")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -530,7 +564,20 @@ class FloatingMenu:
 
     def _process(self, action: dict, text: str):
         try:
-            result = GeminiClient.generate(action["prompt"], text)
+            result = None
+            last_error = None
+            if ConfigManager.is_configured():
+                try:
+                    result = GeminiClient.generate(action["prompt"], text)
+                except Exception as e:
+                    last_error = str(e)
+            if result is None:
+                try:
+                    result = FreeAIClient.generate(action["prompt"], text)
+                except Exception as e:
+                    if last_error:
+                        raise RuntimeError(f"Gemini: {last_error} | Pollinations: {e}")
+                    raise
             self.app.root.after(0, self.app.tooltip.hide)
             self.app.root.after(0, lambda: ResultWindow(self.app, result, self._prev_hwnd))
         except Exception as e:
@@ -716,9 +763,8 @@ class EscribaApp:
         self._lock         = threading.Lock()
 
     def run(self):
-        if not ConfigManager.is_configured():
-            self.root.after(400, self.open_config)
-
+        # Garantiza que config.json existe desde el primer arranque
+        ConfigManager.load()
         self.tray.start()
         # El hotkey se registra DESPUÉS de que Tk haya creado la ventana
         self.root.after(500, self.hotkey.start)
@@ -745,10 +791,6 @@ class EscribaApp:
         if not self._lock.acquire(blocking=False):
             return
         try:
-            if not ConfigManager.is_configured():
-                self.root.after(0, self.open_config)
-                return
-
             # Guardar portapapeles actual
             old_clip = ""
             try:

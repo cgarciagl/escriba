@@ -26,9 +26,6 @@ a = Analysis(
         'setuptools', 'pkg_resources',
         'pygments', 'colorama',
         'pydoc_fork', 'pydoc',
-        'multiprocessing.pool',
-        'concurrent.futures',
-        'asyncio',
         'xmlrpc', 'ftplib', 'imaplib', 'smtplib', 'poplib',
         'sqlite3', 'bz2', 'lzma',
         # dependencias eliminadas del proyecto
