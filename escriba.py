@@ -468,6 +468,66 @@ class TooltipNotification:
 
 
 # ─────────────────────────────────────────────────────────────
+# Ventana de "Pensando…" con barra animada
+# ─────────────────────────────────────────────────────────────
+class ThinkingWindow:
+    def __init__(self, root: tb.Window, label: str):
+        self.root   = root
+        self.window = None
+        self._bar   = None
+        self.root.after(0, self._show, label)
+
+    def _show(self, label: str):
+        win = tb.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-alpha", 0.0)
+        self.window = win
+
+        outer = tb.Frame(win, bootstyle="dark", padding=2)
+        outer.pack(fill=BOTH, expand=True)
+        inner = tb.Frame(outer, padding=(18, 14))
+        inner.pack(fill=BOTH, expand=True)
+
+        tb.Label(inner, text=f"⚡ {APP_NAME}",
+                 font=("Segoe UI", 10, "bold"), bootstyle="info").pack(anchor=W)
+        tb.Label(inner, text=label,
+                 font=("Segoe UI", 10)).pack(anchor=W, pady=(4, 10))
+
+        bar = tb.Progressbar(inner, mode="indeterminate",
+                             bootstyle="info-striped", length=240)
+        bar.pack(fill=X)
+        bar.start(10)
+        self._bar = bar
+
+        win.update_idletasks()
+        sw = win.winfo_screenwidth()
+        sh = win.winfo_screenheight()
+        w  = win.winfo_reqwidth()
+        h  = win.winfo_reqheight()
+        win.geometry(f"+{sw - w - 22}+{sh - h - 110}")
+        self._fade_in(0.0)
+
+    def _fade_in(self, a):
+        if not self.window or not self.window.winfo_exists():
+            return
+        a = min(a + 0.15, 0.95)
+        self.window.attributes("-alpha", a)
+        if a < 0.95:
+            self.window.after(18, self._fade_in, a)
+
+    def close(self):
+        if self.window and self.window.winfo_exists():
+            if self._bar:
+                try:
+                    self._bar.stop()
+                except Exception:
+                    pass
+            self.window.destroy()
+        self.window = None
+
+
+# ─────────────────────────────────────────────────────────────
 # Menú Flotante de IA
 # ─────────────────────────────────────────────────────────────
 class FloatingMenu:
@@ -475,6 +535,7 @@ class FloatingMenu:
         self.app        = app
         self.window     = None
         self._prev_hwnd = None
+        self._thinking  = None
 
     def show(self, selected_text: str):
         self.hide()
@@ -559,10 +620,14 @@ class FloatingMenu:
 
     def _on_action(self, action: dict, text: str):
         self.hide()
-        self.app.tooltip.show(f"⏳ {action['label'].strip()}…", "info", 8000)
+        self._thinking = ThinkingWindow(self.app.root, f"{action['label'].strip()}…")
         threading.Thread(target=self._process, args=(action, text), daemon=True).start()
 
     def _process(self, action: dict, text: str):
+        def close_thinking():
+            if self._thinking:
+                self._thinking.close()
+                self._thinking = None
         try:
             result = None
             last_error = None
@@ -578,10 +643,10 @@ class FloatingMenu:
                     if last_error:
                         raise RuntimeError(f"Gemini: {last_error} | Pollinations: {e}")
                     raise
-            self.app.root.after(0, self.app.tooltip.hide)
+            self.app.root.after(0, close_thinking)
             self.app.root.after(0, lambda: ResultWindow(self.app, result, self._prev_hwnd))
         except Exception as e:
-            self.app.root.after(0, self.app.tooltip.hide)
+            self.app.root.after(0, close_thinking)
             self.app.root.after(0, self.app.tooltip.show,
                                 f"❌ {str(e)[:180]}", "danger", 6000)
 
