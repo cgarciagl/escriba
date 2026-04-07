@@ -416,12 +416,7 @@ class ConfigWindow:
 
     def _save(self):
         key = self.api_key_var.get().strip()
-        if not key:
-            self.status_var.set("⚠️  La API Key no puede estar vacía.")
-            self.status_lbl.configure(bootstyle="warning")
-            return
-
-        # Guardar API Key
+        # Permitir API Key vacía para configurar solo el autostart
         ConfigManager.set("api_key", key)
         GeminiClient._working_model = None  # forzar re-detección
 
