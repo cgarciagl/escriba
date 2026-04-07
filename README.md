@@ -1,4 +1,4 @@
-# ⚡ Escriba — Asistente de Texto con IA para Windows
+# ✍️ Escriba — Asistente de Texto con IA para Windows
 
 Asistente nativo que se ejecuta en segundo plano con ícono en la bandeja del sistema. Con solo presionar **Ctrl+Shift+Space** sobre cualquier texto seleccionado, muestra un menú flotante de acciones de IA. El resultado se presenta en una ventana editable con opción de sustituir el texto original o copiarlo al portapapeles.
 
