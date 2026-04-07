@@ -600,6 +600,12 @@ class FloatingMenu:
                       command=lambda a=action: self._on_action(a, selected_text)
                       ).pack(fill=X, pady=2, ipady=4)
 
+        tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(6, 2))
+        tb.Button(inner, text="✏️  Crea tu propio prompt",
+                  bootstyle="primary", width=28,
+                  command=lambda: self._on_custom_prompt(selected_text)
+                  ).pack(fill=X, pady=2, ipady=4)
+
         win.update_idletasks()
         w, h   = win.winfo_reqwidth(), win.winfo_reqheight()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
@@ -639,6 +645,10 @@ class FloatingMenu:
         self._thinking = ThinkingWindow(self.app.root, f"{action['label'].strip()}…")
         threading.Thread(target=self._process, args=(action, text), daemon=True).start()
 
+    def _on_custom_prompt(self, selected_text: str):
+        self.hide()
+        CustomPromptWindow(self.app, selected_text, self._prev_hwnd)
+
     def _process(self, action: dict, text: str):
         def close_thinking():
             if self._thinking:
@@ -661,6 +671,106 @@ class FloatingMenu:
                     raise
             self.app.root.after(0, close_thinking)
             self.app.root.after(0, lambda: ResultWindow(self.app, result, self._prev_hwnd))
+        except Exception as e:
+            self.app.root.after(0, close_thinking)
+            self.app.root.after(0, self.app.tooltip.show,
+                                f"❌ {str(e)[:180]}", "danger", 6000)
+
+
+# ─────────────────────────────────────────────────────────────
+# Ventana de Prompt Personalizado
+# ─────────────────────────────────────────────────────────────
+class CustomPromptWindow:
+    def __init__(self, app: "EscribaApp", selected_text: str, prev_hwnd):
+        self.app           = app
+        self.selected_text = selected_text
+        self.prev_hwnd     = prev_hwnd
+
+        win = tb.Toplevel(app.root)
+        win.title(f"{APP_NAME} — Prompt personalizado")
+        win.attributes("-topmost", True)
+        win.resizable(True, True)
+        self.window = win
+
+        win.update_idletasks()
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w, h = 520, 340
+        win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+        frame = tb.Frame(win, padding=(16, 12))
+        frame.pack(fill=BOTH, expand=True)
+
+        tb.Label(frame, text="✏️  Escribe tu prompt",
+                 font=("Segoe UI", 12, "bold"), bootstyle="info").pack(anchor=W, pady=(0, 4))
+
+        preview = selected_text[:75] + ("…" if len(selected_text) > 75 else "")
+        tb.Label(frame, text=f'Texto seleccionado: "{preview}"',
+                 font=("Segoe UI", 9, "italic"),
+                 bootstyle="secondary", wraplength=480).pack(anchor=W, pady=(0, 8))
+
+        tb.Separator(frame, bootstyle="info").pack(fill=X, pady=(0, 8))
+
+        btn_frame = tb.Frame(frame)
+        btn_frame.pack(side=BOTTOM, fill=X, pady=(8, 0))
+        tb.Button(btn_frame, text="🚀  Ejecutar",
+                  bootstyle="info",
+                  command=self._execute).pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
+        tb.Button(btn_frame, text="✕  Cancelar",
+                  bootstyle="danger-outline",
+                  command=win.destroy).pack(side=LEFT, expand=True, fill=X, ipady=4)
+
+        txt_frame = tb.Frame(frame)
+        txt_frame.pack(fill=BOTH, expand=True)
+
+        scrollbar = tb.Scrollbar(txt_frame, bootstyle="info-round")
+        scrollbar.pack(side=RIGHT, fill=Y)
+
+        self.prompt_widget = tk.Text(
+            txt_frame,
+            font=("Segoe UI", 10),
+            wrap=tk.WORD,
+            relief="flat",
+            padx=8, pady=8,
+            yscrollcommand=scrollbar.set,
+        )
+        self.prompt_widget.pack(fill=BOTH, expand=True)
+        scrollbar.config(command=self.prompt_widget.yview)
+        self.prompt_widget.focus_set()
+
+        win.bind("<Control-Return>", lambda e: self._execute())
+
+    def _execute(self):
+        custom_prompt = self.prompt_widget.get("1.0", tk.END).strip()
+        if not custom_prompt:
+            self.app.tooltip.show("⚠️ El prompt no puede estar vacío.", "warning")
+            return
+        self.window.destroy()
+        action = {"label": "✏️  Prompt personalizado", "prompt": custom_prompt}
+        thinking = ThinkingWindow(self.app.root, "✏️  Prompt personalizado…")
+        threading.Thread(
+            target=self._process, args=(action, thinking), daemon=True
+        ).start()
+
+    def _process(self, action: dict, thinking: ThinkingWindow):
+        def close_thinking():
+            thinking.close()
+        try:
+            result = None
+            last_error = None
+            if ConfigManager.is_configured():
+                try:
+                    result = GeminiClient.generate(action["prompt"], self.selected_text)
+                except Exception as e:
+                    last_error = str(e)
+            if result is None:
+                try:
+                    result = FreeAIClient.generate(action["prompt"], self.selected_text)
+                except Exception as e:
+                    if last_error:
+                        raise RuntimeError(f"Gemini: {last_error} | Pollinations: {e}")
+                    raise
+            self.app.root.after(0, close_thinking)
+            self.app.root.after(0, lambda: ResultWindow(self.app, result, self.prev_hwnd))
         except Exception as e:
             self.app.root.after(0, close_thinking)
             self.app.root.after(0, self.app.tooltip.show,
