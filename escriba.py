@@ -96,6 +96,12 @@ AI_ACTIONS = [
         "section":   "Para desarrolladores",
     },
     {
+        "label":     "⚙️  Refactorizar Código",
+        "prompt":    "Reescribe el siguiente código para aplicar principios de Clean Code. Mejora el nombrado de variables, reduce la anidación y optimiza la lógica sin alterar su funcionamiento original. Solo devuelve el código.",
+        "bootstyle": "info-outline",
+        "section":   "Para desarrolladores",
+    },    
+    {
         "label":     "🔍  Explicar Código",
         "prompt":    "Analiza el siguiente código y explica su lógica paso a paso.",
         "bootstyle": "primary-outline",
@@ -205,9 +211,15 @@ class HotkeyManager:
         self._hook    = None
 
     def start(self):
+        def _on_trigger():
+            # Liberar modificadores inmediatamente via API nativa antes
+            # de ceder el control al hilo, para evitar teclas "pegadas".
+            _release_modifiers()
+            threading.Thread(target=self.callback, daemon=True).start()
+
         self._hook = keyboard.add_hotkey(
             'ctrl+shift+space',
-            lambda: threading.Thread(target=self.callback, daemon=True).start(),
+            _on_trigger,
             suppress=True,
         )
 
@@ -223,11 +235,19 @@ class HotkeyManager:
 # ─────────────────────────────────────────────────────────────
 # Helpers de teclado
 # ─────────────────────────────────────────────────────────────
+_KEYEVENTF_KEYUP = 0x0002
+
+def _release_modifiers():
+    """Suelta Ctrl, Shift y Space via keybd_event (API nativa Windows).
+    Más fiable que keyboard.release() porque no pasa por el hook de la librería.
+    """
+    for vk in (0x11, 0x10, 0x20):  # VK_CONTROL, VK_SHIFT, VK_SPACE
+        ctypes.windll.user32.keybd_event(vk, 0, _KEYEVENTF_KEYUP, 0)
+
+
 def send_ctrl_c():
     """Suelta los modificadores del hotkey y envía Ctrl+C limpio."""
-    keyboard.release('ctrl')
-    keyboard.release('shift')
-    keyboard.release('space')
+    _release_modifiers()
     time.sleep(0.08)
     keyboard.send('ctrl+c')
 
@@ -938,6 +958,87 @@ class TrayIconManager:
 
 
 # ─────────────────────────────────────────────────────────────
+# Banner de bienvenida
+# ─────────────────────────────────────────────────────────────
+class SplashBanner:
+    """Pequeño banner esquina inferior-derecha que aparece al iniciar y se
+    desvanece solo tras `duration` ms.
+    """
+    _SHOW_MS  = 3800
+    _HOLD_MS  = 2800
+
+    def __init__(self, root: tb.Window):
+        self.root   = root
+        self.window = None
+        self.root.after(300, self._show)
+
+    def _show(self):
+        win = tb.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-alpha", 0.0)
+        self.window = win
+
+        # Contenedor con borde sutil
+        outer = tb.Frame(win, bootstyle="info", padding=2)
+        outer.pack(fill=BOTH, expand=True)
+        inner = tb.Frame(outer, padding=(18, 14, 18, 14))
+        inner.pack(fill=BOTH, expand=True)
+
+        # Icono + nombre
+        hdr = tb.Frame(inner)
+        hdr.pack(fill=X)
+        tb.Label(hdr, text="⚡",
+                 font=("Segoe UI", 22), bootstyle="info").pack(side=LEFT, padx=(0, 8))
+        title_frame = tb.Frame(hdr)
+        title_frame.pack(side=LEFT)
+        tb.Label(title_frame, text=APP_NAME,
+                 font=("Segoe UI", 16, "bold"), bootstyle="info").pack(anchor=W)
+        tb.Label(title_frame, text="Asistente de Texto con IA",
+                 font=("Segoe UI", 9), bootstyle="secondary").pack(anchor=W)
+
+        tb.Separator(inner, bootstyle="info").pack(fill=X, pady=(10, 8))
+
+        # Pista del atajo
+        hint = tb.Frame(inner)
+        hint.pack(fill=X)
+        tb.Label(hint, text="Atajo: ",
+                 font=("Segoe UI", 9), bootstyle="secondary").pack(side=LEFT)
+        tb.Label(hint, text="Ctrl + Shift + Space",
+                 font=("Consolas", 9, "bold"), bootstyle="info").pack(side=LEFT)
+
+        win.update_idletasks()
+        sw = win.winfo_screenwidth()
+        sh = win.winfo_screenheight()
+        w  = win.winfo_reqwidth()
+        h  = win.winfo_reqheight()
+        win.geometry(f"+{sw - w - 22}+{sh - h - 110}")
+
+        self._fade_in(0.0)
+        win.after(self._HOLD_MS, lambda: self._fade_out(0.95))
+
+    def _fade_in(self, a):
+        if not self.window or not self.window.winfo_exists():
+            return
+        a = min(a + 0.12, 0.95)
+        self.window.attributes("-alpha", a)
+        if a < 0.95:
+            self.window.after(18, self._fade_in, a)
+
+    def _fade_out(self, a):
+        if not self.window or not self.window.winfo_exists():
+            return
+        a = max(a - 0.07, 0.0)
+        self.window.attributes("-alpha", a)
+        if a > 0:
+            self.window.after(28, self._fade_out, a)
+        else:
+            if self.window and self.window.winfo_exists():
+                self.window.destroy()
+            self.window = None
+
+
+# ─────────────────────────────────────────────────────────────
 # Aplicación Principal
 # ─────────────────────────────────────────────────────────────
 class EscribaApp:
@@ -957,6 +1058,7 @@ class EscribaApp:
         # Garantiza que config.json existe desde el primer arranque
         ConfigManager.load()
         self.tray.start()
+        SplashBanner(self.root)
         # El hotkey se registra DESPUÉS de que Tk haya creado la ventana
         self.root.after(500, self.hotkey.start)
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
