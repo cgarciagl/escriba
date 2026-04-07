@@ -97,7 +97,7 @@ AI_ACTIONS = [
     },
     {
         "label":     "⚙️  Refactorizar Código",
-        "prompt":    "Reescribe el siguiente código para aplicar principios de Clean Code. Mejora el nombrado de variables, reduce la anidación y optimiza la lógica sin alterar su funcionamiento original. Solo devuelve el código.",
+        "prompt":    "Reescribe el siguiente código para aplicar principios de Clean Code. Mejora el nombrado de variables, reduce la anidación y optimiza la lógica sin alterar su funcionamiento original. Solo devuelve el código. No lo devuelvas en formato markdown.",
         "bootstyle": "info-outline",
         "section":   "Para desarrolladores",
     },    
@@ -588,43 +588,88 @@ class FloatingMenu:
 
         outer = tb.Frame(win, bootstyle="dark", padding=2)
         outer.pack(fill=BOTH, expand=True)
-        inner = tb.Frame(outer, padding=10)
+        inner = tb.Frame(outer, padding=(12, 10))
         inner.pack(fill=BOTH, expand=True)
 
-        # Header
+        # ── Header ─────────────────────────────────────────────────────
         hdr = tb.Frame(inner)
-        hdr.pack(fill=X, pady=(0, 6))
-        tb.Label(hdr, text=f"⚡ {APP_NAME}",
+        hdr.pack(fill=X, pady=(0, 4))
+
+        tb.Label(hdr, text="⚡", font=("Segoe UI", 13), bootstyle="info").pack(side=LEFT)
+        tb.Label(hdr, text=f" {APP_NAME}",
                  font=("Segoe UI", 11, "bold"), bootstyle="info").pack(side=LEFT)
+
+        word_count = len(selected_text.split())
+        char_count = len(selected_text.strip())
+        tb.Label(hdr, text=f"  {word_count} pal. · {char_count} car.",
+                 font=("Segoe UI", 8), bootstyle="secondary").pack(side=LEFT)
+
         tb.Button(hdr, text="✕", bootstyle="secondary-link",
-                  command=self.hide, width=3).pack(side=RIGHT)
+                  command=self.hide, width=2).pack(side=RIGHT)
 
-        tb.Separator(inner, bootstyle="info").pack(fill=X, pady=(0, 8))
+        tb.Separator(inner, bootstyle="info").pack(fill=X, pady=(4, 8))
 
-        preview = selected_text[:75] + ("…" if len(selected_text) > 75 else "")
-        tb.Label(inner, text=f'"{preview}"',
+        # ── Preview ────────────────────────────────────────────────────
+        preview = selected_text[:80] + ("…" if len(selected_text) > 80 else "")
+        prev_frame = tb.Frame(inner, padding=(8, 5))
+        prev_frame.pack(fill=X, pady=(0, 10))
+        tb.Label(prev_frame, text=f'"{preview}"',
                  font=("Segoe UI", 9, "italic"),
-                 bootstyle="secondary", wraplength=285).pack(fill=X, pady=(0, 8))
+                 bootstyle="secondary", wraplength=305).pack(fill=X)
 
-        current_section = None
-        for action in AI_ACTIONS:
-            sec = action.get("section")
-            if sec and sec != current_section:
-                current_section = sec
-                tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(6, 2))
-                tb.Label(inner, text=sec,
-                         font=("Segoe UI", 8, "bold"),
-                         bootstyle="secondary").pack(anchor=W, pady=(0, 4))
-            tb.Button(inner, text=action["label"],
-                      bootstyle=action["bootstyle"], width=28,
-                      command=lambda a=action: self._on_action(a, selected_text)
-                      ).pack(fill=X, pady=2, ipady=4)
+        # ── Acciones principales — grilla 2 columnas ───────────────────
+        main_actions = [a for a in AI_ACTIONS if not a.get("section")]
+        grid = tb.Frame(inner)
+        grid.pack(fill=X, pady=(0, 4))
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
 
-        tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(6, 2))
-        tb.Button(inner, text="✏️  Crea tu propio prompt",
-                  bootstyle="primary", width=28,
+        for i, action in enumerate(main_actions):
+            row, col = divmod(i, 2)
+            span = 2 if (i == len(main_actions) - 1 and len(main_actions) % 2 != 0) else 1
+            btn = tb.Button(grid, text=action["label"],
+                            bootstyle=action["bootstyle"],
+                            command=lambda a=action: self._on_action(a, selected_text))
+            btn.grid(row=row, column=col, columnspan=span, sticky="ew",
+                     padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=5)
+
+        # ── Sección Desarrolladores ────────────────────────────────────
+        dev_actions = [a for a in AI_ACTIONS if a.get("section")]
+        if dev_actions:
+            sections: dict = {}
+            for a in dev_actions:
+                sec = a.get("section", "")
+                sections.setdefault(sec, []).append(a)
+
+            for sec_name, sec_actions in sections.items():
+                tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(8, 5))
+                sec_hdr = tb.Frame(inner)
+                sec_hdr.pack(fill=X, pady=(0, 4))
+                tb.Label(sec_hdr, text="</>",
+                         font=("Consolas", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
+                tb.Label(sec_hdr, text=f"  {sec_name.upper()}",
+                         font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
+
+                dev_grid = tb.Frame(inner)
+                dev_grid.pack(fill=X)
+                dev_grid.columnconfigure(0, weight=1)
+                dev_grid.columnconfigure(1, weight=1)
+
+                for i, action in enumerate(sec_actions):
+                    row, col = divmod(i, 2)
+                    span = 2 if (i == len(sec_actions) - 1 and len(sec_actions) % 2 != 0) else 1
+                    btn = tb.Button(dev_grid, text=action["label"],
+                                    bootstyle=action["bootstyle"],
+                                    command=lambda a=action: self._on_action(a, selected_text))
+                    btn.grid(row=row, column=col, columnspan=span, sticky="ew",
+                             padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=4)
+
+        # ── Prompt personalizado ───────────────────────────────────────
+        tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(8, 5))
+        tb.Button(inner, text="✏️  Crear prompt personalizado",
+                  bootstyle="primary",
                   command=lambda: self._on_custom_prompt(selected_text)
-                  ).pack(fill=X, pady=2, ipady=4)
+                  ).pack(fill=X, pady=(0, 2), ipady=6)
 
         win.update_idletasks()
         w, h   = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -634,6 +679,7 @@ class FloatingMenu:
         win.geometry(f"+{x}+{y}")
 
         self._fade_in(0.0)
+        win.bind("<Escape>", lambda e: self.hide())
         win.bind("<FocusOut>", lambda e: win.after(220, self._check_focus))
         win.focus_force()
 
