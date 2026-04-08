@@ -15,9 +15,6 @@ __pycache__/
 venv/
 env/
 
-# VS Code
-.vscode/
-
 # Windows
 Thumbs.db
 desktop.ini
