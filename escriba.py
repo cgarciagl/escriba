@@ -90,8 +90,7 @@ AI_ACTIONS = [
     },
     {
         "label":     "🗄️  Fix SQL",
-        "prompt":    "Actúa como experto en bases de datos. Formatea la siguiente consulta SQL "
-                     "con un Formato Compacto Estructurado y Seccionado. Solo devuelve el código SQL.",
+        "prompt":    "Actúa como experto en bases de datos. Formatea la consulta, tratando de mantenerla compacta, pero separando bien las secciones de la consulta. Con un Formato Compacto Estructurado y Seccionado. Solo devuelve el código SQL. No lo devuelvas en formato markdown.",
         "bootstyle": "danger-outline",
         "section":   "Para desarrolladores",
     },
