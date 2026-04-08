@@ -718,9 +718,11 @@ class FloatingMenu:
         try:
             result = None
             last_error = None
+            used_gemini = False
             if ConfigManager.is_configured():
                 try:
                     result = GeminiClient.generate(action["prompt"], text)
+                    used_gemini = True
                 except Exception as e:
                     last_error = str(e)
             if result is None:
@@ -731,7 +733,10 @@ class FloatingMenu:
                         raise RuntimeError(f"Gemini: {last_error} | Pollinations: {e}")
                     raise
             self.app.root.after(0, close_thinking)
-            self.app.root.after(0, lambda: ResultWindow(self.app, result, self._prev_hwnd))
+            self.app.root.after(0, lambda: ResultWindow(
+                self.app, result, self._prev_hwnd,
+                prompt=action["prompt"], selected_text=text,
+                used_gemini=used_gemini))
         except Exception as e:
             self.app.root.after(0, close_thinking)
             self.app.root.after(0, self.app.tooltip.show,
@@ -818,9 +823,11 @@ class CustomPromptWindow:
         try:
             result = None
             last_error = None
+            used_gemini = False
             if ConfigManager.is_configured():
                 try:
                     result = GeminiClient.generate(action["prompt"], self.selected_text)
+                    used_gemini = True
                 except Exception as e:
                     last_error = str(e)
             if result is None:
@@ -831,7 +838,10 @@ class CustomPromptWindow:
                         raise RuntimeError(f"Gemini: {last_error} | Pollinations: {e}")
                     raise
             self.app.root.after(0, close_thinking)
-            self.app.root.after(0, lambda: ResultWindow(self.app, result, self.prev_hwnd))
+            self.app.root.after(0, lambda: ResultWindow(
+                self.app, result, self.prev_hwnd,
+                prompt=action["prompt"], selected_text=self.selected_text,
+                used_gemini=used_gemini))
         except Exception as e:
             self.app.root.after(0, close_thinking)
             self.app.root.after(0, self.app.tooltip.show,
@@ -842,10 +852,21 @@ class CustomPromptWindow:
 # Ventana de Resultado con botón Sustituir
 # ─────────────────────────────────────────────────────────────
 class ResultWindow:
-    def __init__(self, app: "EscribaApp", result: str, prev_hwnd):
-        self.app       = app
-        self.result    = result
-        self.prev_hwnd = prev_hwnd
+    _last_pollinations_ts: float = 0.0   # timestamp de la última llamada a Pollinations
+    _POLLINATIONS_COOLDOWN = 10          # segundos de espera entre regeneraciones
+
+    def __init__(self, app: "EscribaApp", result: str, prev_hwnd,
+                 prompt: str = "", selected_text: str = "",
+                 used_gemini: bool = False):
+        self.app           = app
+        self.result        = result
+        self.prev_hwnd     = prev_hwnd
+        self.prompt        = prompt
+        self.selected_text = selected_text
+        self.used_gemini   = used_gemini
+
+        if not used_gemini:
+            ResultWindow._last_pollinations_ts = time.time()
 
         win = tb.Toplevel(app.root)
         win.title(f"{APP_NAME} — Resultado")
@@ -882,12 +903,25 @@ class ResultWindow:
                   bootstyle="danger-outline",
                   command=win.destroy).pack(side=LEFT, expand=True, fill=X, ipady=4)
 
-        btn_top = tb.Frame(frame)
-        btn_top.pack(side=BOTTOM, fill=X, pady=(0, 6))
+        btn_mid = tb.Frame(frame)
+        btn_mid.pack(side=BOTTOM, fill=X, pady=(0, 6))
 
-        tb.Button(btn_top, text="⬅️  Sustituir texto seleccionado",
+        has_prompt = bool(self.prompt)
+        self._regen_btn = tb.Button(
+            btn_mid, text="🔄  Volver a generar",
+            bootstyle="warning" if has_prompt else "secondary",
+            command=self._regenerate if has_prompt else lambda: None,
+            state="normal" if has_prompt else "disabled",
+        )
+        self._regen_btn.pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
+
+        # Iniciar cooldown visual si la respuesta vino de Pollinations
+        if has_prompt and not used_gemini:
+            self._start_cooldown()
+
+        tb.Button(btn_mid, text="⬅️  Sustituir texto seleccionado",
                   bootstyle="info",
-                  command=self._replace).pack(fill=X, ipady=6)
+                  command=self._replace).pack(side=LEFT, expand=True, fill=X, ipady=4)
 
         # Área de texto editable — ocupa el espacio restante
         txt_frame = tb.Frame(frame)
@@ -942,6 +976,66 @@ class ResultWindow:
         except Exception as e:
             self.app.root.after(
                 0, lambda: self.app.tooltip.show(f"❌ Error al sustituir: {e}", "danger"))
+
+    def _start_cooldown(self):
+        """Deshabilita el botón regenerar y muestra cuenta regresiva."""
+        elapsed = time.time() - ResultWindow._last_pollinations_ts
+        remaining = self._POLLINATIONS_COOLDOWN - elapsed
+        if remaining <= 0:
+            return
+        self._regen_btn.configure(state="disabled")
+        self._tick_cooldown(remaining)
+
+    def _tick_cooldown(self, remaining: float):
+        if not self.window or not self.window.winfo_exists():
+            return
+        if remaining <= 0:
+            self._regen_btn.configure(
+                text="🔄  Volver a generar", state="normal", bootstyle="warning")
+            return
+        secs = int(remaining) + 1
+        self._regen_btn.configure(
+            text=f"🔄  Espera {secs}s…", bootstyle="secondary")
+        self.window.after(500, self._tick_cooldown, remaining - 0.5)
+
+    def _regenerate(self):
+        self.window.destroy()
+        thinking = ThinkingWindow(self.app.root, "🔄  Volver a generar…")
+        threading.Thread(
+            target=self._do_regenerate, args=(thinking,), daemon=True
+        ).start()
+
+    def _do_regenerate(self, thinking: ThinkingWindow):
+        def close_thinking():
+            thinking.close()
+        try:
+            result = None
+            last_error = None
+            used_gemini = False
+            # Forzar re-detección de modelo para evitar quedarnos en uno con error
+            GeminiClient._working_model = None
+            if ConfigManager.is_configured():
+                try:
+                    result = GeminiClient.generate(self.prompt, self.selected_text)
+                    used_gemini = True
+                except Exception as e:
+                    last_error = str(e)
+            if result is None:
+                try:
+                    result = FreeAIClient.generate(self.prompt, self.selected_text)
+                except Exception as e:
+                    if last_error:
+                        raise RuntimeError(f"Gemini: {last_error} | Pollinations: {e}")
+                    raise
+            self.app.root.after(0, close_thinking)
+            self.app.root.after(0, lambda: ResultWindow(
+                self.app, result, self.prev_hwnd,
+                prompt=self.prompt, selected_text=self.selected_text,
+                used_gemini=used_gemini))
+        except Exception as e:
+            self.app.root.after(0, close_thinking)
+            self.app.root.after(0, self.app.tooltip.show,
+                                f"❌ {str(e)[:180]}", "danger", 6000)
 
 
 # ─────────────────────────────────────────────────────────────
