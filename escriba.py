@@ -84,10 +84,18 @@ AI_ACTIONS = [
     },
     {
         "label":     "🌐  Traducir al español",
-        "prompt":    "Traduce el siguiente texto al español. "
-                     "Devuelve ÚNICAMENTE la traducción, sin explicaciones ni comentarios.",
+        "prompt":    "Tu tarea es traducir el siguiente texto al español. "
+                     "Devuelve ÚNICAMENTE el texto traducido, sin explicaciones, sin comentarios, sin aclaraciones. "
+                     "Solo la traducción exacta:\n\n",
         "bootstyle": "warning-outline",
     },
+    {
+        "label":     "🗽  Traducir al inglés",
+        "prompt":    "Your task is to translate the following text to English. "
+                     "Return ONLY the translated text, without explanations, without comments, without clarifications. "
+                     "Only the exact translation:\n\n",
+        "bootstyle": "warning-outline",
+    },    
     {
         "label":     "🗄️  Fix SQL",
         "prompt":    "Actúa como experto en bases de datos. Formatea la consulta, tratando de mantenerla compacta, pero separando bien las secciones de la consulta. Con un Formato Compacto Estructurado y Seccionado. Solo devuelve el código SQL. No lo devuelvas en formato markdown.",
