@@ -64,30 +64,43 @@ AI_ACTIONS = [
         "prompt":    "Reescribe el siguiente texto para mejorar su claridad y fluidez. "
                      "Devuelve ÚNICAMENTE el texto reescrito, sin explicaciones ni comentarios.",
         "bootstyle": "info-outline",
+        "section":   "Texto y Contenido",
     },
     {
         "label":     "💡  Explicar",
         "prompt":    "Explica de forma detallada pero concisa el siguiente texto. "
                      "Sé claro y estructurado.",
         "bootstyle": "warning-outline",
+        "section":   "Texto y Contenido",
     },
     {
         "label":     "📐  Extender",
-        "prompt":    "Amplía el siguiente texto de forma coherente aportando más detalles. "
+        "prompt":    "Amplía el siguiente texto de forma coherente. Pero sin alucinar ni inventar información. Solo extiende lo que ya está, sin cambiar el sentido original."
                      "Devuelve ÚNICAMENTE el texto extendido.",
         "bootstyle": "success-outline",
+        "section":   "Texto y Contenido",
     },
     {
         "label":     "📋  Resumir",
         "prompt":    "Genera un resumen ejecutivo del siguiente texto destacando los puntos clave.",
         "bootstyle": "secondary-outline",
+        "section":   "Texto y Contenido",
     },
+    {
+        "label":     "✉️  Mejorar Correo",
+        "prompt":    "Mejora el siguiente correo electrónico enfocándote en claridad, profesionalismo y tono adecuado. "
+                     "Mantén el contenido esencial y la intención original. "
+                     "Devuelve ÚNICAMENTE el correo mejorado, sin explicaciones ni comentarios.",
+        "bootstyle": "success-outline",
+        "section":   "Texto y Contenido",
+    },      
     {
         "label":     "🌐  Traducir al español",
         "prompt":    "Tu tarea es traducir el siguiente texto al español. "
                      "Devuelve ÚNICAMENTE el texto traducido, sin explicaciones, sin comentarios, sin aclaraciones. "
                      "Solo la traducción exacta:\n\n",
         "bootstyle": "warning-outline",
+        "section":   "Idiomas",
     },
     {
         "label":     "🗽  Traducir al inglés",
@@ -95,7 +108,8 @@ AI_ACTIONS = [
                      "Return ONLY the translated text, without explanations, without comments, without clarifications. "
                      "Only the exact translation:\n\n",
         "bootstyle": "warning-outline",
-    },    
+        "section":   "Idiomas",
+    },  
     {
         "label":     "🗄️  Fix SQL",
         "prompt":    "Actúa como experto en bases de datos. Formatea la consulta, tratando de mantenerla compacta, pero separando bien las secciones de la consulta. Con un Formato Compacto Estructurado y Seccionado. Solo devuelve el código SQL. No lo devuelvas en formato markdown.",
