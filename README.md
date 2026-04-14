@@ -16,7 +16,7 @@ Aplicación nativa de escritorio que proporciona asistencia de IA integrada dire
 - 📌 **Bandeja del sistema** — se ejecuta silenciosamente en segundo plano
 - ⚡ **Captura inteligente** — extrae el texto seleccionado sin dejar rastro en el portapapeles
 - 🚀 **Inicio automático** — Se añade a HKCU Run al primer arranque
-- 📦 **Compilado a .exe** — distribuzione lista para usar sin Python
+- 📦 **Compilado a .exe** — distribución lista para usar sin Python
 
 ## 🛠️ Stack Técnico
 
