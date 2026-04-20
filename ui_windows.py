@@ -193,7 +193,7 @@ class SplashBanner:
         hint.pack(fill=X)
         tb.Label(hint, text="Atajo: ",
                  font=("Segoe UI", 9), bootstyle="secondary").pack(side=LEFT)
-        tb.Label(hint, text="Ctrl + Shift + Space",
+        tb.Label(hint, text="Win + Alt + E",
                  font=("Consolas", 9, "bold"), bootstyle="info").pack(side=LEFT)
 
         win.update_idletasks()
@@ -282,7 +282,7 @@ class ConfigWindow:
         hotkey_frame.pack(fill=X, pady=(0, 14))
         tb.Label(hotkey_frame, text="Atajo global:",
                  font=("Segoe UI", 10, "bold")).pack(side=LEFT)
-        tb.Label(hotkey_frame, text="  Ctrl + Shift + Space",
+        tb.Label(hotkey_frame, text="  Win + Alt + E",
                  font=("Consolas", 10), bootstyle="info").pack(side=LEFT)
 
         # ── Arranque con Windows ─────────────────────────────
@@ -349,7 +349,7 @@ class FloatingMenu:
         if not selected_text.strip():
             self.app.tooltip.show(
                 "⚠️ No se detectó texto seleccionado.\n"
-                "Selecciona texto y usa Ctrl+Shift+Space.", "warning"
+                "Selecciona texto y usa Win+Alt+E.", "warning"
             )
             return
 

@@ -8,7 +8,7 @@ Aplicación nativa de escritorio que proporciona asistencia de IA integrada dire
 
 ## 🎯 Características
 
-- ⌨️ **Hotkey global** (`Ctrl+Shift+Space`) que funciona en cualquier aplicación
+- ⌨️ **Hotkey global** (`Win+Alt+E`) que funciona en cualquier aplicación
 - 🤖 **Seis acciones de IA**: reescribir, explicar, extender, resumir, fix SQL, analizar código
 - 📋 **Sin API Key requerida** — usa Pollinations AI gratis por defecto
 - 🔄 **Fallback automático** — intenta Gemini primero; si falla, usa Pollinations
@@ -67,7 +67,7 @@ No require API Key para funcionar. Pulsa con el botón derecho en el ícono de l
 ## ⌨️ Cómo Usar
 
 1. **Selecciona** cualquier texto en cualquier aplicación (navegador, editor, chat, etc.)
-2. **Presiona** `Ctrl+Shift+Space` — aparecerá un menú flotante junto al cursor
+2. **Presiona** `Win+Alt+E` — aparecerá un menú flotante junto al cursor
 3. **Elige** una de estas seis acciones:
    - ✍️ **Reescribir** — Mejora la claridad, fluidez y gramática
    - 💡 **Explicar** — Proporciona una explicación detallada pero concisa
@@ -121,7 +121,7 @@ escriba/
 ├── constants.py        # Constantes y rutas de la aplicación
 ├── config.py           # Gestor de persistencia de configuración
 ├── startup.py          # Gestor de inicio automático con Windows
-├── hotkey.py           # Captura del hotkey global (Ctrl+Shift+Space)
+├── hotkey.py           # Captura del hotkey global (Win+Alt+E)
 ├── tray.py             # Ícono y menú de bandeja del sistema
 ├── ui_windows.py       # Componentes UI (menú flotante, ventana config, etc.)
 ├── ai_clients.py       # Clientes de IA (Gemini, Pollinations, fallback)
@@ -161,7 +161,7 @@ Los cambios se aplican inmediatamente sin necesidad de reiniciar.
 ### Módulos principales
 
 - **`escriba.py`** — Clase `EscribaApp` que orquesta toda la aplicación. Gestiona el mainloop de Tkinter, la conexión entre hotkey y UI, y el ciclo de vida.
-- **`hotkey.py`** — `HotkeyManager` que registra el hotkey global `Ctrl+Shift+Space` sin permitir que la tecla filtre a otras aplicaciones.
+- **`hotkey.py`** — `HotkeyManager` que registra el hotkey global `Win+Alt+E` sin permitir que la tecla filtre a otras aplicaciones.
 - **`tray.py`** — `TrayIconManager` que crea y gestiona el ícono en la bandeja del sistema con menú contextual.
 - **`ui_windows.py`** — Componentes de interfaz: `FloatingMenu` (menú flotante), `ResultWindow` (ventana de resultados), `ConfigWindow` (diálogo de configuración).
 - **`ai_clients.py`** — Clientes HTTP para `GeminiClient` (Google) y `PollutionsClient` con lógica de fallback automático.
@@ -174,9 +174,9 @@ Los cambios se aplican inmediatamente sin necesidad de reiniciar.
 1. EscribaApp.run() inicia
 2. ConfigManager.load() lee config.json
 3. TrayIconManager.start() crea ícono en bandeja
-4. HotkeyManager.start() registra Ctrl+Shift+Space
+4. HotkeyManager.start() registra Win+Alt+E
 5. Espera presión del hotkey...
-6. Al presionar Ctrl+Shift+Space:
+6. Al presionar Win+Alt+E:
    └─ Captura texto del portapapeles vía Ctrl+C
    └─ Muestra FloatingMenu en posición del cursor
    └─ Usuario selecciona acción

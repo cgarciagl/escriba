@@ -63,7 +63,7 @@ class TrayIconManager:
         )
         self.icon = pystray.Icon(
             APP_NAME, image,
-            f"{APP_NAME} — Ctrl+Shift+Space para activar",
+            f"{APP_NAME} — Win+Alt+E para activar",
             menu,
         )
         threading.Thread(target=self.icon.run, daemon=True).start()

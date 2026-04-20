@@ -1,7 +1,7 @@
 """
 Escriba - Asistente de Texto con IA para Windows v2.1
 ======================================================
-Hotkey: Ctrl+Shift+Space
+Hotkey: Win+Alt+E
 - Registrado con `keyboard` library (suppress=True).
   Garantiza que la tecla NUNCA filtra a otras aplicaciones.
 
@@ -67,7 +67,7 @@ class EscribaApp:
         os._exit(0)
 
     def _on_hotkey(self):
-        """Ejecutado en hilo secundario al detectar Ctrl+Shift+Space."""
+        """Ejecutado en hilo secundario al detectar Win+Alt+E."""
         if not self._lock.acquire(blocking=False):
             return
         try:
