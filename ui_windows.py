@@ -19,6 +19,7 @@ from ttkbootstrap.constants import *
 
 import pyperclip
 
+import webbrowser
 from constants import APP_NAME, AI_ACTIONS
 from config import ConfigManager
 from startup import StartupManager
@@ -27,6 +28,45 @@ from hotkey import send_ctrl_v
 
 if TYPE_CHECKING:
     from escriba import EscribaApp
+
+
+# ─────────────────────────────────────────────────────────────
+# Helpers de UI
+# ─────────────────────────────────────────────────────────────
+def fade_window(window, target: float, step: float, interval: int = 18, on_done=None):
+    """Anima alpha de una ventana hacia target."""
+    if not window or not window.winfo_exists():
+        return
+    try:
+        current = float(window.attributes("-alpha"))
+        if step > 0:
+            new_alpha = min(current + step, target)
+        else:
+            new_alpha = max(current + step, target)
+        window.attributes("-alpha", new_alpha)
+        if (step > 0 and new_alpha < target) or (step < 0 and new_alpha > target):
+            window.after(interval, fade_window, window, target, step, interval, on_done)
+        elif on_done:
+            on_done()
+    except Exception:
+        pass
+
+
+def run_ai_action(app, prompt, text, prev_hwnd, thinking):
+    """Ejecuta una acción de IA en hilo secundario — reutilizable."""
+    def close():
+        thinking.close()
+    try:
+        result, used_gemini = generate_with_fallback(prompt, text)
+        app.root.after(0, close)
+        app.root.after(0, lambda: ResultWindow(
+            app, result, prev_hwnd,
+            prompt=prompt, selected_text=text,
+            used_gemini=used_gemini))
+    except Exception as e:
+        app.root.after(0, close)
+        app.root.after(0, app.tooltip.show,
+                       f"❌ {str(e)[:180]}", "danger", 6000)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -57,26 +97,9 @@ class TooltipNotification:
         sh  = win.winfo_screenheight()
         w   = win.winfo_reqwidth()
         win.geometry(f"+{sw - w - 22}+{sh - 110}")
-        self._fade_in(0.0)
-        win.after(duration, lambda: self._fade_out(0.95))
+        fade_window(win, 0.95, 0.15)
+        win.after(duration, lambda: fade_window(win, 0.0, -0.10, on_done=self.hide))
 
-    def _fade_in(self, a):
-        if not self.window or not self.window.winfo_exists():
-            return
-        a = min(a + 0.15, 0.95)
-        self.window.attributes("-alpha", a)
-        if a < 0.95:
-            self.window.after(18, self._fade_in, a)
-
-    def _fade_out(self, a):
-        if not self.window or not self.window.winfo_exists():
-            return
-        a = max(a - 0.10, 0.0)
-        self.window.attributes("-alpha", a)
-        if a > 0:
-            self.window.after(28, self._fade_out, a)
-        else:
-            self.hide()
 
     def hide(self):
         if self.window and self.window.winfo_exists():
@@ -125,15 +148,8 @@ class ThinkingWindow:
         w  = win.winfo_reqwidth()
         h  = win.winfo_reqheight()
         win.geometry(f"+{sw - w - 22}+{sh - h - 110}")
-        self._fade_in(0.0)
+        fade_window(win, 0.95, 0.15)
 
-    def _fade_in(self, a):
-        if not self.window or not self.window.winfo_exists():
-            return
-        a = min(a + 0.15, 0.95)
-        self.window.attributes("-alpha", a)
-        if a < 0.95:
-            self.window.after(18, self._fade_in, a)
 
     def close(self):
         if self.window and self.window.winfo_exists():
@@ -144,6 +160,7 @@ class ThinkingWindow:
                     pass
             self.window.destroy()
         self.window = None
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -203,28 +220,9 @@ class SplashBanner:
         h  = win.winfo_reqheight()
         win.geometry(f"+{sw - w - 22}+{sh - h - 110}")
 
-        self._fade_in(0.0)
-        win.after(self._HOLD_MS, lambda: self._fade_out(0.95))
+        fade_window(win, 0.95, 0.12)
+        win.after(self._HOLD_MS, lambda: fade_window(win, 0.0, -0.07, on_done=lambda: win.destroy() if win.winfo_exists() else None))
 
-    def _fade_in(self, a):
-        if not self.window or not self.window.winfo_exists():
-            return
-        a = min(a + 0.12, 0.95)
-        self.window.attributes("-alpha", a)
-        if a < 0.95:
-            self.window.after(18, self._fade_in, a)
-
-    def _fade_out(self, a):
-        if not self.window or not self.window.winfo_exists():
-            return
-        a = max(a - 0.07, 0.0)
-        self.window.attributes("-alpha", a)
-        if a > 0:
-            self.window.after(28, self._fade_out, a)
-        else:
-            if self.window and self.window.winfo_exists():
-                self.window.destroy()
-            self.window = None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -272,9 +270,11 @@ class ConfigWindow:
                              show="•", font=("Consolas", 11), bootstyle="info")
         key_entry.pack(fill=X, ipady=6, pady=(0, 6))
 
-        tb.Label(frame, text="Obtén tu clave en → https://aistudio.google.com/apikey",
+        url_label = tb.Label(frame, text="Obtén tu clave en → https://aistudio.google.com/apikey",
                  font=("Segoe UI", 9), bootstyle="secondary",
-                 cursor="hand2").pack(anchor=W, pady=(0, 20))
+                 cursor="hand2")
+        url_label.pack(anchor=W, pady=(0, 20))
+        url_label.bind("<Button-1>", lambda e: webbrowser.open("https://aistudio.google.com/apikey"))
 
         # ── Hotkey Info ──────────────────────────────────────
         tb.Separator(frame, bootstyle="secondary").pack(fill=X, pady=(0, 14))
@@ -396,8 +396,8 @@ class FloatingMenu:
                  font=("Segoe UI", 9, "italic"),
                  bootstyle="secondary", wraplength=305).pack(fill=X)
 
-        # ── Acciones principales — grilla 2 columnas ───────────────────
-        main_actions = [a for a in AI_ACTIONS if not a.get("section")]
+        # ── Acciones principales ───────────────────────────────────────
+        main_actions = [a for a in AI_ACTIONS if a.get("section") == "Texto y Contenido"]
         grid = tb.Frame(inner)
         grid.pack(fill=X, pady=(0, 4))
         grid.columnconfigure(0, weight=1)
@@ -412,8 +412,8 @@ class FloatingMenu:
             btn.grid(row=row, column=col, columnspan=span, sticky="ew",
                      padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=5)
 
-        # ── Secciones agrupadas ────────────────────────────────────
-        sectioned_actions = [a for a in AI_ACTIONS if a.get("section")]
+        # ── Secciones agrupadas (otras) ────────────────────────────────
+        sectioned_actions = [a for a in AI_ACTIONS if a.get("section") != "Texto y Contenido"]
         if sectioned_actions:
             sections: dict = {}
             for a in sectioned_actions:
@@ -457,18 +457,11 @@ class FloatingMenu:
         y = mouse_y + 14 if mouse_y + 14 + h < sh else mouse_y - h - 14
         win.geometry(f"+{x}+{y}")
 
-        self._fade_in(0.0)
+        fade_window(win, 0.97, 0.15)
         win.bind("<Escape>", lambda e: self.hide())
         win.bind("<FocusOut>", lambda e: win.after(220, self._check_focus))
         win.focus_force()
 
-    def _fade_in(self, a):
-        if not self.window or not self.window.winfo_exists():
-            return
-        a = min(a + 0.15, 0.97)
-        self.window.attributes("-alpha", a)
-        if a < 0.97:
-            self.window.after(18, self._fade_in, a)
 
     def _check_focus(self):
         if not self.window or not self.window.winfo_exists():
@@ -487,31 +480,17 @@ class FloatingMenu:
 
     def _on_action(self, action: dict, text: str):
         self.hide()
-        self._thinking = ThinkingWindow(self.app.root, f"{action['label'].strip()}…")
+        thinking = ThinkingWindow(self.app.root, f"{action['label'].strip()}…")
         threading.Thread(
-            target=self._process, args=(action, text), daemon=True
+            target=run_ai_action,
+            args=(self.app, action["prompt"], text, self._prev_hwnd, thinking),
+            daemon=True
         ).start()
 
     def _on_custom_prompt(self, selected_text: str):
         self.hide()
         CustomPromptWindow(self.app, selected_text, self._prev_hwnd)
 
-    def _process(self, action: dict, text: str):
-        def close_thinking():
-            if self._thinking:
-                self._thinking.close()
-                self._thinking = None
-        try:
-            result, used_gemini = generate_with_fallback(action["prompt"], text)
-            self.app.root.after(0, close_thinking)
-            self.app.root.after(0, lambda: ResultWindow(
-                self.app, result, self._prev_hwnd,
-                prompt=action["prompt"], selected_text=text,
-                used_gemini=used_gemini))
-        except Exception as e:
-            self.app.root.after(0, close_thinking)
-            self.app.root.after(0, self.app.tooltip.show,
-                                f"❌ {str(e)[:180]}", "danger", 6000)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -587,25 +566,11 @@ class CustomPromptWindow:
         action = {"label": "✏️  Prompt personalizado", "prompt": custom_prompt}
         thinking = ThinkingWindow(self.app.root, "✏️  Prompt personalizado…")
         threading.Thread(
-            target=self._process, args=(action, thinking), daemon=True
+            target=run_ai_action,
+            args=(self.app, action["prompt"], self.selected_text, self.prev_hwnd, thinking),
+            daemon=True
         ).start()
 
-    def _process(self, action: dict, thinking: ThinkingWindow):
-        def close_thinking():
-            thinking.close()
-        try:
-            result, used_gemini = generate_with_fallback(
-                action["prompt"], self.selected_text
-            )
-            self.app.root.after(0, close_thinking)
-            self.app.root.after(0, lambda: ResultWindow(
-                self.app, result, self.prev_hwnd,
-                prompt=action["prompt"], selected_text=self.selected_text,
-                used_gemini=used_gemini))
-        except Exception as e:
-            self.app.root.after(0, close_thinking)
-            self.app.root.after(0, self.app.tooltip.show,
-                                f"❌ {str(e)[:180]}", "danger", 6000)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -649,6 +614,11 @@ class ResultWindow:
         hdr.pack(fill=X, pady=(0, 8))
         tb.Label(hdr, text="✨ Texto generado",
                  font=("Segoe UI", 12, "bold"), bootstyle="info").pack(side=LEFT)
+
+        # Badge del backend
+        badge_text = "⚡ Gemini" if used_gemini else "🌐 Pollinations (gratuito)"
+        badge_style = "info" if used_gemini else "warning"
+        tb.Label(hdr, text=badge_text, font=("Segoe UI", 9), bootstyle=badge_style).pack(side=RIGHT)
 
         tb.Separator(frame, bootstyle="info").pack(fill=X, pady=(0, 10))
 
@@ -767,18 +737,4 @@ class ResultWindow:
         ).start()
 
     def _do_regenerate(self, thinking: ThinkingWindow):
-        def close_thinking():
-            thinking.close()
-        try:
-            result, used_gemini = generate_with_fallback(
-                self.prompt, self.selected_text, reset_model=True
-            )
-            self.app.root.after(0, close_thinking)
-            self.app.root.after(0, lambda: ResultWindow(
-                self.app, result, self.prev_hwnd,
-                prompt=self.prompt, selected_text=self.selected_text,
-                used_gemini=used_gemini))
-        except Exception as e:
-            self.app.root.after(0, close_thinking)
-            self.app.root.after(0, self.app.tooltip.show,
-                                f"❌ {str(e)[:180]}", "danger", 6000)
+        run_ai_action(self.app, self.prompt, self.selected_text, self.prev_hwnd, thinking)

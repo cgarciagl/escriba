@@ -12,34 +12,41 @@ from startup import StartupManager
 class ConfigManager:
     """Lee y escribe la configuración de la app en disco."""
 
-    @staticmethod
-    def load() -> dict:
+    _cache: dict | None = None
+
+    @classmethod
+    def load(cls) -> dict:
+        if cls._cache is not None:
+            return cls._cache
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    cls._cache = json.load(f)
+                    return cls._cache
             except Exception:
                 pass
         # Primer arranque: crear config con autostart activado
         default = {"api_key": "", "autostart": True}
-        ConfigManager.save(default)
+        cls.save(default)
         StartupManager.enable()
+        cls._cache = default
         return default
 
-    @staticmethod
-    def save(data: dict):
+    @classmethod
+    def save(cls, data: dict):
+        cls._cache = data
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-    @staticmethod
-    def get(key: str, default=None):
-        return ConfigManager.load().get(key, default)
+    @classmethod
+    def get(cls, key: str, default=None):
+        return cls.load().get(key, default)
 
-    @staticmethod
-    def set(key: str, value):
-        data = ConfigManager.load()
+    @classmethod
+    def set(cls, key: str, value):
+        data = cls.load()
         data[key] = value
-        ConfigManager.save(data)
+        cls.save(data)
 
     @staticmethod
     def get_api_key() -> str:

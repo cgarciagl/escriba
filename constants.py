@@ -56,7 +56,7 @@ AI_ACTIONS = [
     },
     {
         "label":     "📐  Extender",
-        "prompt":    "Amplía el siguiente texto de forma coherente. Pero sin alucinar ni inventar información. Solo extiende lo que ya está, sin cambiar el sentido original."
+        "prompt":    "Amplía el siguiente texto de forma coherente. Pero sin alucinar ni inventar información. Solo extiende lo que ya está, sin cambiar el sentido original. "
                      "Devuelve ÚNICAMENTE el texto extendido.",
         "bootstyle": "success-outline",
         "section":   "Texto y Contenido",

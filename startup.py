@@ -17,7 +17,9 @@ class StartupManager:
         """Ruta al ejecutable actual."""
         if getattr(sys, "frozen", False):
             return sys.executable
-        return f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+        # En desarrollo, apuntar a escriba.py
+        main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "escriba.py")
+        return f'"{sys.executable}" "{main_script}"'
 
     @staticmethod
     def is_enabled() -> bool:

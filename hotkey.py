@@ -68,6 +68,9 @@ class HotkeyManager:
         ok = ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_ID,
                                                   _MOD_WIN | _MOD_ALT, _VK_E)
         if not ok:
+            # Notificar error de registro (ej. puerto ocupado o combinación en uso)
+            if self.callback:
+                self.root.after(0, lambda: self.callback(error=True))
             return
 
         msg = ctypes.wintypes.MSG()

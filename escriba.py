@@ -1,5 +1,5 @@
 """
-Escriba - Asistente de Texto con IA para Windows v2.1
+Escriba - Asistente de Texto con IA para Windows v1.0.0
 ======================================================
 Hotkey: Win+Alt+E
 - Registrado con `keyboard` library (suppress=True).
@@ -66,8 +66,16 @@ class EscribaApp:
             pass
         os._exit(0)
 
-    def _on_hotkey(self):
+    def _on_hotkey(self, error=False):
         """Ejecutado en hilo secundario al detectar Win+Alt+E."""
+        if error:
+            self.tooltip.show(
+                "❌ Error: No se pudo registrar el atajo Win+Alt+E.\n"
+                "Es posible que otra aplicación lo esté usando.",
+                "danger", 6000
+            )
+            return
+
         if not self._lock.acquire(blocking=False):
             return
         try:
@@ -94,6 +102,13 @@ class EscribaApp:
                     selected = ""
 
             self.root.after(0, self.floating_menu.show, selected)
+
+            # Restaurar portapapeles original después de capturar
+            try:
+                if old_clip:
+                    pyperclip.copy(old_clip)
+            except Exception:
+                pass
         finally:
             self._lock.release()
 

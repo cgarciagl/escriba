@@ -36,7 +36,7 @@ class GeminiClient:
 
         last_error = "Sin modelos disponibles."
         for model in ordered:
-            url = f"{GEMINI_BASE}/{model}:generateContent?key={api_key}"
+            url = f"{GEMINI_BASE}/{model}:generateContent"
             payload = {
                 "contents": [{"parts": [{"text": f"{prompt}\n\n---\n\n{text}"}]}],
                 "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096},
@@ -45,7 +45,10 @@ class GeminiClient:
                 r = requests.post(
                     url,
                     json=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": api_key
+                    },
                     timeout=60,
                 )
                 if r.status_code == 404:
