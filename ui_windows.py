@@ -389,7 +389,7 @@ class FloatingMenu:
         shortcut = action.get("shortcut", "")
 
         frame = tk.Frame(parent, bg=_FM_CARD, cursor="hand2")
-        inner = tk.Frame(frame, bg=_FM_CARD, padx=10, pady=9)
+        inner = tk.Frame(frame, bg=_FM_CARD, padx=7, pady=6)
         inner.pack(fill=X)
 
         parts = action["label"].split("  ", 1)
@@ -455,22 +455,21 @@ class FloatingMenu:
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.0)
         win.configure(bg=_FM_BG)
-        # Defensa contra override del tema vapor en tk.Label
         win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
         win.option_add('*Label.background', _FM_BG, 'userDefault')
         win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
-        outer = tk.Frame(win, bg=_FM_BG, padx=16, pady=14)
+        outer = tk.Frame(win, bg=_FM_BG, padx=10, pady=8)
         outer.pack(fill=BOTH, expand=True)
 
         # ── Header ──────────────────────────────────────────────────────
         hdr = tk.Frame(outer, bg=_FM_BG)
-        hdr.pack(fill=X, pady=(0, 10))
+        hdr.pack(fill=X, pady=(0, 6))
 
-        badge_frame = tk.Frame(hdr, bg=_FM_ACCENT, padx=10, pady=8)
-        badge_frame.pack(side=LEFT, padx=(0, 12))
-        tk.Label(badge_frame, text="⚡︎", font=("Segoe UI", 16, "bold"),
+        badge_frame = tk.Frame(hdr, bg=_FM_ACCENT, padx=6, pady=4)
+        badge_frame.pack(side=LEFT, padx=(0, 8))
+        tk.Label(badge_frame, text="⚡︎", font=("Segoe UI", 14, "bold"),
                  bg=_FM_ACCENT, fg=_FM_BG).pack()
 
         title_col = tk.Frame(hdr, bg=_FM_BG)
@@ -488,14 +487,14 @@ class FloatingMenu:
         close_lbl.bind("<Button-1>", lambda e: self.hide())
 
         # ── Separator ────────────────────────────────────────────────────
-        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 12))
+        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 8))
 
         # ── Preview card ─────────────────────────────────────────────────
         preview = selected_text[:100] + ("…" if len(selected_text) > 100 else "")
         _PREVIEW_BG = "#0a0e1a"  # más oscuro que _FM_BG para destacar
         card_border = tk.Frame(outer, bg=_FM_ACCENT, padx=2, pady=2)
-        card_border.pack(fill=X, pady=(0, 14))
-        card_content = tk.Frame(card_border, bg=_PREVIEW_BG, padx=12, pady=10)
+        card_border.pack(fill=X, pady=(0, 8))
+        card_content = tk.Frame(card_border, bg=_PREVIEW_BG, padx=8, pady=6)
         card_content.pack(fill=BOTH, expand=True)
         sel_hdr = tk.Frame(card_content, bg=_PREVIEW_BG)
         sel_hdr.pack(fill=X, pady=(0, 4))
@@ -513,17 +512,17 @@ class FloatingMenu:
 
         for i, (sec_name, sec_actions) in enumerate(all_sections.items()):
             if i > 0:
-                tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(4, 12))
+                tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(2, 6))
 
             sec_row = tk.Frame(outer, bg=_FM_BG)
-            sec_row.pack(fill=X, pady=(0, 8))
+            sec_row.pack(fill=X, pady=(0, 4))
             tk.Label(sec_row, text=sec_name.upper(), font=("Segoe UI", 7, "bold"),
                      bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
             tk.Frame(sec_row, bg=_FM_SEP, height=1).pack(
                 side=LEFT, fill=X, expand=True, padx=(8, 0), pady=(4, 0))
 
             sec_grid = tk.Frame(outer, bg=_FM_BG)
-            sec_grid.pack(fill=X, pady=(0, 4))
+            sec_grid.pack(fill=X, pady=(0, 2))
             sec_grid.columnconfigure(0, weight=1)
             sec_grid.columnconfigure(1, weight=1)
 
@@ -533,10 +532,10 @@ class FloatingMenu:
                 btn = self._action_btn(sec_grid, action,
                                        lambda a=action: self._on_action(a, selected_text))
                 btn.grid(row=row, column=col, columnspan=span, sticky="ew",
-                         padx=(0, 4) if col == 0 else (4, 0), pady=3)
+                         padx=(0, 3) if col == 0 else (3, 0), pady=2)
 
         # ── CTA ──────────────────────────────────────────────────────────
-        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(8, 12))
+        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(6, 8))
 
         cta = tk.Frame(outer, bg=_FM_ACCENT, cursor="hand2")
         cta.pack(fill=X)
@@ -569,8 +568,8 @@ class FloatingMenu:
         win.update_idletasks()
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        x = mouse_x + 14 if mouse_x + 14 + w < sw else mouse_x - w - 14
-        y = mouse_y + 14 if mouse_y + 14 + h < sh else mouse_y - h - 14
+        x = (sw - w) // 2
+        y = (sh - h) // 2
         win.geometry(f"+{x}+{y}")
 
         fade_window(win, 0.96, 0.15)
