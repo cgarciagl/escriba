@@ -25,12 +25,11 @@ class ConfigManager:
                     return cls._cache
             except Exception:
                 pass
-        # Primer arranque: crear config con autostart activado
-        default = {"api_key": "", "autostart": True}
-        cls.save(default)
-        StartupManager.enable()
-        cls._cache = default
-        return default
+        # Primer arranque: crear config por defecto
+        default_config = {"api_key": "", "autostart": True}
+        cls.save(default_config)
+        cls._cache = default_config
+        return default_config
 
     @classmethod
     def save(cls, data: dict):

@@ -22,6 +22,7 @@ from ui_windows import (
 )
 from tray import TrayIconManager
 from hotkey import HotkeyManager, send_ctrl_c
+from startup import StartupManager
 
 
 # ─────────────────────────────────────────────────────────────
@@ -31,20 +32,25 @@ class EscribaApp:
     """Orquestador principal: conecta hotkey, tray, y ventanas UI."""
 
     def __init__(self):
-        self.root    = tb.Window(themename="vapor")
+        self.root = tb.Window(themename="vapor")
         self.root.title(APP_NAME)
         self.root.withdraw()
 
         self.config_window = ConfigWindow(self)
         self.floating_menu = FloatingMenu(self)
-        self.tooltip       = TooltipNotification(self.root)
-        self.tray          = TrayIconManager(self)
-        self.hotkey        = HotkeyManager(self.root, self._on_hotkey)
-        self._lock         = threading.Lock()
+        self.tooltip = TooltipNotification(self.root)
+        self.tray = TrayIconManager(self)
+        self.hotkey = HotkeyManager(self.root, self._on_hotkey)
+        self._lock = threading.Lock()
 
     def run(self):
         """Inicia la app: carga config, tray, hotkey y entra al mainloop."""
-        ConfigManager.load()
+        config = ConfigManager.load()
+        
+        # Orquestar arranque automático si está activado en config
+        if config.get("autostart"):
+            StartupManager.enable()
+            
         self.tray.start()
         SplashBanner(self.root)
         self.root.after(500, self.hotkey.start)
@@ -53,6 +59,10 @@ class EscribaApp:
 
     def open_config(self):
         self.config_window.show()
+
+    def schedule(self, callback, *args):
+        """Programa una tarea en el hilo principal de Tk (Law of Demeter)."""
+        self.root.after(0, callback, *args)
 
     def quit_app(self):
         self.hotkey.stop()
@@ -67,50 +77,53 @@ class EscribaApp:
         os._exit(0)
 
     def _on_hotkey(self, error=False):
-        """Ejecutado en hilo secundario al detectar Win+Alt+E."""
+        """Ejecutado al detectar el atajo global."""
         if error:
-            self.tooltip.show(
-                "❌ Error: No se pudo registrar el atajo Win+Alt+E.\n"
-                "Es posible que otra aplicación lo esté usando.",
-                "danger", 6000
-            )
+            self._notify_hotkey_error()
             return
 
         if not self._lock.acquire(blocking=False):
             return
         try:
-            old_clip = ""
-            try:
-                old_clip = pyperclip.paste()
-            except Exception:
-                pass
-
-            send_ctrl_c()
-            time.sleep(0.40)
-
-            try:
-                selected = pyperclip.paste()
-            except Exception:
-                selected = ""
-
-            if selected == old_clip:
-                send_ctrl_c()
-                time.sleep(0.35)
-                try:
-                    selected = pyperclip.paste()
-                except Exception:
-                    selected = ""
-
-            self.root.after(0, self.floating_menu.show, selected)
-
-            # Restaurar portapapeles original después de capturar
-            try:
-                if old_clip:
-                    pyperclip.copy(old_clip)
-            except Exception:
-                pass
+            selected = self._capture_selected_text()
+            self.schedule(self.floating_menu.show, selected)
         finally:
             self._lock.release()
+
+    def _notify_hotkey_error(self):
+        self.tooltip.show(
+            "❌ Error: No se pudo registrar el atajo Win+Alt+E.\n"
+            "Es posible que otra aplicación lo esté usando.",
+            "danger", 6000
+        )
+
+    def _capture_selected_text(self) -> str:
+        """Copia texto seleccionado y restaura portapapeles original."""
+        original_clip = self._safe_paste()
+        send_ctrl_c()
+        time.sleep(0.40)
+        selected = self._safe_paste()
+
+        if selected == original_clip:
+            send_ctrl_c()
+            time.sleep(0.35)
+            selected = self._safe_paste()
+
+        if original_clip:
+            self._safe_copy(original_clip)
+        return selected
+
+    def _safe_paste(self) -> str:
+        try:
+            return pyperclip.paste()
+        except Exception:
+            return ""
+
+    def _safe_copy(self, text: str):
+        try:
+            pyperclip.copy(text)
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────

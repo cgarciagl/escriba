@@ -21,7 +21,7 @@ class TrayIconManager:
     """Crea y gestiona el ícono en la bandeja del sistema."""
 
     def __init__(self, app: EscribaApp):
-        self.app  = app
+        self.app = app
         self.icon = None
 
     @staticmethod
@@ -36,7 +36,7 @@ class TrayIconManager:
                 pass
         # Fallback generado
         size = 64
-        img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
             [4, 4, 60, 60], radius=14,
@@ -48,17 +48,17 @@ class TrayIconManager:
 
     def start(self):
         image = self._build_image()
-        menu  = pystray.Menu(
+        menu = pystray.Menu(
             pystray.MenuItem(f"{APP_NAME} v{APP_VERSION}", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "⚙️  Configuración",
-                lambda icon, item: self.app.root.after(0, self.app.open_config),
+                lambda icon, item: self.app.schedule(self.app.open_config),
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "❌  Salir",
-                lambda icon, item: self.app.root.after(0, self.app.quit_app),
+                lambda icon, item: self.app.schedule(self.app.quit_app),
             ),
         )
         self.icon = pystray.Icon(

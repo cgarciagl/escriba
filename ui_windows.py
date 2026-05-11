@@ -52,21 +52,30 @@ def fade_window(window, target: float, step: float, interval: int = 18, on_done=
         pass
 
 
+def position_bottom_right(window, margin_x=22, margin_y=110):
+    """Posiciona la ventana en la esquina inferior derecha (DRY)."""
+    window.update_idletasks()
+    sw = window.winfo_screenwidth()
+    sh = window.winfo_screenheight()
+    w = window.winfo_reqwidth()
+    h = window.winfo_reqheight()
+    window.geometry(f"+{sw - w - margin_x}+{sh - h - margin_y}")
+
+
 def run_ai_action(app, prompt, text, prev_hwnd, thinking):
-    """Ejecuta una acción de IA en hilo secundario — reutilizable."""
+    """Ejecuta una acción de IA en hilo secundario."""
     def close():
         thinking.close()
     try:
         result, used_gemini = generate_with_fallback(prompt, text)
-        app.root.after(0, close)
-        app.root.after(0, lambda: ResultWindow(
+        app.schedule(close)
+        app.schedule(lambda: ResultWindow(
             app, result, prev_hwnd,
             prompt=prompt, selected_text=text,
             used_gemini=used_gemini))
     except Exception as e:
-        app.root.after(0, close)
-        app.root.after(0, app.tooltip.show,
-                       f"❌ {str(e)[:180]}", "danger", 6000)
+        app.schedule(close)
+        app.schedule(app.tooltip.show, f"❌ {str(e)[:180]}", "danger", 6000)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -93,10 +102,7 @@ class TooltipNotification:
                  wraplength=370, bootstyle=f"inverse-{style}").pack()
 
         win.update_idletasks()
-        sw  = win.winfo_screenwidth()
-        sh  = win.winfo_screenheight()
-        w   = win.winfo_reqwidth()
-        win.geometry(f"+{sw - w - 22}+{sh - 110}")
+        position_bottom_right(win, margin_y=110)
         fade_window(win, 0.95, 0.15)
         win.after(duration, lambda: fade_window(win, 0.0, -0.10, on_done=self.hide))
 
@@ -142,12 +148,7 @@ class ThinkingWindow:
         bar.start(10)
         self._bar = bar
 
-        win.update_idletasks()
-        sw = win.winfo_screenwidth()
-        sh = win.winfo_screenheight()
-        w  = win.winfo_reqwidth()
-        h  = win.winfo_reqheight()
-        win.geometry(f"+{sw - w - 22}+{sh - h - 110}")
+        position_bottom_right(win)
         fade_window(win, 0.95, 0.15)
 
 
@@ -167,11 +168,8 @@ class ThinkingWindow:
 # Banner de bienvenida
 # ─────────────────────────────────────────────────────────────
 class SplashBanner:
-    """Pequeño banner esquina inferior-derecha que aparece al iniciar y se
-    desvanece solo tras un tiempo.
-    """
-    _SHOW_MS  = 3800
-    _HOLD_MS  = 2800
+    """Banner de bienvenida en la esquina inferior-derecha."""
+    _HOLD_MS = 2800
 
     def __init__(self, root: tb.Window):
         self.root   = root
@@ -213,13 +211,7 @@ class SplashBanner:
         tb.Label(hint, text="Win + Alt + E",
                  font=("Consolas", 9, "bold"), bootstyle="info").pack(side=LEFT)
 
-        win.update_idletasks()
-        sw = win.winfo_screenwidth()
-        sh = win.winfo_screenheight()
-        w  = win.winfo_reqwidth()
-        h  = win.winfo_reqheight()
-        win.geometry(f"+{sw - w - 22}+{sh - h - 110}")
-
+        position_bottom_right(win)
         fade_window(win, 0.95, 0.12)
         win.after(self._HOLD_MS, lambda: fade_window(win, 0.0, -0.07, on_done=lambda: win.destroy() if win.winfo_exists() else None))
 
@@ -232,7 +224,7 @@ class ConfigWindow:
     """Formulario para API Key, autostart y configuración general."""
 
     def __init__(self, app: EscribaApp):
-        self.app    = app
+        self.app = app
         self.window = None
 
     def show(self):
@@ -314,8 +306,6 @@ class ConfigWindow:
     def _save(self):
         key = self.api_key_var.get().strip()
         ConfigManager.set("api_key", key)
-        GeminiClient._working_model = None  # forzar re-detección
-
         if self.autostart_var.get():
             StartupManager.enable()
         else:
@@ -339,10 +329,9 @@ class FloatingMenu:
     """Menú contextual con las acciones de IA sobre el texto seleccionado."""
 
     def __init__(self, app: EscribaApp):
-        self.app        = app
-        self.window     = None
+        self.app = app
+        self.window = None
         self._prev_hwnd = None
-        self._thinking  = None
 
     def show(self, selected_text: str):
         self.hide()
@@ -500,9 +489,9 @@ class CustomPromptWindow:
     """Permite al usuario escribir un prompt libre para aplicar al texto."""
 
     def __init__(self, app: EscribaApp, selected_text: str, prev_hwnd):
-        self.app           = app
+        self.app = app
         self.selected_text = selected_text
-        self.prev_hwnd     = prev_hwnd
+        self.prev_hwnd = prev_hwnd
 
         win = tb.Toplevel(app.root)
         win.title(f"{APP_NAME} — Prompt personalizado")
@@ -585,12 +574,12 @@ class ResultWindow:
     def __init__(self, app: EscribaApp, result: str, prev_hwnd,
                  prompt: str = "", selected_text: str = "",
                  used_gemini: bool = False):
-        self.app           = app
-        self.result        = result
-        self.prev_hwnd     = prev_hwnd
-        self.prompt        = prompt
+        self.app = app
+        self.result = result
+        self.prev_hwnd = prev_hwnd
+        self.prompt = prompt
         self.selected_text = selected_text
-        self.used_gemini   = used_gemini
+        self.used_gemini = used_gemini
 
         if not used_gemini:
             ResultWindow._last_pollinations_ts = time.time()
@@ -705,8 +694,7 @@ class ResultWindow:
             self.app.root.after(
                 0, lambda: self.app.tooltip.show("✅ Texto sustituido.", "success"))
         except Exception as e:
-            self.app.root.after(
-                0, lambda: self.app.tooltip.show(f"❌ Error al sustituir: {e}", "danger"))
+            self.app.schedule(lambda: self.app.tooltip.show(f"❌ Error al sustituir: {e}", "danger"))
 
     def _start_cooldown(self):
         """Deshabilita el botón regenerar y muestra cuenta regresiva."""

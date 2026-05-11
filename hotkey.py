@@ -20,8 +20,8 @@ def _release_modifiers():
     """Suelta Win y Alt via keybd_event (API nativa Windows).
     Más fiable que keyboard.release() porque no pasa por el hook de la librería.
     """
-    for vk in (0x5B, 0x5C, 0x12):  # VK_LWIN, VK_RWIN, VK_MENU (Alt)
-        ctypes.windll.user32.keybd_event(vk, 0, _KEYEVENTF_KEYUP, 0)
+    for virtual_key in (0x5B, 0x5C, 0x12):  # VK_LWIN, VK_RWIN, VK_MENU (Alt)
+        ctypes.windll.user32.keybd_event(virtual_key, 0, _KEYEVENTF_KEYUP, 0)
 
 
 def send_ctrl_c():
