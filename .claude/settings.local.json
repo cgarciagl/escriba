@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.py$|\\\\.json$\")",
+      "PowerShell(pyinstaller Escriba.spec --clean --noconfirm)",
+      "PowerShell(Start-Process \"C:\\\\Sistemas\\\\Repos\\\\escriba\\\\dist\\\\Escriba.exe\")"
+    ]
+  }
+}

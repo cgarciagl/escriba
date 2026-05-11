@@ -31,6 +31,19 @@ if TYPE_CHECKING:
 
 
 # ─────────────────────────────────────────────────────────────
+# Paleta FloatingMenu
+# ─────────────────────────────────────────────────────────────
+_FM_BG     = "#151a26"   # fondo principal
+_FM_CARD   = "#1e2436"   # fondo botón/card
+_FM_HOVER  = "#28304a"   # hover de botón
+_FM_ACCENT = "#f59e0b"   # ámbar acento
+_FM_TEXT   = "#e2e8f0"   # texto principal (blanco)
+_FM_MUTED  = "#64748b"   # texto secundario
+_FM_BADGE  = "#0f1320"   # fondo badge de atajo
+_FM_SEP    = "#252d42"   # línea separadora
+
+
+# ─────────────────────────────────────────────────────────────
 # Helpers de UI
 # ─────────────────────────────────────────────────────────────
 def fade_window(window, target: float, step: float, interval: int = 18, on_done=None):
@@ -90,16 +103,26 @@ class TooltipNotification:
 
     def show(self, message: str, style: str = "info", duration: int = 3500):
         self.hide()
-        win = tb.Toplevel(self.root)
+        win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.0)
+        win.configure(bg=_FM_BG)
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
-        frame = tb.Frame(win, bootstyle=style, padding=(16, 10))
-        frame.pack(fill=BOTH, expand=True)
-        tb.Label(frame, text=message, font=("Segoe UI", 10),
-                 wraplength=370, bootstyle=f"inverse-{style}").pack()
+        border_color = {
+            "info": _FM_ACCENT, "warning": "#f59e0b",
+            "danger": "#ef4444", "success": "#22c55e",
+        }.get(style, _FM_ACCENT)
+        outer = tk.Frame(win, bg=border_color, padx=2, pady=2)
+        outer.pack(fill=BOTH, expand=True)
+        inner = tk.Frame(outer, bg=_FM_BG, padx=14, pady=10)
+        inner.pack(fill=BOTH, expand=True)
+        tk.Label(inner, text=message, font=("Segoe UI", 10),
+                 bg=_FM_BG, fg=_FM_TEXT, wraplength=370, justify=LEFT).pack()
 
         win.update_idletasks()
         position_bottom_right(win, margin_y=110)
@@ -126,24 +149,35 @@ class ThinkingWindow:
         self.root.after(0, self._show, label)
 
     def _show(self, label: str):
-        win = tb.Toplevel(self.root)
+        win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.0)
+        win.configure(bg=_FM_BG)
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
-        outer = tb.Frame(win, bootstyle="dark", padding=2)
+        outer = tk.Frame(win, bg=_FM_ACCENT, padx=2, pady=2)
         outer.pack(fill=BOTH, expand=True)
-        inner = tb.Frame(outer, padding=(18, 14))
+        inner = tk.Frame(outer, bg=_FM_BG, padx=16, pady=12)
         inner.pack(fill=BOTH, expand=True)
 
-        tb.Label(inner, text=f"⚡ {APP_NAME}",
-                 font=("Segoe UI", 10, "bold"), bootstyle="info").pack(anchor=W)
-        tb.Label(inner, text=label,
-                 font=("Segoe UI", 10)).pack(anchor=W, pady=(4, 10))
+        hdr = tk.Frame(inner, bg=_FM_BG)
+        hdr.pack(fill=X, pady=(0, 6))
+        badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=6, pady=4)
+        badge.pack(side=LEFT, padx=(0, 8))
+        tk.Label(badge, text="⚡︎", font=("Segoe UI", 10, "bold"),
+                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+        tk.Label(hdr, text=APP_NAME, font=("Segoe UI", 10, "bold"),
+                 bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+
+        tk.Label(inner, text=label, font=("Segoe UI", 9),
+                 bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, pady=(0, 10))
 
         bar = tb.Progressbar(inner, mode="indeterminate",
-                             bootstyle="info-striped", length=240)
+                             bootstyle="warning-striped", length=240)
         bar.pack(fill=X)
         bar.start(10)
         self._bar = bar
@@ -177,43 +211,47 @@ class SplashBanner:
         self.root.after(300, self._show)
 
     def _show(self):
-        win = tb.Toplevel(self.root)
+        win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.0)
+        win.configure(bg=_FM_BG)
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
-        # Contenedor con borde sutil
-        outer = tb.Frame(win, bootstyle="info", padding=2)
+        outer = tk.Frame(win, bg=_FM_ACCENT, padx=2, pady=2)
         outer.pack(fill=BOTH, expand=True)
-        inner = tb.Frame(outer, padding=(18, 14, 18, 14))
+        inner = tk.Frame(outer, bg=_FM_BG, padx=18, pady=14)
         inner.pack(fill=BOTH, expand=True)
 
-        # Icono + nombre
-        hdr = tb.Frame(inner)
-        hdr.pack(fill=X)
-        tb.Label(hdr, text="⚡",
-                 font=("Segoe UI", 22), bootstyle="info").pack(side=LEFT, padx=(0, 8))
-        title_frame = tb.Frame(hdr)
-        title_frame.pack(side=LEFT)
-        tb.Label(title_frame, text=APP_NAME,
-                 font=("Segoe UI", 16, "bold"), bootstyle="info").pack(anchor=W)
-        tb.Label(title_frame, text="Asistente de Texto con IA",
-                 font=("Segoe UI", 9), bootstyle="secondary").pack(anchor=W)
+        hdr = tk.Frame(inner, bg=_FM_BG)
+        hdr.pack(fill=X, pady=(0, 10))
+        badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=12, pady=10)
+        badge.pack(side=LEFT, padx=(0, 12))
+        tk.Label(badge, text="⚡", font=("Segoe UI Emoji", 18),
+                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+        title_col = tk.Frame(hdr, bg=_FM_BG)
+        title_col.pack(side=LEFT)
+        tk.Label(title_col, text=APP_NAME,
+                 font=("Segoe UI", 16, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
+        tk.Label(title_col, text="Asistente de Texto con IA",
+                 font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
-        tb.Separator(inner, bootstyle="info").pack(fill=X, pady=(10, 8))
+        tk.Frame(inner, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 10))
 
-        # Pista del atajo
-        hint = tb.Frame(inner)
-        hint.pack(fill=X)
-        tb.Label(hint, text="Atajo: ",
-                 font=("Segoe UI", 9), bootstyle="secondary").pack(side=LEFT)
-        tb.Label(hint, text="Win + Alt + E",
-                 font=("Consolas", 9, "bold"), bootstyle="info").pack(side=LEFT)
+        hint_row = tk.Frame(inner, bg=_FM_BG)
+        hint_row.pack(fill=X)
+        tk.Label(hint_row, text="Atajo: ", font=("Segoe UI", 9),
+                 bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+        tk.Label(hint_row, text="Win + Alt + E",
+                 font=("Consolas", 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
 
         position_bottom_right(win)
         fade_window(win, 0.95, 0.12)
-        win.after(self._HOLD_MS, lambda: fade_window(win, 0.0, -0.07, on_done=lambda: win.destroy() if win.winfo_exists() else None))
+        win.after(self._HOLD_MS, lambda: fade_window(win, 0.0, -0.07,
+                  on_done=lambda: win.destroy() if win.winfo_exists() else None))
 
 
 
@@ -235,68 +273,81 @@ class ConfigWindow:
 
         win = tb.Toplevel(self.app.root)
         win.title(f"{APP_NAME} — Configuración")
-        win.geometry("520x580")
+        win.geometry("520x560")
         win.resizable(False, False)
         win.attributes("-topmost", True)
+        win.configure(bg=_FM_BG)
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         win.update_idletasks()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"+{(sw-520)//2}+{(sh-500)//2}")
         self.window = win
 
-        frame = tb.Frame(win, padding=(30, 24))
+        frame = tk.Frame(win, bg=_FM_BG, padx=30, pady=24)
         frame.pack(fill=BOTH, expand=True)
 
         # ── Header ──────────────────────────────────────────
-        tb.Label(frame, text=f"⚡ {APP_NAME}",
-                 font=("Segoe UI", 22, "bold"), bootstyle="info").pack(pady=(0, 4))
-        tb.Label(frame, text="Asistente de Texto con IA",
-                 font=("Segoe UI", 10), bootstyle="secondary").pack(pady=(0, 16))
-        tb.Separator(frame, bootstyle="info").pack(fill=X, pady=(0, 20))
+        hdr = tk.Frame(frame, bg=_FM_BG)
+        hdr.pack(fill=X, pady=(0, 4))
+        badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=10, pady=8)
+        badge.pack(side=LEFT, padx=(0, 12))
+        tk.Label(badge, text="⚡︎", font=("Segoe UI", 16, "bold"),
+                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+        title_col = tk.Frame(hdr, bg=_FM_BG)
+        title_col.pack(side=LEFT)
+        tk.Label(title_col, text=APP_NAME,
+                 font=("Segoe UI", 14, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
+        tk.Label(title_col, text="Configuración",
+                 font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(10, 20))
 
         # ── API Key ──────────────────────────────────────────
-        tb.Label(frame, text="API Key de Google Gemini",
-                 font=("Segoe UI", 11, "bold")).pack(anchor=W, pady=(0, 6))
+        tk.Label(frame, text="API Key de Google Gemini",
+                 font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 6))
 
         self.api_key_var = tk.StringVar(value=ConfigManager.get_api_key())
         key_entry = tb.Entry(frame, textvariable=self.api_key_var,
-                             show="•", font=("Consolas", 11), bootstyle="info")
+                             show="•", font=("Consolas", 11), bootstyle="warning")
         key_entry.pack(fill=X, ipady=6, pady=(0, 6))
 
-        url_label = tb.Label(frame, text="Obtén tu clave en → https://aistudio.google.com/apikey",
-                 font=("Segoe UI", 9), bootstyle="secondary",
-                 cursor="hand2")
+        url_label = tk.Label(frame,
+                             text="Obtén tu clave en → https://aistudio.google.com/apikey",
+                             font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
         url_label.pack(anchor=W, pady=(0, 20))
         url_label.bind("<Button-1>", lambda e: webbrowser.open("https://aistudio.google.com/apikey"))
 
         # ── Hotkey Info ──────────────────────────────────────
-        tb.Separator(frame, bootstyle="secondary").pack(fill=X, pady=(0, 14))
-        hotkey_frame = tb.Frame(frame)
-        hotkey_frame.pack(fill=X, pady=(0, 14))
-        tb.Label(hotkey_frame, text="Atajo global:",
-                 font=("Segoe UI", 10, "bold")).pack(side=LEFT)
-        tb.Label(hotkey_frame, text="  Win + Alt + E",
-                 font=("Consolas", 10), bootstyle="info").pack(side=LEFT)
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
+        hotkey_row = tk.Frame(frame, bg=_FM_BG)
+        hotkey_row.pack(fill=X, pady=(0, 14))
+        tk.Label(hotkey_row, text="Atajo global:  ",
+                 font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+        tk.Label(hotkey_row, text="Win + Alt + E",
+                 font=("Consolas", 10), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
 
         # ── Arranque con Windows ─────────────────────────────
-        tb.Separator(frame, bootstyle="secondary").pack(fill=X, pady=(0, 14))
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
         autostart_chk = tb.Checkbutton(
             frame,
             text="  Iniciar automáticamente con Windows",
             variable=self.autostart_var,
-            bootstyle="info-round-toggle",
+            bootstyle="warning-round-toggle",
         )
         autostart_chk.pack(anchor=W, pady=(0, 20))
 
         # ── Status label ─────────────────────────────────────
         self.status_var = tk.StringVar()
-        self.status_lbl = tb.Label(frame, textvariable=self.status_var,
-                                   font=("Segoe UI", 9), wraplength=460)
+        self.status_lbl = tk.Label(frame, textvariable=self.status_var,
+                                   font=("Segoe UI", 9), wraplength=460,
+                                   bg=_FM_BG, fg=_FM_MUTED)
         self.status_lbl.pack(anchor=W, pady=(0, 10))
 
         # ── Botón Guardar ────────────────────────────────────
         tb.Button(frame, text="💾  Guardar y Cerrar",
-                  bootstyle="info", width=26,
+                  bootstyle="warning", width=26,
                   command=self._save).pack()
 
         key_entry.focus_set()
@@ -313,7 +364,7 @@ class ConfigWindow:
         ConfigManager.set("autostart", self.autostart_var.get())
 
         self.status_var.set("✅  Configuración guardada correctamente.")
-        self.status_lbl.configure(bootstyle="success")
+        self.status_lbl.configure(fg=_FM_ACCENT)
         self.window.after(900, self._close)
 
     def _close(self):
@@ -333,6 +384,58 @@ class FloatingMenu:
         self.window = None
         self._prev_hwnd = None
 
+    def _action_btn(self, parent: tk.Widget, action: dict, cmd) -> tk.Frame:
+        """Card-style button: icono + texto + badge de atajo. El caller hace grid()."""
+        shortcut = action.get("shortcut", "")
+
+        frame = tk.Frame(parent, bg=_FM_CARD, cursor="hand2")
+        inner = tk.Frame(frame, bg=_FM_CARD, padx=10, pady=9)
+        inner.pack(fill=X)
+
+        parts = action["label"].split("  ", 1)
+        icon = parts[0].strip() if len(parts) == 2 else ""
+        text = parts[1].strip() if len(parts) == 2 else action["label"].strip()
+
+        icon_lbl = tk.Label(inner, text=icon, font=("Segoe UI Emoji", 12),
+                            bg=_FM_CARD, fg=_FM_ACCENT)
+        icon_lbl.pack(side=LEFT, padx=(0, 6))
+
+        text_lbl = tk.Label(inner, text=text, font=("Segoe UI", 9),
+                            bg=_FM_CARD, fg=_FM_TEXT, anchor=W)
+        text_lbl.pack(side=LEFT, fill=X, expand=True)
+
+        badge_clickable = []
+        if shortcut:
+            badge_f = tk.Frame(inner, bg=_FM_BADGE)
+            badge_f.pack(side=RIGHT)
+            badge_lbl = tk.Label(badge_f, text=shortcut, font=("Segoe UI", 7),
+                                 bg=_FM_BADGE, fg=_FM_MUTED, padx=5, pady=2)
+            badge_lbl.pack()
+            badge_clickable = [badge_f, badge_lbl]
+
+        card_ws = [frame, inner, icon_lbl, text_lbl]
+
+        def _enter(e):
+            mx, my = frame.winfo_pointerx(), frame.winfo_pointery()
+            rx, ry = frame.winfo_rootx(), frame.winfo_rooty()
+            if rx <= mx <= rx + frame.winfo_width() and ry <= my <= ry + frame.winfo_height():
+                for w in card_ws:
+                    w.configure(bg=_FM_HOVER)
+
+        def _leave(e):
+            mx, my = frame.winfo_pointerx(), frame.winfo_pointery()
+            rx, ry = frame.winfo_rootx(), frame.winfo_rooty()
+            if not (rx <= mx <= rx + frame.winfo_width() and ry <= my <= ry + frame.winfo_height()):
+                for w in card_ws:
+                    w.configure(bg=_FM_CARD)
+
+        for w in card_ws + badge_clickable:
+            w.bind("<Button-1>", lambda e, c=cmd: c())
+            w.bind("<Enter>", _enter)
+            w.bind("<Leave>", _leave)
+
+        return frame
+
     def show(self, selected_text: str):
         self.hide()
         if not selected_text.strip():
@@ -343,110 +446,134 @@ class FloatingMenu:
             return
 
         self._prev_hwnd = ctypes.windll.user32.GetForegroundWindow()
-
         point = ctypes.wintypes.POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
         mouse_x, mouse_y = point.x, point.y
 
-        win = tb.Toplevel(self.app.root)
+        win = tk.Toplevel(self.app.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.0)
+        win.configure(bg=_FM_BG)
+        # Defensa contra override del tema vapor en tk.Label
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
-        outer = tb.Frame(win, bootstyle="dark", padding=2)
+        outer = tk.Frame(win, bg=_FM_BG, padx=16, pady=14)
         outer.pack(fill=BOTH, expand=True)
-        inner = tb.Frame(outer, padding=(12, 10))
-        inner.pack(fill=BOTH, expand=True)
 
-        # ── Header ─────────────────────────────────────────────────────
-        hdr = tb.Frame(inner)
-        hdr.pack(fill=X, pady=(0, 4))
+        # ── Header ──────────────────────────────────────────────────────
+        hdr = tk.Frame(outer, bg=_FM_BG)
+        hdr.pack(fill=X, pady=(0, 10))
 
-        tb.Label(hdr, text="⚡", font=("Segoe UI", 13), bootstyle="info").pack(side=LEFT)
-        tb.Label(hdr, text=f" {APP_NAME}",
-                 font=("Segoe UI", 11, "bold"), bootstyle="info").pack(side=LEFT)
+        badge_frame = tk.Frame(hdr, bg=_FM_ACCENT, padx=10, pady=8)
+        badge_frame.pack(side=LEFT, padx=(0, 12))
+        tk.Label(badge_frame, text="⚡︎", font=("Segoe UI", 16, "bold"),
+                 bg=_FM_ACCENT, fg=_FM_BG).pack()
 
+        title_col = tk.Frame(hdr, bg=_FM_BG)
+        title_col.pack(side=LEFT, fill=Y, expand=True)
+        tk.Label(title_col, text=APP_NAME, font=("Segoe UI", 14, "bold"),
+                 bg=_FM_BG, fg=_FM_TEXT, anchor=W).pack(anchor=W)
         word_count = len(selected_text.split())
-        char_count = len(selected_text.strip())
-        tb.Label(hdr, text=f"  {word_count} pal. · {char_count} car.",
-                 font=("Segoe UI", 8), bootstyle="secondary").pack(side=LEFT)
+        char_count  = len(selected_text.strip())
+        tk.Label(title_col, text=f"{word_count} pal  ·  {char_count} car",
+                 font=("Segoe UI", 8), bg=_FM_BG, fg=_FM_MUTED, anchor=W).pack(anchor=W)
 
-        tb.Button(hdr, text="✕", bootstyle="secondary-link",
-                  command=self.hide, width=2).pack(side=RIGHT)
+        close_lbl = tk.Label(hdr, text="×", font=("Segoe UI", 16),
+                             bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
+        close_lbl.pack(side=RIGHT, anchor=N)
+        close_lbl.bind("<Button-1>", lambda e: self.hide())
 
-        tb.Separator(inner, bootstyle="info").pack(fill=X, pady=(4, 8))
+        # ── Separator ────────────────────────────────────────────────────
+        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 12))
 
-        # ── Preview ────────────────────────────────────────────────────
-        preview = selected_text[:80] + ("…" if len(selected_text) > 80 else "")
-        prev_frame = tb.Frame(inner, padding=(8, 5))
-        prev_frame.pack(fill=X, pady=(0, 10))
-        tb.Label(prev_frame, text=f'"{preview}"',
-                 font=("Segoe UI", 9, "italic"),
-                 bootstyle="secondary", wraplength=305).pack(fill=X)
+        # ── Preview card ─────────────────────────────────────────────────
+        preview = selected_text[:100] + ("…" if len(selected_text) > 100 else "")
+        _PREVIEW_BG = "#0a0e1a"  # más oscuro que _FM_BG para destacar
+        card_border = tk.Frame(outer, bg=_FM_ACCENT, padx=2, pady=2)
+        card_border.pack(fill=X, pady=(0, 14))
+        card_content = tk.Frame(card_border, bg=_PREVIEW_BG, padx=12, pady=10)
+        card_content.pack(fill=BOTH, expand=True)
+        sel_hdr = tk.Frame(card_content, bg=_PREVIEW_BG)
+        sel_hdr.pack(fill=X, pady=(0, 4))
+        tk.Label(sel_hdr, text="▤", font=("Segoe UI", 9, "bold"),
+                 bg=_PREVIEW_BG, fg=_FM_ACCENT).pack(side=LEFT, padx=(0, 6))
+        tk.Label(sel_hdr, text="SELECCIÓN", font=("Segoe UI", 8, "bold"),
+                 bg=_PREVIEW_BG, fg=_FM_ACCENT).pack(side=LEFT)
+        tk.Label(card_content, text=preview, font=("Consolas", 9),
+                 bg=_PREVIEW_BG, fg=_FM_TEXT, wraplength=310, justify=LEFT).pack(anchor=W)
 
-        # ── Acciones principales ───────────────────────────────────────
-        main_actions = [a for a in AI_ACTIONS if a.get("section") == "Texto y Contenido"]
-        grid = tb.Frame(inner)
-        grid.pack(fill=X, pady=(0, 4))
-        grid.columnconfigure(0, weight=1)
-        grid.columnconfigure(1, weight=1)
+        # ── Acciones por sección ──────────────────────────────────────────
+        all_sections: dict = {}
+        for a in AI_ACTIONS:
+            all_sections.setdefault(a.get("section", ""), []).append(a)
 
-        for i, action in enumerate(main_actions):
-            row, col = divmod(i, 2)
-            span = 2 if (i == len(main_actions) - 1 and len(main_actions) % 2 != 0) else 1
-            btn = tb.Button(grid, text=action["label"],
-                            bootstyle=action["bootstyle"],
-                            command=lambda a=action: self._on_action(a, selected_text))
-            btn.grid(row=row, column=col, columnspan=span, sticky="ew",
-                     padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=5)
+        for i, (sec_name, sec_actions) in enumerate(all_sections.items()):
+            if i > 0:
+                tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(4, 12))
 
-        # ── Secciones agrupadas (otras) ────────────────────────────────
-        sectioned_actions = [a for a in AI_ACTIONS if a.get("section") != "Texto y Contenido"]
-        if sectioned_actions:
-            sections: dict = {}
-            for a in sectioned_actions:
-                sec = a.get("section", "")
-                sections.setdefault(sec, []).append(a)
+            sec_row = tk.Frame(outer, bg=_FM_BG)
+            sec_row.pack(fill=X, pady=(0, 8))
+            tk.Label(sec_row, text=sec_name.upper(), font=("Segoe UI", 7, "bold"),
+                     bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+            tk.Frame(sec_row, bg=_FM_SEP, height=1).pack(
+                side=LEFT, fill=X, expand=True, padx=(8, 0), pady=(4, 0))
 
-            for sec_name, sec_actions in sections.items():
-                tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(8, 5))
-                sec_hdr = tb.Frame(inner)
-                sec_hdr.pack(fill=X, pady=(0, 4))
-                tb.Label(sec_hdr, text="</>",
-                         font=("Consolas", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
-                tb.Label(sec_hdr, text=f"  {sec_name.upper()}",
-                         font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
+            sec_grid = tk.Frame(outer, bg=_FM_BG)
+            sec_grid.pack(fill=X, pady=(0, 4))
+            sec_grid.columnconfigure(0, weight=1)
+            sec_grid.columnconfigure(1, weight=1)
 
-                dev_grid = tb.Frame(inner)
-                dev_grid.pack(fill=X)
-                dev_grid.columnconfigure(0, weight=1)
-                dev_grid.columnconfigure(1, weight=1)
+            for j, action in enumerate(sec_actions):
+                row, col = divmod(j, 2)
+                span = 2 if (j == len(sec_actions) - 1 and len(sec_actions) % 2 != 0) else 1
+                btn = self._action_btn(sec_grid, action,
+                                       lambda a=action: self._on_action(a, selected_text))
+                btn.grid(row=row, column=col, columnspan=span, sticky="ew",
+                         padx=(0, 4) if col == 0 else (4, 0), pady=3)
 
-                for i, action in enumerate(sec_actions):
-                    row, col = divmod(i, 2)
-                    span = 2 if (i == len(sec_actions) - 1 and len(sec_actions) % 2 != 0) else 1
-                    btn = tb.Button(dev_grid, text=action["label"],
-                                    bootstyle=action["bootstyle"],
-                                    command=lambda a=action: self._on_action(a, selected_text))
-                    btn.grid(row=row, column=col, columnspan=span, sticky="ew",
-                             padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=4)
+        # ── CTA ──────────────────────────────────────────────────────────
+        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(8, 12))
 
-        # ── Prompt personalizado ───────────────────────────────────────
-        tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(8, 5))
-        tb.Button(inner, text="✏️  Crear prompt personalizado",
-                  bootstyle="primary",
-                  command=lambda: self._on_custom_prompt(selected_text)
-                  ).pack(fill=X, pady=(0, 2), ipady=6)
+        cta = tk.Frame(outer, bg=_FM_ACCENT, cursor="hand2")
+        cta.pack(fill=X)
+        cta_inner = tk.Frame(cta, bg=_FM_ACCENT, padx=14, pady=11)
+        cta_inner.pack(fill=X)
+        cta_icon = tk.Label(cta_inner, text="✦", font=("Segoe UI Emoji", 11),
+                            bg=_FM_ACCENT, fg=_FM_BG)
+        cta_icon.pack(side=LEFT, padx=(0, 8))
+        cta_lbl = tk.Label(cta_inner, text="Crear prompt personalizado",
+                           font=("Segoe UI", 10, "bold"), bg=_FM_ACCENT, fg=_FM_BG)
+        cta_lbl.pack(side=LEFT)
+        cta_badge = tk.Frame(cta_inner, bg="#d18a0a")
+        cta_badge.pack(side=RIGHT)
+        cta_badge_lbl = tk.Label(cta_badge, text="Ctrl+K", font=("Segoe UI", 7, "bold"),
+                                 bg="#d18a0a", fg=_FM_BG, padx=6, pady=3)
+        cta_badge_lbl.pack()
+        cta_cmd = lambda: self._on_custom_prompt(selected_text)
+        for w in [cta, cta_inner, cta_icon, cta_lbl, cta_badge, cta_badge_lbl]:
+            w.bind("<Button-1>", lambda e: cta_cmd())
 
+        # ── Atajos de teclado ─────────────────────────────────────────────
+        for action in AI_ACTIONS:
+            key = action.get("shortcut_key", "")
+            if key:
+                win.bind(key, lambda e, a=action: self._on_action(a, selected_text))
+        win.bind("<Control-k>", lambda e: self._on_custom_prompt(selected_text))
+
+        # ── Posición y fade ───────────────────────────────────────────────
+        win.minsize(390, 100)
         win.update_idletasks()
-        w, h   = win.winfo_reqwidth(), win.winfo_reqheight()
+        w, h = win.winfo_reqwidth(), win.winfo_reqheight()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         x = mouse_x + 14 if mouse_x + 14 + w < sw else mouse_x - w - 14
         y = mouse_y + 14 if mouse_y + 14 + h < sh else mouse_y - h - 14
         win.geometry(f"+{x}+{y}")
 
-        fade_window(win, 0.97, 0.15)
+        fade_window(win, 0.96, 0.15)
         win.bind("<Escape>", lambda e: self.hide())
         win.bind("<FocusOut>", lambda e: win.after(220, self._check_focus))
         win.focus_force()
@@ -497,6 +624,10 @@ class CustomPromptWindow:
         win.title(f"{APP_NAME} — Prompt personalizado")
         win.attributes("-topmost", True)
         win.resizable(True, True)
+        win.configure(bg=_FM_BG)
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
         win.update_idletasks()
@@ -504,32 +635,32 @@ class CustomPromptWindow:
         w, h = 520, 340
         win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
 
-        frame = tb.Frame(win, padding=(16, 12))
+        frame = tk.Frame(win, bg=_FM_BG, padx=16, pady=12)
         frame.pack(fill=BOTH, expand=True)
 
-        tb.Label(frame, text="✏️  Escribe tu prompt",
-                 font=("Segoe UI", 12, "bold"), bootstyle="info").pack(anchor=W, pady=(0, 4))
+        tk.Label(frame, text="✦  Escribe tu prompt",
+                 font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 4))
 
         preview = selected_text[:75] + ("…" if len(selected_text) > 75 else "")
-        tb.Label(frame, text=f'Texto seleccionado: "{preview}"',
+        tk.Label(frame, text=f'Texto seleccionado: "{preview}"',
                  font=("Segoe UI", 9, "italic"),
-                 bootstyle="secondary", wraplength=480).pack(anchor=W, pady=(0, 8))
+                 bg=_FM_BG, fg=_FM_MUTED, wraplength=480).pack(anchor=W, pady=(0, 8))
 
-        tb.Separator(frame, bootstyle="info").pack(fill=X, pady=(0, 8))
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 8))
 
-        btn_frame = tb.Frame(frame)
+        btn_frame = tk.Frame(frame, bg=_FM_BG)
         btn_frame.pack(side=BOTTOM, fill=X, pady=(8, 0))
         tb.Button(btn_frame, text="🚀  Ejecutar",
-                  bootstyle="info",
+                  bootstyle="warning",
                   command=self._execute).pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
         tb.Button(btn_frame, text="✕  Cancelar",
-                  bootstyle="danger-outline",
+                  bootstyle="secondary-outline",
                   command=win.destroy).pack(side=LEFT, expand=True, fill=X, ipady=4)
 
-        txt_frame = tb.Frame(frame)
+        txt_frame = tk.Frame(frame, bg=_FM_BG)
         txt_frame.pack(fill=BOTH, expand=True)
 
-        scrollbar = tb.Scrollbar(txt_frame, bootstyle="info-round")
+        scrollbar = tb.Scrollbar(txt_frame, bootstyle="warning-round")
         scrollbar.pack(side=RIGHT, fill=Y)
 
         self.prompt_widget = tk.Text(
@@ -537,6 +668,8 @@ class CustomPromptWindow:
             font=("Segoe UI", 10),
             wrap=tk.WORD,
             relief="flat",
+            bg=_FM_CARD, fg=_FM_TEXT,
+            insertbackground=_FM_ACCENT,
             padx=8, pady=8,
             yscrollcommand=scrollbar.set,
         )
@@ -588,6 +721,10 @@ class ResultWindow:
         win.title(f"{APP_NAME} — Resultado")
         win.attributes("-topmost", True)
         win.resizable(True, True)
+        win.configure(bg=_FM_BG)
+        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
+        win.option_add('*Label.background', _FM_BG, 'userDefault')
+        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
         win.update_idletasks()
@@ -595,24 +732,28 @@ class ResultWindow:
         w, h = 580, 420
         win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
 
-        frame = tb.Frame(win, padding=(16, 12))
+        frame = tk.Frame(win, bg=_FM_BG, padx=16, pady=12)
         frame.pack(fill=BOTH, expand=True)
 
         # Header
-        hdr = tb.Frame(frame)
+        hdr = tk.Frame(frame, bg=_FM_BG)
         hdr.pack(fill=X, pady=(0, 8))
-        tb.Label(hdr, text="✨ Texto generado",
-                 font=("Segoe UI", 12, "bold"), bootstyle="info").pack(side=LEFT)
+        tk.Label(hdr, text="✦  Texto generado",
+                 font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
         # Badge del backend
-        badge_text = "⚡ Gemini" if used_gemini else "🌐 Pollinations (gratuito)"
-        badge_style = "info" if used_gemini else "warning"
-        tb.Label(hdr, text=badge_text, font=("Segoe UI", 9), bootstyle=badge_style).pack(side=RIGHT)
+        badge_text = "⚡ Gemini" if used_gemini else "🌐 Pollinations"
+        badge_bg = _FM_ACCENT if used_gemini else _FM_CARD
+        badge_fg = _FM_BG if used_gemini else _FM_MUTED
+        badge_f = tk.Frame(hdr, bg=badge_bg)
+        badge_f.pack(side=RIGHT)
+        tk.Label(badge_f, text=badge_text, font=("Segoe UI", 8),
+                 bg=badge_bg, fg=badge_fg, padx=7, pady=3).pack()
 
-        tb.Separator(frame, bootstyle="info").pack(fill=X, pady=(0, 10))
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 10))
 
         # Botones — se empaquetan primero con side=BOTTOM para garantizar visibilidad
-        btn_bot = tb.Frame(frame)
+        btn_bot = tk.Frame(frame, bg=_FM_BG)
         btn_bot.pack(side=BOTTOM, fill=X, pady=(6, 0))
 
         tb.Button(btn_bot, text="📋  Copiar al portapapeles",
@@ -623,7 +764,7 @@ class ResultWindow:
                   bootstyle="danger-outline",
                   command=win.destroy).pack(side=LEFT, expand=True, fill=X, ipady=4)
 
-        btn_mid = tb.Frame(frame)
+        btn_mid = tk.Frame(frame, bg=_FM_BG)
         btn_mid.pack(side=BOTTOM, fill=X, pady=(0, 6))
 
         has_prompt = bool(self.prompt)
@@ -639,14 +780,14 @@ class ResultWindow:
             self._start_cooldown()
 
         tb.Button(btn_mid, text="⬅️  Sustituir texto seleccionado",
-                  bootstyle="info",
+                  bootstyle="warning",
                   command=self._replace).pack(side=LEFT, expand=True, fill=X, ipady=4)
 
         # Área de texto editable
-        txt_frame = tb.Frame(frame)
+        txt_frame = tk.Frame(frame, bg=_FM_BG)
         txt_frame.pack(fill=BOTH, expand=True, pady=(0, 6))
 
-        scrollbar = tb.Scrollbar(txt_frame, bootstyle="info-round")
+        scrollbar = tb.Scrollbar(txt_frame, bootstyle="warning-round")
         scrollbar.pack(side=RIGHT, fill=Y)
 
         self.text_widget = tk.Text(
@@ -654,6 +795,8 @@ class ResultWindow:
             font=("Segoe UI", 10),
             wrap=tk.WORD,
             relief="flat",
+            bg=_FM_CARD, fg=_FM_TEXT,
+            insertbackground=_FM_ACCENT,
             padx=8, pady=8,
             yscrollcommand=scrollbar.set,
         )
