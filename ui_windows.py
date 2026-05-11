@@ -446,133 +446,106 @@ class FloatingMenu:
             return
 
         self._prev_hwnd = ctypes.windll.user32.GetForegroundWindow()
-        point = ctypes.wintypes.POINT()
-        ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
-        mouse_x, mouse_y = point.x, point.y
 
-        win = tk.Toplevel(self.app.root)
+        win = tb.Toplevel(self.app.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.0)
-        win.configure(bg=_FM_BG)
-        win.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
-        win.option_add('*Label.background', _FM_BG, 'userDefault')
-        win.option_add('*Frame.background', _FM_BG, 'userDefault')
         self.window = win
 
-        outer = tk.Frame(win, bg=_FM_BG, padx=10, pady=8)
+        outer = tb.Frame(win, bootstyle="dark", padding=2)
         outer.pack(fill=BOTH, expand=True)
+        inner = tb.Frame(outer, padding=(12, 10))
+        inner.pack(fill=BOTH, expand=True)
 
-        # ── Header ──────────────────────────────────────────────────────
-        hdr = tk.Frame(outer, bg=_FM_BG)
-        hdr.pack(fill=X, pady=(0, 6))
+        # ── Header ─────────────────────────────────────────────────────
+        hdr = tb.Frame(inner)
+        hdr.pack(fill=X, pady=(0, 4))
 
-        badge_frame = tk.Frame(hdr, bg=_FM_ACCENT, padx=6, pady=4)
-        badge_frame.pack(side=LEFT, padx=(0, 8))
-        tk.Label(badge_frame, text="⚡︎", font=("Segoe UI", 14, "bold"),
-                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+        tb.Label(hdr, text="⚡", font=("Segoe UI", 13), bootstyle="info").pack(side=LEFT)
+        tb.Label(hdr, text=f" {APP_NAME}",
+                 font=("Segoe UI", 11, "bold"), bootstyle="info").pack(side=LEFT)
 
-        title_col = tk.Frame(hdr, bg=_FM_BG)
-        title_col.pack(side=LEFT, fill=Y, expand=True)
-        tk.Label(title_col, text=APP_NAME, font=("Segoe UI", 14, "bold"),
-                 bg=_FM_BG, fg=_FM_TEXT, anchor=W).pack(anchor=W)
         word_count = len(selected_text.split())
-        char_count  = len(selected_text.strip())
-        tk.Label(title_col, text=f"{word_count} pal  ·  {char_count} car",
-                 font=("Segoe UI", 8), bg=_FM_BG, fg=_FM_MUTED, anchor=W).pack(anchor=W)
+        char_count = len(selected_text.strip())
+        tb.Label(hdr, text=f"  {word_count} pal. · {char_count} car.",
+                 font=("Segoe UI", 8), bootstyle="secondary").pack(side=LEFT)
 
-        close_lbl = tk.Label(hdr, text="×", font=("Segoe UI", 16),
-                             bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
-        close_lbl.pack(side=RIGHT, anchor=N)
-        close_lbl.bind("<Button-1>", lambda e: self.hide())
+        tb.Button(hdr, text="✕", bootstyle="secondary-link",
+                  command=self.hide, width=2).pack(side=RIGHT)
 
-        # ── Separator ────────────────────────────────────────────────────
-        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 8))
+        tb.Separator(inner, bootstyle="info").pack(fill=X, pady=(4, 8))
 
-        # ── Preview card ─────────────────────────────────────────────────
-        preview = selected_text[:100] + ("…" if len(selected_text) > 100 else "")
-        _PREVIEW_BG = "#0a0e1a"  # más oscuro que _FM_BG para destacar
-        card_border = tk.Frame(outer, bg=_FM_ACCENT, padx=2, pady=2)
-        card_border.pack(fill=X, pady=(0, 8))
-        card_content = tk.Frame(card_border, bg=_PREVIEW_BG, padx=8, pady=6)
-        card_content.pack(fill=BOTH, expand=True)
-        sel_hdr = tk.Frame(card_content, bg=_PREVIEW_BG)
-        sel_hdr.pack(fill=X, pady=(0, 4))
-        tk.Label(sel_hdr, text="▤", font=("Segoe UI", 9, "bold"),
-                 bg=_PREVIEW_BG, fg=_FM_ACCENT).pack(side=LEFT, padx=(0, 6))
-        tk.Label(sel_hdr, text="SELECCIÓN", font=("Segoe UI", 8, "bold"),
-                 bg=_PREVIEW_BG, fg=_FM_ACCENT).pack(side=LEFT)
-        tk.Label(card_content, text=preview, font=("Consolas", 9),
-                 bg=_PREVIEW_BG, fg=_FM_TEXT, wraplength=310, justify=LEFT).pack(anchor=W)
+        # ── Preview ────────────────────────────────────────────────────
+        preview = selected_text[:80] + ("…" if len(selected_text) > 80 else "")
+        prev_frame = tb.Frame(inner, padding=(8, 5))
+        prev_frame.pack(fill=X, pady=(0, 10))
+        tb.Label(prev_frame, text=f'"{preview}"',
+                 font=("Segoe UI", 9, "italic"),
+                 bootstyle="secondary", wraplength=305).pack(fill=X)
 
-        # ── Acciones por sección ──────────────────────────────────────────
-        all_sections: dict = {}
-        for a in AI_ACTIONS:
-            all_sections.setdefault(a.get("section", ""), []).append(a)
+        # ── Acciones principales ───────────────────────────────────────
+        main_actions = [a for a in AI_ACTIONS if a.get("section") == "Texto y Contenido"]
+        grid = tb.Frame(inner)
+        grid.pack(fill=X, pady=(0, 4))
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
 
-        for i, (sec_name, sec_actions) in enumerate(all_sections.items()):
-            if i > 0:
-                tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(2, 6))
+        for i, action in enumerate(main_actions):
+            row, col = divmod(i, 2)
+            span = 2 if (i == len(main_actions) - 1 and len(main_actions) % 2 != 0) else 1
+            btn = tb.Button(grid, text=action["label"],
+                            bootstyle=action["bootstyle"],
+                            command=lambda a=action: self._on_action(a, selected_text))
+            btn.grid(row=row, column=col, columnspan=span, sticky="ew",
+                     padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=5)
 
-            sec_row = tk.Frame(outer, bg=_FM_BG)
-            sec_row.pack(fill=X, pady=(0, 4))
-            tk.Label(sec_row, text=sec_name.upper(), font=("Segoe UI", 7, "bold"),
-                     bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
-            tk.Frame(sec_row, bg=_FM_SEP, height=1).pack(
-                side=LEFT, fill=X, expand=True, padx=(8, 0), pady=(4, 0))
+        # ── Secciones agrupadas (otras) ────────────────────────────────
+        sectioned_actions = [a for a in AI_ACTIONS if a.get("section") != "Texto y Contenido"]
+        if sectioned_actions:
+            sections: dict = {}
+            for a in sectioned_actions:
+                sec = a.get("section", "")
+                sections.setdefault(sec, []).append(a)
 
-            sec_grid = tk.Frame(outer, bg=_FM_BG)
-            sec_grid.pack(fill=X, pady=(0, 2))
-            sec_grid.columnconfigure(0, weight=1)
-            sec_grid.columnconfigure(1, weight=1)
+            for sec_name, sec_actions in sections.items():
+                tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(8, 5))
+                sec_hdr = tb.Frame(inner)
+                sec_hdr.pack(fill=X, pady=(0, 4))
+                tb.Label(sec_hdr, text="</>",
+                         font=("Consolas", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
+                tb.Label(sec_hdr, text=f"  {sec_name.upper()}",
+                         font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
 
-            for j, action in enumerate(sec_actions):
-                row, col = divmod(j, 2)
-                span = 2 if (j == len(sec_actions) - 1 and len(sec_actions) % 2 != 0) else 1
-                btn = self._action_btn(sec_grid, action,
-                                       lambda a=action: self._on_action(a, selected_text))
-                btn.grid(row=row, column=col, columnspan=span, sticky="ew",
-                         padx=(0, 3) if col == 0 else (3, 0), pady=2)
+                dev_grid = tb.Frame(inner)
+                dev_grid.pack(fill=X)
+                dev_grid.columnconfigure(0, weight=1)
+                dev_grid.columnconfigure(1, weight=1)
 
-        # ── CTA ──────────────────────────────────────────────────────────
-        tk.Frame(outer, bg=_FM_SEP, height=1).pack(fill=X, pady=(6, 8))
+                for i, action in enumerate(sec_actions):
+                    row, col = divmod(i, 2)
+                    span = 2 if (i == len(sec_actions) - 1 and len(sec_actions) % 2 != 0) else 1
+                    btn = tb.Button(dev_grid, text=action["label"],
+                                    bootstyle=action["bootstyle"],
+                                    command=lambda a=action: self._on_action(a, selected_text))
+                    btn.grid(row=row, column=col, columnspan=span, sticky="ew",
+                             padx=(0, 2) if col == 0 else (2, 0), pady=2, ipady=4)
 
-        cta = tk.Frame(outer, bg=_FM_ACCENT, cursor="hand2")
-        cta.pack(fill=X)
-        cta_inner = tk.Frame(cta, bg=_FM_ACCENT, padx=14, pady=11)
-        cta_inner.pack(fill=X)
-        cta_icon = tk.Label(cta_inner, text="✦", font=("Segoe UI Emoji", 11),
-                            bg=_FM_ACCENT, fg=_FM_BG)
-        cta_icon.pack(side=LEFT, padx=(0, 8))
-        cta_lbl = tk.Label(cta_inner, text="Crear prompt personalizado",
-                           font=("Segoe UI", 10, "bold"), bg=_FM_ACCENT, fg=_FM_BG)
-        cta_lbl.pack(side=LEFT)
-        cta_badge = tk.Frame(cta_inner, bg="#d18a0a")
-        cta_badge.pack(side=RIGHT)
-        cta_badge_lbl = tk.Label(cta_badge, text="Ctrl+K", font=("Segoe UI", 7, "bold"),
-                                 bg="#d18a0a", fg=_FM_BG, padx=6, pady=3)
-        cta_badge_lbl.pack()
-        cta_cmd = lambda: self._on_custom_prompt(selected_text)
-        for w in [cta, cta_inner, cta_icon, cta_lbl, cta_badge, cta_badge_lbl]:
-            w.bind("<Button-1>", lambda e: cta_cmd())
+        # ── Prompt personalizado ───────────────────────────────────────
+        tb.Separator(inner, bootstyle="secondary").pack(fill=X, pady=(8, 5))
+        tb.Button(inner, text="✏️  Crear prompt personalizado",
+                  bootstyle="primary",
+                  command=lambda: self._on_custom_prompt(selected_text)
+                  ).pack(fill=X, pady=(0, 2), ipady=6)
 
-        # ── Atajos de teclado ─────────────────────────────────────────────
-        for action in AI_ACTIONS:
-            key = action.get("shortcut_key", "")
-            if key:
-                win.bind(key, lambda e, a=action: self._on_action(a, selected_text))
-        win.bind("<Control-k>", lambda e: self._on_custom_prompt(selected_text))
-
-        # ── Posición y fade ───────────────────────────────────────────────
-        win.minsize(390, 100)
         win.update_idletasks()
-        w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+        w, h   = win.winfo_reqwidth(), win.winfo_reqheight()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         x = (sw - w) // 2
         y = (sh - h) // 2
         win.geometry(f"+{x}+{y}")
 
-        fade_window(win, 0.96, 0.15)
+        fade_window(win, 0.97, 0.15)
         win.bind("<Escape>", lambda e: self.hide())
         win.bind("<FocusOut>", lambda e: win.after(220, self._check_focus))
         win.focus_force()
