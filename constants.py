@@ -25,15 +25,10 @@ STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 # ─────────────────────────────────────────────────────────────
-# Modelos Gemini en orden de preferencia
+# OpenRouter API
 # ─────────────────────────────────────────────────────────────
-GEMINI_MODELS = [
-    "gemini-3.1-flash-lite-preview",   # Más nuevo, bajo costo, baja latencia
-    "gemini-3-flash-preview",          # Alto rendimiento, velocidad + inteligencia
-    "gemini-2.5-flash",                # Estable, rápido, alto volumen
-    "gemini-2.5-flash-lite",           # Estable, ultra-eficiente
-]
-GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+OPENROUTER_BASE          = "https://openrouter.ai/api/v1"
+OPENROUTER_DEFAULT_MODEL = "openrouter/free"
 
 
 # ─────────────────────────────────────────────────────────────

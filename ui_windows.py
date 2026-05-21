@@ -23,7 +23,7 @@ import webbrowser
 from constants import APP_NAME, AI_ACTIONS
 from config import ConfigManager
 from startup import StartupManager
-from ai_clients import GeminiClient, generate_with_fallback
+from ai_clients import generate_with_fallback
 from hotkey import send_ctrl_v
 
 if TYPE_CHECKING:
@@ -80,12 +80,12 @@ def run_ai_action(app, prompt, text, prev_hwnd, thinking):
     def close():
         thinking.close()
     try:
-        result, used_gemini = generate_with_fallback(prompt, text)
+        result, used_openrouter = generate_with_fallback(prompt, text)
         app.schedule(close)
         app.schedule(lambda: ResultWindow(
             app, result, prev_hwnd,
             prompt=prompt, selected_text=text,
-            used_gemini=used_gemini))
+            used_openrouter=used_openrouter))
     except Exception as e:
         app.schedule(close)
         app.schedule(app.tooltip.show, f"❌ {str(e)[:180]}", "danger", 6000)
@@ -304,7 +304,7 @@ class ConfigWindow:
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(10, 20))
 
         # ── API Key ──────────────────────────────────────────
-        tk.Label(frame, text="API Key de Google Gemini",
+        tk.Label(frame, text="API Key de OpenRouter",
                  font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 6))
 
         self.api_key_var = tk.StringVar(value=ConfigManager.get_api_key())
@@ -313,10 +313,10 @@ class ConfigWindow:
         key_entry.pack(fill=X, ipady=6, pady=(0, 6))
 
         url_label = tk.Label(frame,
-                             text="Obtén tu clave en → https://aistudio.google.com/apikey",
+                             text="Obtén tu clave en → https://openrouter.ai/keys",
                              font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
         url_label.pack(anchor=W, pady=(0, 20))
-        url_label.bind("<Button-1>", lambda e: webbrowser.open("https://aistudio.google.com/apikey"))
+        url_label.bind("<Button-1>", lambda e: webbrowser.open("https://openrouter.ai/keys"))
 
         # ── Hotkey Info ──────────────────────────────────────
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
@@ -678,15 +678,15 @@ class ResultWindow:
 
     def __init__(self, app: EscribaApp, result: str, prev_hwnd,
                  prompt: str = "", selected_text: str = "",
-                 used_gemini: bool = False):
+                 used_openrouter: bool = False):
         self.app = app
         self.result = result
         self.prev_hwnd = prev_hwnd
         self.prompt = prompt
         self.selected_text = selected_text
-        self.used_gemini = used_gemini
+        self.used_openrouter = used_openrouter
 
-        if not used_gemini:
+        if not used_openrouter:
             ResultWindow._last_pollinations_ts = time.time()
 
         win = tb.Toplevel(app.root)
@@ -714,9 +714,9 @@ class ResultWindow:
                  font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
         # Badge del backend
-        badge_text = "⚡ Gemini" if used_gemini else "🌐 Pollinations"
-        badge_bg = _FM_ACCENT if used_gemini else _FM_CARD
-        badge_fg = _FM_BG if used_gemini else _FM_MUTED
+        badge_text = "⚡ OpenRouter" if used_openrouter else "🌐 Pollinations"
+        badge_bg = _FM_ACCENT if used_openrouter else _FM_CARD
+        badge_fg = _FM_BG if used_openrouter else _FM_MUTED
         badge_f = tk.Frame(hdr, bg=badge_bg)
         badge_f.pack(side=RIGHT)
         tk.Label(badge_f, text=badge_text, font=("Segoe UI", 8),
@@ -748,7 +748,7 @@ class ResultWindow:
         )
         self._regen_btn.pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
 
-        if has_prompt and not used_gemini:
+        if has_prompt and not used_openrouter:
             self._start_cooldown()
 
         tb.Button(btn_mid, text="⬅️  Sustituir texto seleccionado",

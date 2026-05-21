@@ -1,23 +1,18 @@
 """
-Escriba — Clientes de IA (Gemini + Pollinations) y lógica de fallback.
+Escriba — Clientes de IA (OpenRouter + Pollinations) y lógica de fallback.
 """
 
 import requests
 
-from constants import GEMINI_MODELS, GEMINI_BASE
+from constants import OPENROUTER_BASE, OPENROUTER_DEFAULT_MODEL
 from config import ConfigManager
 
 
 # ─────────────────────────────────────────────────────────────
-# Cliente Gemini — auto-detección del modelo disponible
+# Cliente OpenRouter — API compatible con OpenAI
 # ─────────────────────────────────────────────────────────────
-class GeminiClient:
-    """Llama a la API de Gemini probando modelos en orden de preferencia."""
-
-    @classmethod
-    def reset_model_cache(cls):
-        """Limpia el modelo que funcionó anteriormente para forzar re-detección."""
-        cls._working_model = None
+class OpenRouterClient:
+    """Llama a la API de OpenRouter con el modelo configurado."""
 
     @classmethod
     def generate(cls, prompt: str, text: str) -> str:
@@ -25,55 +20,30 @@ class GeminiClient:
         if not api_key:
             raise ValueError("API Key no configurada.")
 
-        # Construir lista de modelos a probar (priorizando el último exitoso)
-        priority_models = cls._get_priority_models()
-
-        last_failure_reason = "Sin modelos disponibles."
-        for model in priority_models:
-            url = f"{GEMINI_BASE}/{model}:generateContent"
-            payload = {
-                "contents": [{"parts": [{"text": f"{prompt}\n\n---\n\n{text}"}]}],
-                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096},
-            }
-            try:
-                response = requests.post(
-                    url,
-                    json=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": api_key
-                    },
-                    timeout=60,
-                )
-                if response.status_code == 404:
-                    last_failure_reason = f"{model}: no disponible para esta API key (404)"
-                    continue
-                response.raise_for_status()
-                result = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-                cls._working_model = model
-                return result.strip()
-            except requests.exceptions.ConnectionError:
-                last_failure_reason = f"{model}: Error de conexión (revisa tu internet)"
-            except requests.exceptions.HTTPError as e:
-                last_failure_reason = f"{model}: HTTP {e.response.status_code}"
-            except Exception as e:
-                last_failure_reason = f"{model}: {e}"
-
-        raise RuntimeError(f"Error de API — {last_failure_reason}")
-
-    @classmethod
-    def _get_priority_models(cls) -> list[str]:
-        candidates = (
-            [cls._working_model] + GEMINI_MODELS
-            if cls._working_model
-            else GEMINI_MODELS
-        )
-        seen, ordered = set(), []
-        for m in candidates:
-            if m and m not in seen:
-                ordered.append(m)
-                seen.add(m)
-        return ordered
+        model = ConfigManager.get("model", OPENROUTER_DEFAULT_MODEL)
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": f"{prompt}\n\n---\n\n{text}"}],
+        }
+        try:
+            response = requests.post(
+                f"{OPENROUTER_BASE}/chat/completions",
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                    "X-Title": "Escriba",
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"].strip()
+        except requests.exceptions.ConnectionError:
+            raise RuntimeError("Error de red: No se pudo conectar a OpenRouter. Revisa tu conexión.")
+        except requests.exceptions.HTTPError as e:
+            raise RuntimeError(f"OpenRouter HTTP {e.response.status_code}: {e.response.text[:200]}")
+        except Exception as e:
+            raise RuntimeError(f"OpenRouter: {e}")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -111,32 +81,22 @@ class FreeAIClient:
 
 
 # ─────────────────────────────────────────────────────────────
-# Fallback unificado (elimina triplicación de lógica)
+# Fallback unificado
 # ─────────────────────────────────────────────────────────────
-def generate_with_fallback(
-    prompt: str, text: str, reset_model: bool = False
-) -> tuple:
-    """Intenta Gemini; si falla, hace fallback a Pollinations.
-
-    Args:
-        prompt:      Instrucción para la IA.
-        text:        Texto del usuario.
-        reset_model: Si True, fuerza re-detección del modelo Gemini.
+def generate_with_fallback(prompt: str, text: str) -> tuple:
+    """Intenta OpenRouter; si falla o no hay key, hace fallback a Pollinations.
 
     Returns:
-        (resultado: str, used_gemini: bool)
+        (resultado: str, used_openrouter: bool)
     """
     result = None
     last_error = None
-    used_gemini = False
-
-    if reset_model:
-        GeminiClient.reset_model_cache()
+    used_openrouter = False
 
     if ConfigManager.is_configured():
         try:
-            result = GeminiClient.generate(prompt, text)
-            used_gemini = True
+            result = OpenRouterClient.generate(prompt, text)
+            used_openrouter = True
         except Exception as e:
             last_error = str(e)
 
@@ -145,9 +105,7 @@ def generate_with_fallback(
             result = FreeAIClient.generate(prompt, text)
         except Exception as e:
             if last_error:
-                raise RuntimeError(
-                    f"Gemini: {last_error} | Pollinations: {e}"
-                )
+                raise RuntimeError(f"OpenRouter: {last_error} | Pollinations: {e}")
             raise
 
-    return result, used_gemini
+    return result, used_openrouter
