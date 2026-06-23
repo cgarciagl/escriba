@@ -3,7 +3,12 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from ai_clients import OpenRouterClient, FreeAIClient, generate_with_fallback
+from ai_clients import (
+    OpenRouterClient,
+    OpenCodeZenClient,
+    FreeAIClient,
+    generate_with_fallback,
+)
 
 
 class TestFreeAIClient:
@@ -108,39 +113,111 @@ class TestOpenRouterClient:
                 OpenRouterClient.generate("prompt", "text")
 
 
+class TestOpenCodeZenClient:
+    def test_generate_uses_big_pickle_model(self):
+        with (
+            patch(
+                "ai_clients.ConfigManager.get_opencode_api_key",
+                return_value="oc_key",
+            ),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "choices": [{"message": {"content": "  pepinillo  "}}]
+            }
+            mock_response.raise_for_status.return_value = None
+            mock_post.return_value = mock_response
+
+            result = OpenCodeZenClient.generate("prompt", "text")
+
+            assert result == "pepinillo"
+            args, kwargs = mock_post.call_args
+            assert kwargs["json"]["model"] == "big-pickle"
+            assert kwargs["headers"]["Authorization"] == "Bearer oc_key"
+            assert "opencode.ai/zen" in args[0]
+
+    def test_generate_no_api_key(self):
+        with patch(
+            "ai_clients.ConfigManager.get_opencode_api_key", return_value=""
+        ):
+            with pytest.raises(ValueError, match="no configurada"):
+                OpenCodeZenClient.generate("prompt", "text")
+
+
 class TestGenerateWithFallback:
+    def test_uses_opencode_first_when_configured(self):
+        with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=True),
+            patch(
+                "ai_clients.OpenCodeZenClient.generate", return_value="oc result"
+            ) as mock_oc,
+            patch("ai_clients.OpenRouterClient.generate") as mock_or,
+            patch("ai_clients.FreeAIClient.generate") as mock_free,
+        ):
+            result, provider = generate_with_fallback("prompt", "text")
+
+            assert result == "oc result"
+            assert provider == "opencode"
+            mock_oc.assert_called_once_with("prompt", "text")
+            mock_or.assert_not_called()
+            mock_free.assert_not_called()
+
     def test_uses_openrouter_when_configured(self):
         with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
             patch("ai_clients.ConfigManager.is_configured", return_value=True),
             patch(
                 "ai_clients.OpenRouterClient.generate", return_value="or result"
             ) as mock_or,
             patch("ai_clients.FreeAIClient.generate") as mock_free,
         ):
-            result, used = generate_with_fallback("prompt", "text")
+            result, provider = generate_with_fallback("prompt", "text")
 
             assert result == "or result"
-            assert used is True
+            assert provider == "openrouter"
             mock_or.assert_called_once_with("prompt", "text")
             mock_free.assert_not_called()
 
     def test_uses_free_when_not_configured(self):
         with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
             patch("ai_clients.ConfigManager.is_configured", return_value=False),
             patch("ai_clients.OpenRouterClient.generate") as mock_or,
             patch(
                 "ai_clients.FreeAIClient.generate", return_value="free result"
             ) as mock_free,
         ):
-            result, used = generate_with_fallback("prompt", "text")
+            result, provider = generate_with_fallback("prompt", "text")
 
             assert result == "free result"
-            assert used is False
+            assert provider == "pollinations"
             mock_or.assert_not_called()
             mock_free.assert_called_once_with("prompt", "text")
 
+    def test_fallback_from_opencode_to_openrouter(self):
+        with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=True),
+            patch("ai_clients.ConfigManager.is_configured", return_value=True),
+            patch(
+                "ai_clients.OpenCodeZenClient.generate",
+                side_effect=RuntimeError("OC error"),
+            ),
+            patch(
+                "ai_clients.OpenRouterClient.generate", return_value="or result"
+            ) as mock_or,
+            patch("ai_clients.FreeAIClient.generate") as mock_free,
+        ):
+            result, provider = generate_with_fallback("prompt", "text")
+
+            assert result == "or result"
+            assert provider == "openrouter"
+            mock_or.assert_called_once_with("prompt", "text")
+            mock_free.assert_not_called()
+
     def test_fallback_on_openrouter_failure(self):
         with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
             patch("ai_clients.ConfigManager.is_configured", return_value=True),
             patch(
                 "ai_clients.OpenRouterClient.generate",
@@ -150,15 +227,20 @@ class TestGenerateWithFallback:
                 "ai_clients.FreeAIClient.generate", return_value="fallback result"
             ) as mock_free,
         ):
-            result, used = generate_with_fallback("prompt", "text")
+            result, provider = generate_with_fallback("prompt", "text")
 
             assert result == "fallback result"
-            assert used is False
+            assert provider == "pollinations"
             mock_free.assert_called_once_with("prompt", "text")
 
-    def test_raises_when_both_fail(self):
+    def test_raises_when_all_fail(self):
         with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=True),
             patch("ai_clients.ConfigManager.is_configured", return_value=True),
+            patch(
+                "ai_clients.OpenCodeZenClient.generate",
+                side_effect=RuntimeError("OC error"),
+            ),
             patch(
                 "ai_clients.OpenRouterClient.generate",
                 side_effect=RuntimeError("OR error"),
@@ -171,11 +253,13 @@ class TestGenerateWithFallback:
             with pytest.raises(RuntimeError) as excinfo:
                 generate_with_fallback("prompt", "text")
 
+            assert "OC error" in str(excinfo.value)
             assert "OR error" in str(excinfo.value)
             assert "Free error" in str(excinfo.value)
 
     def test_raises_on_free_when_not_configured(self):
         with (
+            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
             patch("ai_clients.ConfigManager.is_configured", return_value=False),
             patch(
                 "ai_clients.FreeAIClient.generate",

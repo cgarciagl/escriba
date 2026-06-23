@@ -32,6 +32,13 @@ OPENROUTER_DEFAULT_MODEL = "openrouter/free"
 
 
 # ─────────────────────────────────────────────────────────────
+# OpenCode Zen API — compatible con OpenAI, modelo fijo Big Pickle
+# ─────────────────────────────────────────────────────────────
+OPENCODE_BASE  = "https://opencode.ai/zen/v1"
+OPENCODE_MODEL = "big-pickle"
+
+
+# ─────────────────────────────────────────────────────────────
 # Acciones de IA disponibles en el menú flotante
 # ─────────────────────────────────────────────────────────────
 AI_ACTIONS = [

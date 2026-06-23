@@ -80,12 +80,12 @@ def run_ai_action(app, prompt, text, prev_hwnd, thinking):
     def close():
         thinking.close()
     try:
-        result, used_openrouter = generate_with_fallback(prompt, text)
+        result, provider = generate_with_fallback(prompt, text)
         app.schedule(close)
         app.schedule(lambda: ResultWindow(
             app, result, prev_hwnd,
             prompt=prompt, selected_text=text,
-            used_openrouter=used_openrouter))
+            provider=provider))
     except Exception as e:
         app.schedule(close)
         app.schedule(app.tooltip.show, f"❌ {str(e)[:180]}", "danger", 6000)
@@ -273,7 +273,7 @@ class ConfigWindow:
 
         win = tb.Toplevel(self.app.root)
         win.title(f"{APP_NAME} — Configuración")
-        win.geometry("520x560")
+        win.geometry("520x680")
         win.resizable(False, False)
         win.attributes("-topmost", True)
         win.configure(bg=_FM_BG)
@@ -282,7 +282,7 @@ class ConfigWindow:
         win.option_add('*Frame.background', _FM_BG, 'userDefault')
         win.update_idletasks()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        win.geometry(f"+{(sw-520)//2}+{(sh-500)//2}")
+        win.geometry(f"+{(sw-520)//2}+{(sh-680)//2}")
         self.window = win
 
         frame = tk.Frame(win, bg=_FM_BG, padx=30, pady=24)
@@ -315,8 +315,23 @@ class ConfigWindow:
         url_label = tk.Label(frame,
                              text="Obtén tu clave en → https://openrouter.ai/keys",
                              font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
-        url_label.pack(anchor=W, pady=(0, 20))
+        url_label.pack(anchor=W, pady=(0, 16))
         url_label.bind("<Button-1>", lambda e: webbrowser.open("https://openrouter.ai/keys"))
+
+        # ── API Key de OpenCode Zen (modelo Big Pickle) ──────
+        tk.Label(frame, text="API Key de OpenCode Zen  (modelo Big Pickle)",
+                 font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 6))
+
+        self.opencode_key_var = tk.StringVar(value=ConfigManager.get_opencode_api_key())
+        opencode_entry = tb.Entry(frame, textvariable=self.opencode_key_var,
+                                  show="•", font=("Consolas", 11), bootstyle="info")
+        opencode_entry.pack(fill=X, ipady=6, pady=(0, 6))
+
+        oc_url_label = tk.Label(frame,
+                                text="Obtén tu clave en → https://opencode.ai/zen",
+                                font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
+        oc_url_label.pack(anchor=W, pady=(0, 20))
+        oc_url_label.bind("<Button-1>", lambda e: webbrowser.open("https://opencode.ai/zen"))
 
         # ── Hotkey Info ──────────────────────────────────────
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
@@ -357,6 +372,7 @@ class ConfigWindow:
     def _save(self):
         key = self.api_key_var.get().strip()
         ConfigManager.set("api_key", key)
+        ConfigManager.set("opencode_api_key", self.opencode_key_var.get().strip())
         if self.autostart_var.get():
             StartupManager.enable()
         else:
@@ -678,15 +694,16 @@ class ResultWindow:
 
     def __init__(self, app: EscribaApp, result: str, prev_hwnd,
                  prompt: str = "", selected_text: str = "",
-                 used_openrouter: bool = False):
+                 provider: str = "pollinations"):
         self.app = app
         self.result = result
         self.prev_hwnd = prev_hwnd
         self.prompt = prompt
         self.selected_text = selected_text
-        self.used_openrouter = used_openrouter
+        self.provider = provider
+        is_free = provider == "pollinations"
 
-        if not used_openrouter:
+        if is_free:
             ResultWindow._last_pollinations_ts = time.time()
 
         win = tb.Toplevel(app.root)
@@ -714,9 +731,14 @@ class ResultWindow:
                  font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
         # Badge del backend
-        badge_text = "⚡ OpenRouter" if used_openrouter else "🌐 Pollinations"
-        badge_bg = _FM_ACCENT if used_openrouter else _FM_CARD
-        badge_fg = _FM_BG if used_openrouter else _FM_MUTED
+        _badge_labels = {
+            "opencode":     "🥒 Big Pickle",
+            "openrouter":   "⚡ OpenRouter",
+            "pollinations": "🌐 Pollinations",
+        }
+        badge_text = _badge_labels.get(provider, "🌐 Pollinations")
+        badge_bg = _FM_CARD if is_free else _FM_ACCENT
+        badge_fg = _FM_MUTED if is_free else _FM_BG
         badge_f = tk.Frame(hdr, bg=badge_bg)
         badge_f.pack(side=RIGHT)
         tk.Label(badge_f, text=badge_text, font=("Segoe UI", 8),
@@ -748,7 +770,7 @@ class ResultWindow:
         )
         self._regen_btn.pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
 
-        if has_prompt and not used_openrouter:
+        if has_prompt and is_free:
             self._start_cooldown()
 
         tb.Button(btn_mid, text="⬅️  Sustituir texto seleccionado",

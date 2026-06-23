@@ -54,3 +54,11 @@ class ConfigManager:
     @staticmethod
     def is_configured() -> bool:
         return bool(ConfigManager.get_api_key().strip())
+
+    @staticmethod
+    def get_opencode_api_key() -> str:
+        return ConfigManager.get("opencode_api_key", "")
+
+    @staticmethod
+    def is_opencode_configured() -> bool:
+        return bool(ConfigManager.get_opencode_api_key().strip())
