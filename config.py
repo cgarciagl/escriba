@@ -5,8 +5,7 @@ Escriba — Persistencia de configuración (config.json).
 import os
 import json
 
-from constants import CONFIG_FILE
-from startup import StartupManager
+from constants import CONFIG_FILE, GEMINI_DEFAULT_MODEL
 
 
 class ConfigManager:
@@ -26,7 +25,11 @@ class ConfigManager:
             except Exception:
                 pass
         # Primer arranque: crear config por defecto
-        default_config = {"api_key": "", "autostart": True}
+        default_config = {
+            "api_key": "",
+            "model": GEMINI_DEFAULT_MODEL,
+            "autostart": True,
+        }
         cls.save(default_config)
         cls._cache = default_config
         return default_config
@@ -56,9 +59,9 @@ class ConfigManager:
         return bool(ConfigManager.get_api_key().strip())
 
     @staticmethod
-    def get_opencode_api_key() -> str:
-        return ConfigManager.get("opencode_api_key", "")
+    def get_model() -> str:
+        return ConfigManager.get("model", GEMINI_DEFAULT_MODEL)
 
     @staticmethod
-    def is_opencode_configured() -> bool:
-        return bool(ConfigManager.get_opencode_api_key().strip())
+    def set_model(model_name: str):
+        ConfigManager.set("model", model_name)

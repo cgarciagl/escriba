@@ -3,8 +3,9 @@ from constants import (
     APP_NAME,
     APP_VERSION,
     CONFIG_FILE,
-    OPENROUTER_BASE,
-    OPENROUTER_DEFAULT_MODEL,
+    GEMINI_BASE,
+    GEMINI_DEFAULT_MODEL,
+    GEMINI_FALLBACK_MODELS,
     STARTUP_KEY,
 )
 
@@ -34,11 +35,10 @@ class TestAppConstants:
         assert STARTUP_KEY.startswith("Software\\")
         assert "Run" in STARTUP_KEY
 
-    def test_openrouter_base_url(self):
-        assert OPENROUTER_BASE == "https://openrouter.ai/api/v1"
-
-    def test_openrouter_default_model(self):
-        assert OPENROUTER_DEFAULT_MODEL == "openrouter/free"
+    def test_gemini_constants(self):
+        assert "googleapis.com" in GEMINI_BASE
+        assert GEMINI_DEFAULT_MODEL == "gemini-3.5-flash-lite"
+        assert "gemini-3.5-flash-lite" in GEMINI_FALLBACK_MODELS
 
 
 class TestAIActions:

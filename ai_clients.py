@@ -1,164 +1,122 @@
 """
-Escriba — Clientes de IA (OpenRouter + Pollinations) y lógica de fallback.
+Escriba — Cliente de IA para Google Gemini.
 """
 
 import requests
 
 from constants import (
-    OPENROUTER_BASE,
-    OPENROUTER_DEFAULT_MODEL,
-    OPENCODE_BASE,
-    OPENCODE_MODEL,
+    GEMINI_BASE,
+    GEMINI_DEFAULT_MODEL,
+    GEMINI_FALLBACK_MODELS,
 )
 from config import ConfigManager
 
 
 # ─────────────────────────────────────────────────────────────
-# Cliente OpenRouter — API compatible con OpenAI
+# Cliente Google Gemini — API oficial
 # ─────────────────────────────────────────────────────────────
-class OpenRouterClient:
-    """Llama a la API de OpenRouter con el modelo configurado."""
+class GeminiClient:
+    """Llama a la API oficial de Google Gemini y gestiona la lista de modelos."""
+
+    @classmethod
+    def fetch_available_models(cls, api_key: str | None = None) -> list[str]:
+        """Descarga la lista de modelos Gemini válidos para generateContent."""
+        key = api_key or ConfigManager.get_api_key()
+        if not key:
+            return list(GEMINI_FALLBACK_MODELS)
+
+        url = GEMINI_BASE
+        try:
+            response = requests.get(
+                url,
+                headers={"x-goog-api-key": key},
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            raw_models = data.get("models", [])
+            valid_models = []
+
+            # Excluir modelos especializados que no son de generación de texto general
+            excluded_keywords = [
+                "tts", "image", "transcribe", "robotics", "computer-use", "customtools"
+            ]
+
+            for m in raw_models:
+                methods = m.get("supportedGenerationMethods", [])
+                name = m.get("name", "").replace("models/", "").strip()
+                if "generateContent" in methods and name.startswith("gemini"):
+                    if not any(kw in name.lower() for kw in excluded_keywords):
+                        valid_models.append(name)
+
+            if not valid_models:
+                return list(GEMINI_FALLBACK_MODELS)
+
+            # Asegurar que gemini-3.5-flash-lite esté al principio
+            if GEMINI_DEFAULT_MODEL in valid_models:
+                valid_models.remove(GEMINI_DEFAULT_MODEL)
+                valid_models.insert(0, GEMINI_DEFAULT_MODEL)
+            else:
+                valid_models.insert(0, GEMINI_DEFAULT_MODEL)
+
+            return valid_models
+        except Exception:
+            return list(GEMINI_FALLBACK_MODELS)
 
     @classmethod
     def generate(cls, prompt: str, text: str) -> str:
         api_key = ConfigManager.get_api_key()
         if not api_key:
-            raise ValueError("API Key no configurada.")
+            raise ValueError("API Key de Google Gemini no configurada.")
 
-        model = ConfigManager.get("model", OPENROUTER_DEFAULT_MODEL)
+        model = ConfigManager.get("model", GEMINI_DEFAULT_MODEL)
+        url = f"{GEMINI_BASE}/{model}:generateContent"
         payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": f"{prompt}\n\n---\n\n{text}"}],
+            "contents": [{"parts": [{"text": f"{prompt}\n\n---\n\n{text}"}]}],
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096},
         }
         try:
             response = requests.post(
-                f"{OPENROUTER_BASE}/chat/completions",
+                url,
                 json=payload,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "X-Title": "Escriba",
+                    "x-goog-api-key": api_key,
                 },
                 timeout=60,
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"].strip()
+            data = response.json()
+            candidates = data.get("candidates", [])
+            if not candidates or "content" not in candidates[0]:
+                raise RuntimeError("La respuesta de Gemini no contiene contenido válido.")
+            parts = candidates[0]["content"].get("parts", [])
+            if not parts or "text" not in parts[0]:
+                raise RuntimeError("La respuesta de Gemini vino vacía.")
+            return parts[0]["text"].strip()
         except requests.exceptions.ConnectionError:
-            raise RuntimeError("Error de red: No se pudo conectar a OpenRouter. Revisa tu conexión.")
+            raise RuntimeError("Error de red: No se pudo conectar a Google Gemini. Revisa tu conexión a internet.")
         except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"OpenRouter HTTP {e.response.status_code}: {e.response.text[:200]}")
+            error_details = ""
+            try:
+                err_json = e.response.json()
+                if "error" in err_json and "message" in err_json["error"]:
+                    error_details = f": {err_json['error']['message']}"
+            except Exception:
+                error_details = f": {e.response.text[:200]}"
+            raise RuntimeError(f"Gemini HTTP {e.response.status_code}{error_details}")
         except Exception as e:
-            raise RuntimeError(f"OpenRouter: {e}")
+            raise RuntimeError(f"Gemini: {e}")
 
 
 # ─────────────────────────────────────────────────────────────
-# Cliente OpenCode Zen — API compatible con OpenAI, modelo fijo Big Pickle
+# Entrada unificada
 # ─────────────────────────────────────────────────────────────
-class OpenCodeZenClient:
-    """Llama a OpenCode Zen usando siempre el modelo Big Pickle."""
-
-    @classmethod
-    def generate(cls, prompt: str, text: str) -> str:
-        api_key = ConfigManager.get_opencode_api_key()
-        if not api_key:
-            raise ValueError("API Key de OpenCode Zen no configurada.")
-
-        payload = {
-            "model": OPENCODE_MODEL,
-            "messages": [{"role": "user", "content": f"{prompt}\n\n---\n\n{text}"}],
-        }
-        try:
-            response = requests.post(
-                f"{OPENCODE_BASE}/chat/completions",
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "X-Title": "Escriba",
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"].strip()
-        except requests.exceptions.ConnectionError:
-            raise RuntimeError("Error de red: No se pudo conectar a OpenCode Zen. Revisa tu conexión.")
-        except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"OpenCode Zen HTTP {e.response.status_code}: {e.response.text[:200]}")
-        except Exception as e:
-            raise RuntimeError(f"OpenCode Zen: {e}")
-
-
-# ─────────────────────────────────────────────────────────────
-# Cliente gratuito — Pollinations AI (sin API Key)
-# ─────────────────────────────────────────────────────────────
-class FreeAIClient:
-    """Fallback gratuito usando Pollinations AI."""
-
-    _ENDPOINT = "https://text.pollinations.ai/"
-
-    @staticmethod
-    def generate(prompt: str, text: str) -> str:
-        full_prompt = f"{prompt}\n\n---\n\n{text}"
-        payload = {
-            "messages": [{"role": "user", "content": full_prompt}],
-            "model": "openai",
-            "private": True,
-        }
-        try:
-            r = requests.post(
-                FreeAIClient._ENDPOINT,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=60,
-            )
-            r.raise_for_status()
-            result = r.text.strip()
-            if not result:
-                raise RuntimeError("La respuesta fue vacía.")
-            return result
-        except requests.exceptions.ConnectionError:
-            raise RuntimeError("Error de red: No se pudo conectar a Pollinations AI. Revisa tu conexión a Internet.")
-        except Exception as e:
-            raise RuntimeError(f"Pollinations AI: {e}")
-
-
-# ─────────────────────────────────────────────────────────────
-# Fallback unificado
-# ─────────────────────────────────────────────────────────────
-def generate_with_fallback(prompt: str, text: str) -> tuple:
-    """Cadena de fallback: OpenCode Zen → OpenRouter → Pollinations.
-
-    Intenta cada proveedor configurado en orden y, si falla o no hay key,
-    pasa al siguiente. Pollinations (gratuito) es el último recurso.
+def generate_with_fallback(prompt: str, text: str) -> tuple[str, str]:
+    """Genera respuesta utilizando Google Gemini con el modelo configurado.
 
     Returns:
-        (resultado: str, provider: str)  donde provider es uno de
-        "opencode", "openrouter" o "pollinations".
+        (resultado: str, provider: str)  donde provider es "gemini".
     """
-    result = None
-    provider = ""
-    errors = []
-
-    if ConfigManager.is_opencode_configured():
-        try:
-            result = OpenCodeZenClient.generate(prompt, text)
-            provider = "opencode"
-        except Exception as e:
-            errors.append(f"OpenCode Zen: {e}")
-
-    if result is None and ConfigManager.is_configured():
-        try:
-            result = OpenRouterClient.generate(prompt, text)
-            provider = "openrouter"
-        except Exception as e:
-            errors.append(f"OpenRouter: {e}")
-
-    if result is None:
-        try:
-            result = FreeAIClient.generate(prompt, text)
-            provider = "pollinations"
-        except Exception as e:
-            errors.append(f"Pollinations: {e}")
-            raise RuntimeError(" | ".join(errors))
-
-    return result, provider
+    result = GeminiClient.generate(prompt, text)
+    return result, "gemini"

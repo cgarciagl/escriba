@@ -20,10 +20,15 @@ from ttkbootstrap.constants import *
 import pyperclip
 
 import webbrowser
-from constants import APP_NAME, AI_ACTIONS
+from constants import (
+    APP_NAME,
+    AI_ACTIONS,
+    GEMINI_DEFAULT_MODEL,
+    GEMINI_FALLBACK_MODELS,
+)
 from config import ConfigManager
 from startup import StartupManager
-from ai_clients import generate_with_fallback
+from ai_clients import GeminiClient, generate_with_fallback
 from hotkey import send_ctrl_v
 
 if TYPE_CHECKING:
@@ -259,7 +264,7 @@ class SplashBanner:
 # Ventana de Configuración
 # ─────────────────────────────────────────────────────────────
 class ConfigWindow:
-    """Formulario para API Key, autostart y configuración general."""
+    """Formulario para API Key de Gemini, selección de modelo y arranque."""
 
     def __init__(self, app: EscribaApp):
         self.app = app
@@ -273,7 +278,7 @@ class ConfigWindow:
 
         win = tb.Toplevel(self.app.root)
         win.title(f"{APP_NAME} — Configuración")
-        win.geometry("520x680")
+        win.geometry("520x620")
         win.resizable(False, False)
         win.attributes("-topmost", True)
         win.configure(bg=_FM_BG)
@@ -282,7 +287,7 @@ class ConfigWindow:
         win.option_add('*Frame.background', _FM_BG, 'userDefault')
         win.update_idletasks()
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        win.geometry(f"+{(sw-520)//2}+{(sh-680)//2}")
+        win.geometry(f"+{(sw-520)//2}+{(sh-620)//2}")
         self.window = win
 
         frame = tk.Frame(win, bg=_FM_BG, padx=30, pady=24)
@@ -299,39 +304,65 @@ class ConfigWindow:
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
                  font=("Segoe UI", 14, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
-        tk.Label(title_col, text="Configuración",
+        tk.Label(title_col, text="Configuración de Google Gemini",
                  font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
-        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(10, 20))
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(10, 16))
 
         # ── API Key ──────────────────────────────────────────
-        tk.Label(frame, text="API Key de OpenRouter",
+        tk.Label(frame, text="API Key de Google Gemini",
                  font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 6))
 
         self.api_key_var = tk.StringVar(value=ConfigManager.get_api_key())
         key_entry = tb.Entry(frame, textvariable=self.api_key_var,
                              show="•", font=("Consolas", 11), bootstyle="warning")
-        key_entry.pack(fill=X, ipady=6, pady=(0, 6))
+        key_entry.pack(fill=X, ipady=5, pady=(0, 4))
 
         url_label = tk.Label(frame,
-                             text="Obtén tu clave en → https://openrouter.ai/keys",
+                             text="Obtén tu clave en → https://aistudio.google.com/apikey",
                              font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
-        url_label.pack(anchor=W, pady=(0, 16))
-        url_label.bind("<Button-1>", lambda e: webbrowser.open("https://openrouter.ai/keys"))
+        url_label.pack(anchor=W, pady=(0, 14))
+        url_label.bind("<Button-1>", lambda e: webbrowser.open("https://aistudio.google.com/apikey"))
 
-        # ── API Key de OpenCode Zen (modelo Big Pickle) ──────
-        tk.Label(frame, text="API Key de OpenCode Zen  (modelo Big Pickle)",
-                 font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 6))
+        # ── Selector de Modelo Gemini ────────────────────────
+        model_hdr = tk.Frame(frame, bg=_FM_BG)
+        model_hdr.pack(fill=X, pady=(0, 6))
+        tk.Label(model_hdr, text="Modelo de Gemini",
+                 font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
-        self.opencode_key_var = tk.StringVar(value=ConfigManager.get_opencode_api_key())
-        opencode_entry = tb.Entry(frame, textvariable=self.opencode_key_var,
-                                  show="•", font=("Consolas", 11), bootstyle="info")
-        opencode_entry.pack(fill=X, ipady=6, pady=(0, 6))
+        current_model = ConfigManager.get("model", GEMINI_DEFAULT_MODEL)
+        self.model_var = tk.StringVar(value=current_model)
 
-        oc_url_label = tk.Label(frame,
-                                text="Obtén tu clave en → https://opencode.ai/zen",
-                                font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
-        oc_url_label.pack(anchor=W, pady=(0, 20))
-        oc_url_label.bind("<Button-1>", lambda e: webbrowser.open("https://opencode.ai/zen"))
+        model_row = tk.Frame(frame, bg=_FM_BG)
+        model_row.pack(fill=X, pady=(0, 4))
+
+        initial_models = [GEMINI_DEFAULT_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_DEFAULT_MODEL]
+        if current_model not in initial_models:
+            initial_models.insert(0, current_model)
+
+        self.model_cb = tb.Combobox(
+            model_row,
+            textvariable=self.model_var,
+            values=initial_models,
+            state="readonly",
+            bootstyle="warning",
+            font=("Consolas", 10),
+        )
+        self.model_cb.pack(side=LEFT, fill=X, expand=True, ipady=4, padx=(0, 8))
+
+        self.refresh_btn = tb.Button(
+            model_row,
+            text="🔄 Actualizar",
+            bootstyle="secondary-outline",
+            command=self._refresh_models,
+        )
+        self.refresh_btn.pack(side=LEFT, ipady=2)
+
+        model_hint = tk.Label(
+            frame,
+            text="Predeterminado: gemini-3.5-flash-lite (rápido y eficiente)",
+            font=("Segoe UI", 8), bg=_FM_BG, fg=_FM_MUTED,
+        )
+        model_hint.pack(anchor=W, pady=(0, 16))
 
         # ── Hotkey Info ──────────────────────────────────────
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
@@ -351,7 +382,7 @@ class ConfigWindow:
             variable=self.autostart_var,
             bootstyle="warning-round-toggle",
         )
-        autostart_chk.pack(anchor=W, pady=(0, 20))
+        autostart_chk.pack(anchor=W, pady=(0, 18))
 
         # ── Status label ─────────────────────────────────────
         self.status_var = tk.StringVar()
@@ -369,10 +400,53 @@ class ConfigWindow:
         win.bind("<Return>", lambda e: self._save())
         win.protocol("WM_DELETE_WINDOW", self._close)
 
+        # Intentar cargar modelos en segundo plano al abrir si hay key
+        if self.api_key_var.get().strip():
+            threading.Thread(target=self._async_fetch_models, daemon=True).start()
+
+    def _async_fetch_models(self):
+        key = self.api_key_var.get().strip()
+        models = GeminiClient.fetch_available_models(key)
+        if self.window and self.window.winfo_exists():
+            self.app.schedule(self._update_model_combobox, models)
+
+    def _refresh_models(self):
+        key = self.api_key_var.get().strip()
+        if not key:
+            self.status_var.set("⚠️ Introduce tu API Key de Gemini para descargar los modelos.")
+            self.status_lbl.configure(fg="#f59e0b")
+            return
+        self.status_var.set("⏳ Consultando modelos disponibles...")
+        self.status_lbl.configure(fg=_FM_MUTED)
+        self.refresh_btn.configure(state="disabled")
+
+        def task():
+            models = GeminiClient.fetch_available_models(key)
+            self.app.schedule(self._on_models_refreshed, models)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _on_models_refreshed(self, models: list[str]):
+        if not self.window or not self.window.winfo_exists():
+            return
+        self.refresh_btn.configure(state="normal")
+        self._update_model_combobox(models)
+        self.status_var.set(f"✅ Se encontraron {len(models)} modelos de Gemini.")
+        self.status_lbl.configure(fg=_FM_ACCENT)
+
+    def _update_model_combobox(self, models: list[str]):
+        if not self.window or not self.window.winfo_exists():
+            return
+        self.model_cb["values"] = models
+        cur = self.model_var.get()
+        if cur not in models:
+            self.model_var.set(models[0] if models else GEMINI_DEFAULT_MODEL)
+
     def _save(self):
         key = self.api_key_var.get().strip()
+        model = self.model_var.get().strip() or GEMINI_DEFAULT_MODEL
         ConfigManager.set("api_key", key)
-        ConfigManager.set("opencode_api_key", self.opencode_key_var.get().strip())
+        ConfigManager.set("model", model)
         if self.autostart_var.get():
             StartupManager.enable()
         else:
@@ -684,27 +758,21 @@ class CustomPromptWindow:
 
 
 # ─────────────────────────────────────────────────────────────
-# Ventana de Resultado con botón Sustituir
+# Ventana de Resultados
 # ─────────────────────────────────────────────────────────────
 class ResultWindow:
     """Muestra el resultado de la IA con opciones de copiar, sustituir y regenerar."""
 
-    _last_pollinations_ts: float = 0.0
-    _POLLINATIONS_COOLDOWN = 10  # segundos
-
     def __init__(self, app: EscribaApp, result: str, prev_hwnd,
                  prompt: str = "", selected_text: str = "",
-                 provider: str = "pollinations"):
+                 provider: str = "gemini"):
         self.app = app
         self.result = result
         self.prev_hwnd = prev_hwnd
         self.prompt = prompt
         self.selected_text = selected_text
         self.provider = provider
-        is_free = provider == "pollinations"
-
-        if is_free:
-            ResultWindow._last_pollinations_ts = time.time()
+        self.model = ConfigManager.get_model()
 
         win = tb.Toplevel(app.root)
         win.title(f"{APP_NAME} — Resultado")
@@ -731,17 +799,12 @@ class ResultWindow:
                  font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
         # Badge del backend
-        _badge_labels = {
-            "opencode":     "🥒 Big Pickle",
-            "openrouter":   "⚡ OpenRouter",
-            "pollinations": "🌐 Pollinations",
-        }
-        badge_text = _badge_labels.get(provider, "🌐 Pollinations")
-        badge_bg = _FM_CARD if is_free else _FM_ACCENT
-        badge_fg = _FM_MUTED if is_free else _FM_BG
+        badge_text = f"⚡ Gemini ({self.model})"
+        badge_bg = _FM_ACCENT
+        badge_fg = _FM_BG
         badge_f = tk.Frame(hdr, bg=badge_bg)
         badge_f.pack(side=RIGHT)
-        tk.Label(badge_f, text=badge_text, font=("Segoe UI", 8),
+        tk.Label(badge_f, text=badge_text, font=("Segoe UI", 8, "bold"),
                  bg=badge_bg, fg=badge_fg, padx=7, pady=3).pack()
 
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 10))
@@ -769,9 +832,6 @@ class ResultWindow:
             state="normal" if has_prompt else "disabled",
         )
         self._regen_btn.pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
-
-        if has_prompt and is_free:
-            self._start_cooldown()
 
         tb.Button(btn_mid, text="⬅️  Sustituir texto seleccionado",
                   bootstyle="warning",
@@ -832,27 +892,6 @@ class ResultWindow:
                 0, lambda: self.app.tooltip.show("✅ Texto sustituido.", "success"))
         except Exception as e:
             self.app.schedule(lambda: self.app.tooltip.show(f"❌ Error al sustituir: {e}", "danger"))
-
-    def _start_cooldown(self):
-        """Deshabilita el botón regenerar y muestra cuenta regresiva."""
-        elapsed = time.time() - ResultWindow._last_pollinations_ts
-        remaining = self._POLLINATIONS_COOLDOWN - elapsed
-        if remaining <= 0:
-            return
-        self._regen_btn.configure(state="disabled")
-        self._tick_cooldown(remaining)
-
-    def _tick_cooldown(self, remaining: float):
-        if not self.window or not self.window.winfo_exists():
-            return
-        if remaining <= 0:
-            self._regen_btn.configure(
-                text="🔄  Volver a generar", state="normal", bootstyle="warning")
-            return
-        secs = int(remaining) + 1
-        self._regen_btn.configure(
-            text=f"🔄  Espera {secs}s…", bootstyle="secondary")
-        self.window.after(500, self._tick_cooldown, remaining - 0.5)
 
     def _regenerate(self):
         self.window.destroy()

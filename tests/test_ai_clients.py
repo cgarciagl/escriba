@@ -1,273 +1,151 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
+from constants import GEMINI_DEFAULT_MODEL, GEMINI_FALLBACK_MODELS
 from ai_clients import (
-    OpenRouterClient,
-    OpenCodeZenClient,
-    FreeAIClient,
+    GeminiClient,
     generate_with_fallback,
 )
 
 
-class TestFreeAIClient:
-    def test_generate_success(self):
-        with patch("ai_clients.requests.post") as mock_post:
-            mock_post.return_value.status_code = 200
-            mock_post.return_value.raise_for_status.return_value = None
-            mock_post.return_value.text = "Respuesta de prueba"
-
-            result = FreeAIClient.generate("test prompt", "test text")
-
-            assert result == "Respuesta de prueba"
-            mock_post.assert_called_once()
-            args, kwargs = mock_post.call_args
-            assert kwargs["json"]["messages"][0]["role"] == "user"
-            assert "test prompt" in kwargs["json"]["messages"][0]["content"]
-            assert "test text" in kwargs["json"]["messages"][0]["content"]
-            assert kwargs["json"]["model"] == "openai"
-            assert kwargs["json"]["private"] is True
-
-    def test_generate_empty_response(self):
-        with patch("ai_clients.requests.post") as mock_post:
-            mock_post.return_value.status_code = 200
-            mock_post.return_value.raise_for_status.return_value = None
-            mock_post.return_value.text = "   "
-
-            with pytest.raises(RuntimeError, match="vacía"):
-                FreeAIClient.generate("prompt", "text")
-
-    def test_generate_connection_error(self):
-        with patch(
-            "ai_clients.requests.post",
-            side_effect=requests.exceptions.ConnectionError,
-        ):
-            with pytest.raises(RuntimeError, match="Error de red"):
-                FreeAIClient.generate("prompt", "text")
-
-    def test_generate_http_error(self):
-        with patch("ai_clients.requests.post") as mock_post:
-            response = requests.Response()
-            response.status_code = 500
-            exc = requests.exceptions.HTTPError(response=response)
-            mock_post.side_effect = exc
-
-            with pytest.raises(RuntimeError, match="Pollinations"):
-                FreeAIClient.generate("prompt", "text")
-
-
-class TestOpenRouterClient:
+class TestGeminiClient:
     def test_generate_success(self):
         with (
-            patch("ai_clients.ConfigManager.get_api_key", return_value="fake_key"),
-            patch("ai_clients.ConfigManager.get", return_value="openrouter/free"),
+            patch("ai_clients.ConfigManager.get_api_key", return_value="fake_gemini_key"),
+            patch("ai_clients.ConfigManager.get", return_value="gemini-3.5-flash-lite"),
             patch("ai_clients.requests.post") as mock_post,
         ):
             mock_response = MagicMock()
             mock_response.json.return_value = {
-                "choices": [{"message": {"content": "  Resultado limpio  "}}]
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "  Texto generado por Gemini  "}]
+                        }
+                    }
+                ]
             }
             mock_response.raise_for_status.return_value = None
             mock_post.return_value = mock_response
 
-            result = OpenRouterClient.generate("prompt", "text")
+            result = GeminiClient.generate("traduce", "hello")
 
-            assert result == "Resultado limpio"
+            assert result == "Texto generado por Gemini"
             mock_post.assert_called_once()
             args, kwargs = mock_post.call_args
-            assert kwargs["json"]["model"] == "openrouter/free"
-            assert "Authorization" in kwargs["headers"]
-            assert kwargs["headers"]["Authorization"] == "Bearer fake_key"
+            assert "gemini-3.5-flash-lite" in args[0]
+            assert kwargs["headers"]["x-goog-api-key"] == "fake_gemini_key"
+            assert kwargs["json"]["contents"][0]["parts"][0]["text"] == "traduce\n\n---\n\nhello"
 
     def test_generate_no_api_key(self):
         with patch("ai_clients.ConfigManager.get_api_key", return_value=""):
-            with pytest.raises(ValueError, match="no configurada"):
-                OpenRouterClient.generate("prompt", "text")
+            with pytest.raises(ValueError, match="API Key de Google Gemini no configurada"):
+                GeminiClient.generate("prompt", "text")
 
-    def test_generate_http_401(self):
+    def test_generate_empty_candidates(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"candidates": []}
+            mock_response.raise_for_status.return_value = None
+            mock_post.return_value = mock_response
+
+            with pytest.raises(RuntimeError, match="no contiene contenido válido"):
+                GeminiClient.generate("prompt", "text")
+
+    def test_generate_empty_text_part(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "candidates": [{"content": {"parts": []}}]
+            }
+            mock_response.raise_for_status.return_value = None
+            mock_post.return_value = mock_response
+
+            with pytest.raises(RuntimeError, match="vino vacía"):
+                GeminiClient.generate("prompt", "text")
+
+    def test_generate_http_error_with_json_message(self):
         with (
             patch("ai_clients.ConfigManager.get_api_key", return_value="bad_key"),
-            patch("ai_clients.ConfigManager.get", return_value="openrouter/free"),
             patch("ai_clients.requests.post") as mock_post,
         ):
             response = requests.Response()
-            response.status_code = 401
-            response._content = b'{"error": "unauthorized"}'
+            response.status_code = 400
+            response.json = MagicMock(return_value={"error": {"message": "API key not valid"}})
             exc = requests.exceptions.HTTPError(response=response)
             mock_post.side_effect = exc
 
-            with pytest.raises(RuntimeError, match="OpenRouter HTTP 401"):
-                OpenRouterClient.generate("prompt", "text")
+            with pytest.raises(RuntimeError, match="Gemini HTTP 400: API key not valid"):
+                GeminiClient.generate("prompt", "text")
 
     def test_generate_connection_error(self):
         with (
             patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
-            patch("ai_clients.ConfigManager.get", return_value="openrouter/free"),
             patch(
                 "ai_clients.requests.post",
                 side_effect=requests.exceptions.ConnectionError,
             ),
         ):
             with pytest.raises(RuntimeError, match="Error de red"):
-                OpenRouterClient.generate("prompt", "text")
+                GeminiClient.generate("prompt", "text")
 
-
-class TestOpenCodeZenClient:
-    def test_generate_uses_big_pickle_model(self):
-        with (
-            patch(
-                "ai_clients.ConfigManager.get_opencode_api_key",
-                return_value="oc_key",
-            ),
-            patch("ai_clients.requests.post") as mock_post,
-        ):
+    def test_fetch_available_models_success(self):
+        with patch("ai_clients.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.json.return_value = {
-                "choices": [{"message": {"content": "  pepinillo  "}}]
+                "models": [
+                    {
+                        "name": "models/gemini-2.5-flash",
+                        "supportedGenerationMethods": ["generateContent"],
+                    },
+                    {
+                        "name": "models/gemini-3.5-flash-lite",
+                        "supportedGenerationMethods": ["generateContent"],
+                    },
+                    {
+                        "name": "models/gemini-3.1-flash-tts-preview",
+                        "supportedGenerationMethods": ["generateContent"],
+                    },
+                    {
+                        "name": "models/embedding-001",
+                        "supportedGenerationMethods": ["embedContent"],
+                    },
+                ]
             }
             mock_response.raise_for_status.return_value = None
-            mock_post.return_value = mock_response
+            mock_get.return_value = mock_response
 
-            result = OpenCodeZenClient.generate("prompt", "text")
+            models = GeminiClient.fetch_available_models("test_key")
 
-            assert result == "pepinillo"
-            args, kwargs = mock_post.call_args
-            assert kwargs["json"]["model"] == "big-pickle"
-            assert kwargs["headers"]["Authorization"] == "Bearer oc_key"
-            assert "opencode.ai/zen" in args[0]
+            # gemini-3.5-flash-lite must be first, tts excluded, embedding excluded
+            assert models[0] == GEMINI_DEFAULT_MODEL
+            assert "gemini-2.5-flash" in models
+            assert "gemini-3.1-flash-tts-preview" not in models
+            assert "embedding-001" not in models
 
-    def test_generate_no_api_key(self):
-        with patch(
-            "ai_clients.ConfigManager.get_opencode_api_key", return_value=""
-        ):
-            with pytest.raises(ValueError, match="no configurada"):
-                OpenCodeZenClient.generate("prompt", "text")
+    def test_fetch_available_models_no_key_returns_fallback(self):
+        models = GeminiClient.fetch_available_models("")
+        assert models == GEMINI_FALLBACK_MODELS
+
+    def test_fetch_available_models_network_failure_returns_fallback(self):
+        with patch("ai_clients.requests.get", side_effect=requests.exceptions.ConnectionError):
+            models = GeminiClient.fetch_available_models("test_key")
+            assert models == GEMINI_FALLBACK_MODELS
 
 
 class TestGenerateWithFallback:
-    def test_uses_opencode_first_when_configured(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=True),
-            patch(
-                "ai_clients.OpenCodeZenClient.generate", return_value="oc result"
-            ) as mock_oc,
-            patch("ai_clients.OpenRouterClient.generate") as mock_or,
-            patch("ai_clients.FreeAIClient.generate") as mock_free,
-        ):
+    def test_uses_gemini(self):
+        with patch("ai_clients.GeminiClient.generate", return_value="gemini result") as mock_gemini:
             result, provider = generate_with_fallback("prompt", "text")
 
-            assert result == "oc result"
-            assert provider == "opencode"
-            mock_oc.assert_called_once_with("prompt", "text")
-            mock_or.assert_not_called()
-            mock_free.assert_not_called()
-
-    def test_uses_openrouter_when_configured(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
-            patch("ai_clients.ConfigManager.is_configured", return_value=True),
-            patch(
-                "ai_clients.OpenRouterClient.generate", return_value="or result"
-            ) as mock_or,
-            patch("ai_clients.FreeAIClient.generate") as mock_free,
-        ):
-            result, provider = generate_with_fallback("prompt", "text")
-
-            assert result == "or result"
-            assert provider == "openrouter"
-            mock_or.assert_called_once_with("prompt", "text")
-            mock_free.assert_not_called()
-
-    def test_uses_free_when_not_configured(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
-            patch("ai_clients.ConfigManager.is_configured", return_value=False),
-            patch("ai_clients.OpenRouterClient.generate") as mock_or,
-            patch(
-                "ai_clients.FreeAIClient.generate", return_value="free result"
-            ) as mock_free,
-        ):
-            result, provider = generate_with_fallback("prompt", "text")
-
-            assert result == "free result"
-            assert provider == "pollinations"
-            mock_or.assert_not_called()
-            mock_free.assert_called_once_with("prompt", "text")
-
-    def test_fallback_from_opencode_to_openrouter(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=True),
-            patch("ai_clients.ConfigManager.is_configured", return_value=True),
-            patch(
-                "ai_clients.OpenCodeZenClient.generate",
-                side_effect=RuntimeError("OC error"),
-            ),
-            patch(
-                "ai_clients.OpenRouterClient.generate", return_value="or result"
-            ) as mock_or,
-            patch("ai_clients.FreeAIClient.generate") as mock_free,
-        ):
-            result, provider = generate_with_fallback("prompt", "text")
-
-            assert result == "or result"
-            assert provider == "openrouter"
-            mock_or.assert_called_once_with("prompt", "text")
-            mock_free.assert_not_called()
-
-    def test_fallback_on_openrouter_failure(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
-            patch("ai_clients.ConfigManager.is_configured", return_value=True),
-            patch(
-                "ai_clients.OpenRouterClient.generate",
-                side_effect=RuntimeError("OR error"),
-            ),
-            patch(
-                "ai_clients.FreeAIClient.generate", return_value="fallback result"
-            ) as mock_free,
-        ):
-            result, provider = generate_with_fallback("prompt", "text")
-
-            assert result == "fallback result"
-            assert provider == "pollinations"
-            mock_free.assert_called_once_with("prompt", "text")
-
-    def test_raises_when_all_fail(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=True),
-            patch("ai_clients.ConfigManager.is_configured", return_value=True),
-            patch(
-                "ai_clients.OpenCodeZenClient.generate",
-                side_effect=RuntimeError("OC error"),
-            ),
-            patch(
-                "ai_clients.OpenRouterClient.generate",
-                side_effect=RuntimeError("OR error"),
-            ),
-            patch(
-                "ai_clients.FreeAIClient.generate",
-                side_effect=RuntimeError("Free error"),
-            ),
-        ):
-            with pytest.raises(RuntimeError) as excinfo:
-                generate_with_fallback("prompt", "text")
-
-            assert "OC error" in str(excinfo.value)
-            assert "OR error" in str(excinfo.value)
-            assert "Free error" in str(excinfo.value)
-
-    def test_raises_on_free_when_not_configured(self):
-        with (
-            patch("ai_clients.ConfigManager.is_opencode_configured", return_value=False),
-            patch("ai_clients.ConfigManager.is_configured", return_value=False),
-            patch(
-                "ai_clients.FreeAIClient.generate",
-                side_effect=RuntimeError("Free error"),
-            ),
-        ):
-            with pytest.raises(RuntimeError, match="Free error"):
-                generate_with_fallback("prompt", "text")
-
-
-from unittest.mock import MagicMock
+            assert result == "gemini result"
+            assert provider == "gemini"
+            mock_gemini.assert_called_once_with("prompt", "text")

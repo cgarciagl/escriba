@@ -12,20 +12,20 @@ class TestConfigManagerLoad:
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "", "autostart": True}
+        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": True}
         assert config_file.exists()
         assert json.loads(config_file.read_text(encoding="utf-8")) == data
 
     def test_load_reads_existing_config(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.json"
         config_file.write_text(
-            json.dumps({"api_key": "abc123", "autostart": False}), encoding="utf-8"
+            json.dumps({"api_key": "abc123", "model": "gemini-2.5-flash", "autostart": False}), encoding="utf-8"
         )
         monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "abc123", "autostart": False}
+        assert data == {"api_key": "abc123", "model": "gemini-2.5-flash", "autostart": False}
 
     def test_load_handles_corrupted_file(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.json"
@@ -34,7 +34,7 @@ class TestConfigManagerLoad:
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "", "autostart": True}
+        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": True}
 
     def test_cache_avoids_reload(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.json"
@@ -166,3 +166,18 @@ class TestConfigManagerApiKey:
         monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
 
         assert ConfigManager.is_configured() is True
+
+
+class TestConfigManagerModel:
+    def test_get_model_default(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.json"
+        monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
+
+        assert ConfigManager.get_model() == "gemini-3.5-flash-lite"
+
+    def test_set_and_get_model(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.json"
+        monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
+
+        ConfigManager.set_model("gemini-2.5-pro")
+        assert ConfigManager.get_model() == "gemini-2.5-pro"

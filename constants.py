@@ -25,17 +25,20 @@ STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 # ─────────────────────────────────────────────────────────────
-# OpenRouter API
+# Google Gemini API
 # ─────────────────────────────────────────────────────────────
-OPENROUTER_BASE          = "https://openrouter.ai/api/v1"
-OPENROUTER_DEFAULT_MODEL = "openrouter/free"
-
-
-# ─────────────────────────────────────────────────────────────
-# OpenCode Zen API — compatible con OpenAI, modelo fijo Big Pickle
-# ─────────────────────────────────────────────────────────────
-OPENCODE_BASE  = "https://opencode.ai/zen/v1"
-OPENCODE_MODEL = "big-pickle"
+GEMINI_BASE            = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_DEFAULT_MODEL   = "gemini-3.5-flash-lite"
+GEMINI_FALLBACK_MODELS = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+]
 
 
 # ─────────────────────────────────────────────────────────────
