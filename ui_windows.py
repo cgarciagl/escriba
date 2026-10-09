@@ -81,11 +81,16 @@ def position_bottom_right(window, margin_x=22, margin_y=110):
 
 
 def run_ai_action(app, prompt, text, prev_hwnd, thinking):
-    """Ejecuta una acción de IA en hilo secundario."""
+    """Ejecuta una acción de IA en hilo secundario con reintentos automáticos."""
     def close():
         thinking.close()
     try:
-        result, provider = generate_with_fallback(prompt, text)
+        def on_retry(attempt, max_retries, delay, reason):
+            sec = max(1, int(round(delay)))
+            msg = f"⏳ Modelo ocupado ({attempt}/{max_retries}). Reintentando en {sec}s…"
+            thinking.update_status(msg)
+
+        result, provider = generate_with_fallback(prompt, text, on_retry=on_retry)
         app.schedule(close)
         app.schedule(lambda: ResultWindow(
             app, result, prev_hwnd,
@@ -151,6 +156,7 @@ class ThinkingWindow:
         self.root   = root
         self.window = None
         self._bar   = None
+        self._label = None
         self.root.after(0, self._show, label)
 
     def _show(self, label: str):
@@ -178,8 +184,9 @@ class ThinkingWindow:
         tk.Label(hdr, text=APP_NAME, font=("Segoe UI", 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
-        tk.Label(inner, text=label, font=("Segoe UI", 9),
-                 bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, pady=(0, 10))
+        self._label = tk.Label(inner, text=label, font=("Segoe UI", 9),
+                               bg=_FM_BG, fg=_FM_MUTED)
+        self._label.pack(anchor=W, pady=(0, 10))
 
         bar = tb.Progressbar(inner, mode="indeterminate",
                              bootstyle="warning-striped", length=240)
@@ -190,6 +197,12 @@ class ThinkingWindow:
         position_bottom_right(win)
         fade_window(win, 0.95, 0.15)
 
+    def update_status(self, text: str):
+        """Actualiza el texto descriptivo del progreso en el hilo principal."""
+        def _update():
+            if self._label and self.window and self.window.winfo_exists():
+                self._label.config(text=text)
+        self.root.after(0, _update)
 
     def close(self):
         if self.window and self.window.winfo_exists():

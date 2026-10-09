@@ -7,6 +7,7 @@ from constants import GEMINI_DEFAULT_MODEL, GEMINI_FALLBACK_MODELS
 from ai_clients import (
     GeminiClient,
     generate_with_fallback,
+    is_retryable_error,
 )
 
 
@@ -86,16 +87,111 @@ class TestGeminiClient:
             with pytest.raises(RuntimeError, match="Gemini HTTP 400: API key not valid"):
                 GeminiClient.generate("prompt", "text")
 
-    def test_generate_connection_error(self):
+    def test_generate_retry_on_429_then_succeed(self):
         with (
             patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep") as mock_sleep,
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            resp_429 = requests.Response()
+            resp_429.status_code = 429
+            resp_429.json = MagicMock(return_value={"error": {"message": "Resource has been exhausted"}})
+            err_429 = requests.exceptions.HTTPError(response=resp_429)
+
+            resp_ok = MagicMock()
+            resp_ok.raise_for_status.return_value = None
+            resp_ok.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "Respuesta tras reintento"}]}}]
+            }
+
+            mock_post.side_effect = [err_429, resp_ok]
+            retry_callback = MagicMock()
+
+            result = GeminiClient.generate("prompt", "text", max_retries=3, initial_delay=0.1, on_retry=retry_callback)
+
+            assert result == "Respuesta tras reintento"
+            assert mock_post.call_count == 2
+            mock_sleep.assert_called_once()
+            retry_callback.assert_called_once()
+            assert retry_callback.call_args[0][0] == 1  # attempt 1
+            assert retry_callback.call_args[0][1] == 3  # max retries
+
+    def test_generate_retry_on_503_overloaded_then_succeed(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            resp_503 = requests.Response()
+            resp_503.status_code = 503
+            resp_503.json = MagicMock(return_value={"error": {"message": "The model is overloaded. Please try again later."}})
+            err_503 = requests.exceptions.HTTPError(response=resp_503)
+
+            resp_ok = MagicMock()
+            resp_ok.raise_for_status.return_value = None
+            resp_ok.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "Éxito al tercer intento"}]}}]
+            }
+
+            mock_post.side_effect = [err_503, err_503, resp_ok]
+
+            result = GeminiClient.generate("prompt", "text", max_retries=3, initial_delay=0.1)
+            assert result == "Éxito al tercer intento"
+            assert mock_post.call_count == 3
+
+    def test_generate_retry_exhausted_on_429(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            resp_429 = requests.Response()
+            resp_429.status_code = 429
+            resp_429.json = MagicMock(return_value={"error": {"message": "Resource has been exhausted"}})
+            err_429 = requests.exceptions.HTTPError(response=resp_429)
+            mock_post.side_effect = err_429
+
+            with pytest.raises(RuntimeError, match="ocupado o con límite de uso excedido.*Reintentos agotados"):
+                GeminiClient.generate("prompt", "text", max_retries=2, initial_delay=0.01)
+
+            assert mock_post.call_count == 2
+
+    def test_generate_retry_on_text_overloaded_message(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            resp_busy = MagicMock()
+            resp_busy.raise_for_status.return_value = None
+            resp_busy.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "El modelo está ocupado en este momento por mucho uso"}]}}]
+            }
+
+            resp_ok = MagicMock()
+            resp_ok.raise_for_status.return_value = None
+            resp_ok.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "Texto generado correctamente"}]}}]
+            }
+
+            mock_post.side_effect = [resp_busy, resp_ok]
+
+            result = GeminiClient.generate("prompt", "text", max_retries=2, initial_delay=0.01)
+            assert result == "Texto generado correctamente"
+            assert mock_post.call_count == 2
+
+    def test_generate_connection_error_exhausted(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep"),
             patch(
                 "ai_clients.requests.post",
                 side_effect=requests.exceptions.ConnectionError,
-            ),
+            ) as mock_post,
         ):
             with pytest.raises(RuntimeError, match="Error de red"):
-                GeminiClient.generate("prompt", "text")
+                GeminiClient.generate("prompt", "text", max_retries=2, initial_delay=0.01)
+            assert mock_post.call_count == 2
 
     def test_fetch_available_models_success(self):
         with patch("ai_clients.requests.get") as mock_get:
@@ -141,11 +237,37 @@ class TestGeminiClient:
             assert models == GEMINI_FALLBACK_MODELS
 
 
+class TestIsRetryableError:
+    def test_connection_and_timeout(self):
+        is_ret, reason = is_retryable_error(requests.exceptions.ConnectionError())
+        assert is_ret is True
+
+        is_ret, reason = is_retryable_error(requests.exceptions.Timeout())
+        assert is_ret is True
+
+    def test_http_status_codes(self):
+        resp_429 = requests.Response()
+        resp_429.status_code = 429
+        is_ret, reason = is_retryable_error(requests.exceptions.HTTPError(response=resp_429))
+        assert is_ret is True
+
+        resp_503 = requests.Response()
+        resp_503.status_code = 503
+        is_ret, reason = is_retryable_error(requests.exceptions.HTTPError(response=resp_503))
+        assert is_ret is True
+
+        resp_400 = requests.Response()
+        resp_400.status_code = 400
+        is_ret, reason = is_retryable_error(requests.exceptions.HTTPError(response=resp_400))
+        assert is_ret is False
+
+
 class TestGenerateWithFallback:
-    def test_uses_gemini(self):
+    def test_uses_gemini_with_callback(self):
+        callback = MagicMock()
         with patch("ai_clients.GeminiClient.generate", return_value="gemini result") as mock_gemini:
-            result, provider = generate_with_fallback("prompt", "text")
+            result, provider = generate_with_fallback("prompt", "text", on_retry=callback)
 
             assert result == "gemini result"
             assert provider == "gemini"
-            mock_gemini.assert_called_once_with("prompt", "text")
+            mock_gemini.assert_called_once_with("prompt", "text", on_retry=callback)
