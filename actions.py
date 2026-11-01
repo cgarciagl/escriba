@@ -21,6 +21,7 @@ import copy
 import json
 import os
 import sys
+import unicodedata
 
 import constants
 from constants import AI_ACTIONS
@@ -169,3 +170,40 @@ def write_defaults(overwrite: bool = False) -> str:
         with open(ACTIONS_FILE, "w", encoding="utf-8") as f:
             json.dump(_serializable(default_actions()), f, indent=2, ensure_ascii=False)
     return ACTIONS_FILE
+
+
+# ─────────────────────────────────────────────────────────────
+# Búsqueda en el menú (paleta de comandos)
+# ─────────────────────────────────────────────────────────────
+def normalize_text(text: str) -> str:
+    """Minúsculas y sin acentos: "Traducir al Español" → "traducir al espanol"."""
+    decomposed = unicodedata.normalize("NFD", text or "")
+    return "".join(c for c in decomposed if unicodedata.category(c) != "Mn").lower().strip()
+
+
+def action_name(action: dict) -> str:
+    """Nombre sin el icono: "✎  Reescribir" → "Reescribir"."""
+    parts = action["label"].split("  ", 1)
+    return (parts[1] if len(parts) == 2 else parts[0]).strip()
+
+
+def action_icon(action: dict) -> str:
+    parts = action["label"].split("  ", 1)
+    return parts[0].strip() if len(parts) == 2 else "•"
+
+
+def filter_actions(actions: list[dict], query: str) -> list[dict]:
+    """Filtra por nombre o sección; todas las palabras de la búsqueda deben aparecer.
+
+    Las coincidencias al inicio del nombre van primero; el resto conserva el orden.
+    """
+    words = normalize_text(query).split()
+    if not words:
+        return list(actions)
+    starts, contains = [], []
+    for action in actions:
+        name = normalize_text(action_name(action))
+        haystack = f"{name} {normalize_text(action.get('section', ''))}"
+        if all(w in haystack for w in words):
+            (starts if name.startswith(words[0]) else contains).append(action)
+    return starts + contains

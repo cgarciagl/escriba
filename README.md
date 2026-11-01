@@ -19,7 +19,10 @@ Aplicación nativa de escritorio que proporciona asistencia de IA integrada dire
 - ✏️ **Prompt personalizado**: ventana dedicada para ingresar instrucciones libres sobre el texto seleccionado
 - ⚡ **Google Gemini Oficial**: soporte para modelos Flash (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-2.5-flash`, etc.) con descarga dinámica de modelos disponibles
 - 🔄 **Reintentos automáticos**: gestión transparente de saturación de modelos y rate limits (HTTP 429, 503) con retroceso exponencial
-- 🎨 **Interfaz moderna**: tema Vapor (`ttkbootstrap`) con animaciones suaves de entrada, menú flotante y ventana de resultados
+- 🔎 **Menú tipo paleta de comandos**: aparece junto al cursor; escribe para filtrar, navega con ↑↓ y usa cualquier texto como instrucción libre
+- 🎨 **Interfaz cuidada**: paleta oscura ámbar coherente en todas las ventanas, texto nítido con escalado de pantalla (DPI) y contraste legible
+- ⏹ **Cancelar en cualquier momento**: detén una petición lenta o un streaming en curso
+- 🧭 **Errores accionables**: los avisos de error se quedan visibles y ofrecen "Abrir configuración" o "Reintentar"
 - 📌 **Bandeja del sistema**: se ejecuta silenciosamente en segundo plano (`pystray`)
 - ⚡ **Captura inteligente**: extrae el texto seleccionado vía portapapeles y restaura el portapapeles original
 - 🚀 **Inicio automático configurable**: opción para iniciar automáticamente junto a Windows (`HKCU\...\Run`)
@@ -68,13 +71,16 @@ Al primer arranque, la aplicación:
 - El inicio automático con Windows viene **desactivado**; se activa desde la ventana de Configuración
 - Muestra un banner de bienvenida y se aloja en la bandeja del sistema
 
-> **Nota:** Para procesar solicitudes con IA, es necesario configurar una API Key de Google Gemini. Haz clic derecho en el ícono de Escriba en la bandeja del sistema y selecciona **Configuración**.
+> **Nota:** Para procesar solicitudes con IA hace falta una API Key de Google Gemini (o un proveedor alternativo). Si no hay ninguno configurado, Escriba abre la ventana de **Configuración** en el primer arranque. También puedes abrirla con clic derecho en el ícono de la bandeja → **Configuración**.
 
 ## ⌨️ Cómo Usar
 
 1. **Selecciona** cualquier texto en cualquier aplicación (navegador, editor, chat, terminal, etc.).
-2. **Presiona** `Win+Alt+E` — aparecerá un menú flotante centrado en pantalla.
-3. **Elige** una acción (con clic o mediante su atajo de teclado):
+2. **Presiona** `Win+Alt+E` — aparece el menú junto al cursor, con un buscador.
+3. **Elige** una acción. Puedes:
+   - **Escribir para filtrar** (no importan acentos ni mayúsculas: `trad`, `resum`, `codigo`…) y pulsar `Enter`.
+   - Moverte con **↑ / ↓** y ejecutar con `Enter`, o hacer clic.
+   - Usar el **atajo** de la acción directamente:
 
    ### 📝 Texto y Contenido
    - ✎ **Reescribir** (`Ctrl+R`) — Mejora la claridad, fluidez y gramática conservando el sentido.
@@ -92,18 +98,25 @@ Al primer arranque, la aplicación:
    - ✦ **Refactorizar Código** (`Ctrl+K`) — Aplica principios de Clean Code, reduce anidamiento y renombra variables.
    - ⊙ **Explicar Código** (`Ctrl+P`) — Análisis paso a paso de la lógica y funcionamiento del código.
 
-   ### ✏️ Prompt Personalizado
-   - Haz clic en **Crear prompt personalizado** (o pulsa `Ctrl+Espacio`) para abrir un diálogo donde podrás introducir cualquier instrucción libre sobre el texto seleccionado. Ejecútalo con `Ctrl+Enter`.
+   ### ✏️ Instrucción libre
+   - Escribe en el buscador lo que quieras ("hazlo más breve y en tono amable"). Si no coincide con ninguna acción, la fila **Usar como instrucción** queda seleccionada: pulsa `Enter`. Con `Shift+Enter` añades saltos de línea para instrucciones largas.
 
    > Los atajos evitan `Ctrl+X`, `Ctrl+S` y `Ctrl+F` por su significado habitual. Puedes cambiarlos en `actions.json`.
 
-4. **Procesamiento** — Se muestra una ventana flotante con barra de progreso hasta que llega el primer fragmento; con streaming activado, la ventana de resultado se abre y el texto aparece mientras se genera. Si el modelo experimenta saturación temporal, la ventana mostrará el reintento automático.
-5. **Interactúa con el resultado** — En la ventana de respuesta podrás:
-   - **⬅️ Sustituir texto seleccionado** — Reemplaza automáticamente el texto seleccionado en la aplicación original.
-   - **🔄 Volver a generar** — Solicita una nueva respuesta a Gemini con el mismo prompt.
-   - **📋 Copiar al portapapeles** — Copia el texto generado.
-   - **✕ Cerrar** — Cierra la ventana y descarta el resultado.
-6. **Historial** — Clic derecho en el ícono de la bandeja → **🕘 Historial** para reabrir una de las últimas respuestas (se guardan solo en memoria y se pierden al cerrar Escriba).
+4. **Procesamiento** — Se muestra un indicador de progreso (con **Cancelar**) hasta que llega el primer fragmento; con streaming activado, la ventana de resultado se abre y el texto aparece mientras se genera (con **⏹ Detener**, que conserva lo generado hasta ese momento). Si el modelo está saturado, el indicador muestra el reintento automático.
+5. **Interactúa con el resultado:**
+
+   | Acción | Atajo |
+   | --- | --- |
+   | **⬅️ Sustituir texto** (acción principal) en la aplicación original | `Ctrl+Enter` |
+   | **📋 Copiar** | `Ctrl+Shift+C` |
+   | **🔄 Regenerar** con el mismo prompt | `Ctrl+R` |
+   | Alternar **Resultado / Original** para comparar | `Ctrl+O` |
+   | Cerrar | `Esc` |
+
+   El resultado es editable antes de sustituirlo o copiarlo.
+6. **Si algo falla** — El aviso de error se queda visible hasta que lo cierras e incluye un botón con el siguiente paso: **Abrir configuración** (clave inválida, modelo inexistente…) o **Reintentar** (red, saturación).
+7. **Historial** — Clic derecho en el ícono de la bandeja → **🕘 Historial** para reabrir una de las últimas respuestas (se guardan solo en memoria y se pierden al cerrar Escriba).
 
 ## 🍎 macOS (experimental)
 
@@ -113,7 +126,7 @@ Escriba también funciona en macOS 11 o superior. Todavía **no se ha probado a 
 | -------------------- | ------------------------------- | ------------------------------------------ |
 | Atajo global         | `Win+Alt+E`                     | `⌃⌘E` (Control+Command+E)                  |
 | Atajos del menú      | `Ctrl+R`, `Ctrl+1`…             | `⌘R`, `⌘1`… (en `actions.json`, `Ctrl` = `⌘`) |
-| Prompt personalizado | `Ctrl+Espacio`, ejecutar `Ctrl+Enter` | `⌘↩`, ejecutar `⌘↩`                  |
+| Ventana de resultado | `Ctrl+Enter`, `Ctrl+Shift+C`, `Ctrl+R`, `Ctrl+O` | `⌘↩`, `⌘⇧C`, `⌘R`, `⌘O`           |
 | Ícono                | Bandeja del sistema             | Barra de menús (sin ícono en el Dock)      |
 | API Keys             | Cifradas con DPAPI en `config.json` | Llavero de macOS                       |
 | Configuración        | `%APPDATA%\Escriba`             | `~/Library/Application Support/Escriba`    |
@@ -189,7 +202,7 @@ En **Configuración → General → 📝 Editar acciones** se crea `%APPDATA%\Es
 | `label`     | Sí          | Texto del botón (por convención, icono + dos espacios + nombre)             |
 | `prompt`    | Sí          | Instrucciones para la IA (se envían como *system instruction*)              |
 | `section`   | No          | Agrupa botones; la primera sección se muestra sin encabezado                |
-| `bootstyle` | No          | Estilo de `ttkbootstrap` (`info-outline`, `warning-outline`, `danger-outline`…) |
+| `bootstyle` | No          | Obsoleto: se acepta por compatibilidad, pero el menú usa la paleta de Escriba |
 | `shortcut`  | No          | `Ctrl`/`Alt`/`Shift` + letra, dígito o `F1`–`F12` (p. ej. `Ctrl+Shift+T`)   |
 
 Si el archivo tiene errores, Escriba usa las acciones válidas (o las predeterminadas) y muestra un aviso. **↺ Restaurar predeterminadas** sobrescribe el archivo.
@@ -240,11 +253,12 @@ escriba/
 ├── tray.py             # Ícono y menú de bandeja del sistema vía pystray
 ├── ui_windows.py       # Fachada que reexporta las ventanas de los módulos ui_*
 ├── ui_common.py        # Paleta, helpers, notificaciones, indicador de progreso y banner
-├── ui_menu.py          # Menú flotante y ventana de prompt personalizado
+├── ui_menu.py          # Menú flotante tipo paleta de comandos (buscador + instrucción libre)
 ├── ui_result.py        # Ejecución de acciones (streaming) y ventana de resultado
 ├── ui_config.py        # Ventana de configuración con pestañas
 ├── ai_clients.py       # Clientes Gemini y OpenAI-compatible, streaming, reintentos y fallback
 ├── tests/              # Suite de pruebas automatizadas con pytest (también corre en CI)
+├── tools/capturas.py   # Capturas PNG de las ventanas reales (la CI las publica como artefacto)
 ├── .github/workflows/  # CI: tests en Windows y macOS, compila y prueba Escriba.exe y Escriba.app
 ├── build/              # Archivos temporales generados por PyInstaller
 ├── dist/               # Contiene el ejecutable final Escriba.exe
@@ -296,7 +310,7 @@ Los cambios guardados desde la UI se aplican inmediatamente.
 - **`escriba.py`** — Clase `EscribaApp`. Orquesta el mainloop de Tkinter, la conexión entre el hotkey global y las ventanas, y el ciclo de vida de la aplicación.
 - **`hotkey.py`** — `HotkeyManager`. Registra `Win+Alt+E` a nivel de sistema operativo utilizando la función WinAPI `RegisterHotKey`, asegurando la captura sin conflictos ni fugas de teclas. Incluye funciones de asistencia de teclado para enviar secuencias seguras de `Ctrl+C` y `Ctrl+V`.
 - **`tray.py`** — `TrayIconManager`. Crea el ícono en la bandeja del sistema con opciones para abrir Configuración, ver información o salir.
-- **`ui_windows.py`** — Fachada que reexporta la interfaz, repartida en `ui_common.py` (paleta y ventanas pequeñas), `ui_menu.py` (`FloatingMenu`, `CustomPromptWindow`), `ui_result.py` (`ResultWindow`, `run_ai_action` con streaming) y `ui_config.py` (`ConfigWindow`).
+- **`ui_windows.py`** — Fachada que reexporta la interfaz, repartida en `ui_common.py` (paleta, estilos `Escriba.*`, escalado por DPI, posición junto al cursor y ventanas pequeñas), `ui_menu.py` (`FloatingMenu`, paleta de comandos), `ui_result.py` (`ResultWindow`, `run_ai_action` con streaming y cancelación) y `ui_config.py` (`ConfigWindow`).
 - **`ai_clients.py`** — `GeminiClient`, `OpenAICompatibleClient` y `generate_text()`. Envía el prompt como *system instruction*, admite streaming (SSE), detecta errores transitorios (`is_retryable_error`), reintenta con retroceso exponencial y aplica el fallback entre proveedores.
 - **`actions.py`** — Lee y valida `actions.json`; convierte atajos como `Ctrl+R` al formato de Tk.
 - **`history.py`** — Historial en memoria, acotado y seguro entre hilos.
@@ -316,8 +330,8 @@ Los cambios guardados desde la UI se aplican inmediatamente.
 6. Al presionar Win+Alt+E:
    └─ Captura el texto seleccionado mediante simulación segura de Ctrl+C
    └─ Despliega FloatingMenu con las acciones de actions.json (o las predeterminadas) y la opción de prompt libre
-   └─ El usuario escoge una acción o introduce un prompt personalizado
-   └─ Se muestra ThinkingWindow con indicador de progreso
+   └─ El usuario filtra y escoge una acción, o escribe una instrucción libre
+   └─ Se muestra ThinkingWindow con indicador de progreso y botón Cancelar
    └─ Se envía la solicitud al proveedor configurado (reintentos y, si está activo, fallback)
    └─ Con el primer fragmento se abre ResultWindow y el texto aparece en streaming
    └─ La respuesta se guarda en el historial de la sesión

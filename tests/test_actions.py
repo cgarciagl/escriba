@@ -126,3 +126,50 @@ class TestWriteDefaults:
         assert len(json.loads(actions_file.read_text(encoding="utf-8"))) == 1
         write_defaults(overwrite=True)
         assert len(json.loads(actions_file.read_text(encoding="utf-8"))) == len(AI_ACTIONS)
+
+
+from actions import action_icon, action_name, filter_actions, normalize_text
+
+
+class TestPaletteSearch:
+    ACTIONS = [
+        {"label": "✎  Reescribir", "section": "Texto y Contenido"},
+        {"label": "≡  Resumir", "section": "Texto y Contenido"},
+        {"label": "◐  Traducir al español", "section": "Idiomas"},
+        {"label": "◑  Traducir al inglés", "section": "Idiomas"},
+        {"label": "⊙  Explicar código", "section": "Para desarrolladores"},
+        {"label": "Sin icono", "section": "Otros"},
+    ]
+
+    def names(self, query):
+        return [action_name(a) for a in filter_actions(self.ACTIONS, query)]
+
+    def test_empty_query_returns_all(self):
+        assert len(filter_actions(self.ACTIONS, "  ")) == len(self.ACTIONS)
+
+    def test_accent_and_case_insensitive(self):
+        assert self.names("ESPANOL") == ["Traducir al español"]
+        assert self.names("código") == ["Explicar código"]
+
+    def test_all_words_must_match(self):
+        assert self.names("trad ingl") == ["Traducir al inglés"]
+
+    def test_matches_section(self):
+        assert self.names("idiomas") == ["Traducir al español", "Traducir al inglés"]
+
+    def test_prefix_matches_first(self):
+        # "re" está al inicio de Reescribir y Resumir; dentro de "desarrolladores" en Explicar código
+        assert self.names("re")[:2] == ["Reescribir", "Resumir"]
+        assert "Explicar código" in self.names("re")
+
+    def test_no_match(self):
+        assert self.names("zzz") == []
+
+    def test_name_and_icon(self):
+        assert action_name(self.ACTIONS[0]) == "Reescribir"
+        assert action_icon(self.ACTIONS[0]) == "✎"
+        assert action_name(self.ACTIONS[-1]) == "Sin icono"
+        assert action_icon(self.ACTIONS[-1]) == "•"
+
+    def test_normalize(self):
+        assert normalize_text("  Ñandú ÁÉÍ ") == "nandu aei"

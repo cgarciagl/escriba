@@ -1,5 +1,5 @@
 """
-Escriba - Asistente de Texto con IA para Windows y macOS v1.2.0
+Escriba - Asistente de Texto con IA para Windows y macOS v1.3.0
 ======================================================
 Hotkey: Win+Alt+E en Windows (RegisterHotKey, ver hotkey.py) y Ctrl+Cmd+E en
 macOS (ver macos.py). Lo dependiente del sistema se accede vía plataforma.py.
@@ -16,12 +16,16 @@ import pyperclip
 
 from constants import APP_NAME
 from config import ConfigManager
+from ai_clients import is_ready
 from history import History
+from ui_common import configure_styles
 from ui_windows import (
     ConfigWindow, FloatingMenu, ResultWindow, TooltipNotification, SplashBanner,
 )
 from tray import TrayIconManager
-from plataforma import HOTKEY_LABEL, HotkeyManager, StartupManager, init_app, send_copy
+from plataforma import (
+    HOTKEY_LABEL, HotkeyManager, StartupManager, enable_dpi_awareness, init_app, send_copy,
+)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -31,8 +35,10 @@ class EscribaApp:
     """Orquestador principal: conecta hotkey, tray, y ventanas UI."""
 
     def __init__(self):
+        enable_dpi_awareness()  # Windows: texto nítido con escalado (antes de crear Tk)
         self.root = tb.Window(themename="vapor")
         init_app()  # macOS: sin ícono en el Dock
+        configure_styles(self.root)
         self.root.title(APP_NAME)
         self.root.withdraw()
 
@@ -57,6 +63,9 @@ class EscribaApp:
         self.tray.start()
         SplashBanner(self.root)
         self.root.after(500, self.hotkey.start)
+        # Primer arranque: sin proveedor configurado, guiar al usuario a Configuración.
+        if not is_ready():
+            self.root.after(1800, lambda: self.config_window.show(welcome=True))
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.root.mainloop()
 

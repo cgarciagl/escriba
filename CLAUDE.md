@@ -4,7 +4,7 @@
 
 **Escriba** es una aplicación de escritorio para Windows (y, de forma experimental, macOS) que actúa como asistente de texto con IA. El usuario selecciona texto en cualquier aplicación, pulsa **Win+Alt+E**, y aparece un menú flotante con acciones de IA (reescribir, traducir, resumir, formatear SQL, etc.). El resultado puede sustituir directamente el texto seleccionado.
 
-- **Versión:** 1.2.0
+- **Versión:** 1.3.0
 - **Plataformas:** Windows (`ctypes.windll`, `winreg`, `RegisterHotKey`) y macOS experimental (`pynput`, PyObjC). Todo lo dependiente del sistema pasa por `plataforma.py`.
 - **Hotkey global:** `Win+Alt+E` en Windows (`RegisterHotKey`); `Ctrl+Cmd+E` en macOS (`pynput`).
 
@@ -66,8 +66,8 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 | `hotkey.py` | (Windows) `HotkeyManager` — registra `Win+Alt+E` via `RegisterHotKey`. Helpers `send_ctrl_c`, `send_ctrl_v`. |
 | `macos.py` | (macOS) atajo con `pynput`, `⌘C/⌘V` con Quartz, app activa con `NSWorkspace`, `StartupManager` (LaunchAgent) y Llavero (`security`). |
 | `ui_windows.py` | Fachada que reexporta la UI. |
-| `ui_common.py` | Paleta `_FM_*`, helpers (`apply_dark_style`, `center_window`, `fade_window`), `TooltipNotification`, `ThinkingWindow`, `SplashBanner`. |
-| `ui_menu.py` | `FloatingMenu` (acciones de `actions.json` + atajos) y `CustomPromptWindow`. |
+| `ui_common.py` | Paleta `_FM_*`, estilos ttk `Escriba.*` (`configure_styles`), escalado DPI (`scaled`, `center_window`), `place_near_pointer`, `TooltipNotification` (errores persistentes con botón de acción), `ThinkingWindow` (con Cancelar), `SplashBanner`. |
+| `ui_menu.py` | `FloatingMenu`: paleta de comandos (buscador, ↑↓/Enter, instrucción libre integrada, atajos). La búsqueda pura está en `actions.filter_actions`. |
 | `ui_result.py` | `run_ai_action`/`start_ai_action` (streaming, historial) y `ResultWindow`. |
 | `ui_config.py` | `ConfigWindow` con pestañas Gemini / Proveedor alternativo / General. |
 | `tray.py` | `TrayIconManager` — ícono en la bandeja del sistema via `pystray`. |
@@ -79,7 +79,7 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 1. `EscribaApp.__init__` crea el root `ttkbootstrap.Window` (tema "vapor") y todas las ventanas.
 2. `run()` carga config, inicia el tray icon, muestra `SplashBanner`, y arranca el hotkey manager.
 3. Al pulsar Win+Alt+E → `_on_hotkey` → `_capture_selected_text` (simula Ctrl+C, lee portapapeles, restaura el original) → muestra `FloatingMenu`.
-4. El usuario elige una acción → `ThinkingWindow` → `generate_text` en hilo secundario → con el primer fragmento se abre `ResultWindow` en modo streaming → `finish()` habilita los botones y la respuesta pasa al historial.
+4. El usuario filtra/elige una acción o escribe una instrucción → `start_ai_action` crea un `_ResultSession` (con `cancel_event`) → `ThinkingWindow` → `generate_text` en hilo secundario → con el primer fragmento se abre `ResultWindow` en modo streaming (con Detener) → `finish()` habilita los botones y la respuesta pasa al historial. Los errores se muestran con `needs_configuration()` → "Abrir configuración" o "Reintentar".
 5. Desde `ResultWindow` el usuario puede copiar, editar, regenerar, o **sustituir** el texto en la aplicación original (simula Ctrl+V).
 
 ### Clientes de IA
@@ -104,6 +104,8 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 - No usar `ctypes.windll`, `winreg` ni APIs de PyObjC fuera de `hotkey.py`, `startup.py`, `config.py` (DPAPI), `plataforma.py` y `macos.py`: el resto del código debe pasar por `plataforma.py`.
 - En macOS, `NSApplication` debe crearse **después** del root de Tk (`init_app()` va tras `tb.Window`) y `pystray` usa `run_detached()` en el hilo principal.
 - Fuentes: usar `UI_FONT`, `MONO_FONT`, `EMOJI_FONT` de `ui_common.py` (Segoe UI no existe en macOS).
-- La UI usa `ttkbootstrap` con tema "vapor" y colores custom definidos en `ui_windows.py` (paleta `_FM_*`).
+- La UI usa `ttkbootstrap` con tema "vapor" como base, pero los colores salen de la paleta `_FM_*` de `ui_common.py`. Para botones secundarios, campos, combos, pestañas y scrollbars usar los estilos `Escriba.*` (no `bootstyle="secondary"`/`info`/`danger`, que el tema pinta de rosa/morado/cian). El único `bootstyle` permitido es `warning` (ámbar) para la acción principal y los indicadores de casillas.
+- Tamaños en píxeles: pasar por `scaled()`/`center_window()` para respetar el escalado de pantalla.
+- Cambios visuales: revisar las capturas de `tools/capturas.py` (artefacto "capturas" de la CI) antes de dar el trabajo por terminado.
 - Los hilos secundarios usan `app.schedule()` para actualizar la UI en el hilo principal de Tk.
 - El idioma del proyecto es español (nombres de variables, comentarios, prompts de IA, UI).

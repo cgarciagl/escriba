@@ -15,7 +15,8 @@ def mock_escriba_deps():
             with patch("escriba.FloatingMenu"):
                 with patch("escriba.TooltipNotification"):
                     with patch("escriba.TrayIconManager"):
-                        with patch("escriba.HotkeyManager"), patch("escriba.init_app"):
+                        with patch("escriba.HotkeyManager"), patch("escriba.init_app"), \
+                             patch("escriba.configure_styles"):
                             yield mock_window_instance
 
 

@@ -19,7 +19,7 @@ else:
 # Constantes de la aplicación
 # ─────────────────────────────────────────────────────────────
 APP_NAME     = "Escriba"
-APP_VERSION  = "1.2.0"
+APP_VERSION  = "1.3.0"
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 # Carpeta de configuración (escribible aunque la app esté en Program Files o
