@@ -82,9 +82,11 @@ class TestBuildItems:
 def _make_result(app, **kwargs):
     from ui_result import ResultWindow
 
-    defaults = dict(prompt="p", selected_text="original del usuario")
-    defaults.update(kwargs)
-    return ResultWindow(app, kwargs.pop("result", ""), kwargs.pop("prev", 1234), **defaults)
+    result = kwargs.pop("result", "")
+    prev = kwargs.pop("prev", 1234)
+    options = dict(prompt="p", selected_text="original del usuario")
+    options.update(kwargs)
+    return ResultWindow(app, result, prev, **options)
 
 
 class TestResultWindow:
