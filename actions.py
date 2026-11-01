@@ -11,7 +11,7 @@ Formato de cada acción (JSON):
       "prompt":    "Reescribe el texto…",    # obligatorio
       "section":   "Texto y Contenido",      # opcional
       "bootstyle": "info-outline",           # opcional (estilo ttkbootstrap)
-      "shortcut":  "Ctrl+R"                  # opcional (Ctrl/Alt/Shift + tecla)
+      "shortcut":  "Ctrl+R"                  # opcional (Ctrl/Alt/Shift + tecla; en macOS Ctrl = ⌘)
     }
 """
 
@@ -20,6 +20,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import sys
 
 import constants
 from constants import AI_ACTIONS
@@ -29,24 +30,29 @@ ACTIONS_FILE = os.path.join(constants.CONFIG_DIR, "actions.json")
 DEFAULT_SECTION = "Texto y Contenido"
 DEFAULT_BOOTSTYLE = "info-outline"
 
-_MODIFIERS = {"ctrl": "Control", "control": "Control", "alt": "Alt", "shift": "Shift"}
+IS_MAC = sys.platform == "darwin"
+
+# "Ctrl" es el modificador principal: en macOS se traduce a Command (⌘), que es
+# la convención de la plataforma. "Cmd"/"Command" también se aceptan.
+_MODIFIERS_WIN = {"ctrl": "Control", "control": "Control", "cmd": "Control", "command": "Control",
+                  "alt": "Alt", "option": "Alt", "shift": "Shift"}
+_MODIFIERS_MAC = {"ctrl": "Command", "control": "Command", "cmd": "Command", "command": "Command",
+                  "alt": "Option", "option": "Option", "shift": "Shift"}
+_MAC_SYMBOLS = {"Command": "⌘", "Option": "⌥", "Shift": "⇧"}
 
 
-def shortcut_to_tk(shortcut: str) -> str | None:
-    """Convierte "Ctrl+R" → "<Control-r>". Devuelve None si no es válido.
-
-    Se exige al menos un modificador para que una tecla suelta no dispare
-    acciones por accidente.
-    """
+def _split(shortcut: str, mac: bool):
+    """Devuelve (modificadores Tk, tecla Tk) o None si el atajo no es válido."""
     if not shortcut or not isinstance(shortcut, str):
         return None
     parts = [p.strip() for p in shortcut.split("+") if p.strip()]
     if len(parts) < 2:
         return None
     *mods, key = parts
-    tk_mods = []
+    table = _MODIFIERS_MAC if mac else _MODIFIERS_WIN
+    tk_mods: list[str] = []
     for m in mods:
-        name = _MODIFIERS.get(m.lower())
+        name = table.get(m.lower())
         if not name or name in tk_mods:
             return None
         tk_mods.append(name)
@@ -56,7 +62,30 @@ def shortcut_to_tk(shortcut: str) -> str | None:
         key = key.upper()
     else:
         return None
+    return tk_mods, key
+
+
+def shortcut_to_tk(shortcut: str, mac: bool | None = None) -> str | None:
+    """Convierte "Ctrl+R" → "<Control-r>" (o "<Command-r>" en macOS).
+
+    Devuelve None si no es válido. Se exige al menos un modificador para que una
+    tecla suelta no dispare acciones por accidente.
+    """
+    parsed = _split(shortcut, IS_MAC if mac is None else mac)
+    if parsed is None:
+        return None
+    tk_mods, key = parsed
     return "<" + "-".join(tk_mods + [key]) + ">"
+
+
+def display_shortcut(shortcut: str, mac: bool | None = None) -> str:
+    """Texto a mostrar: "Ctrl+R" en Windows, "⌘R" en macOS."""
+    mac = IS_MAC if mac is None else mac
+    parsed = _split(shortcut, mac)
+    if parsed is None or not mac:
+        return shortcut
+    tk_mods, key = parsed
+    return "".join(_MAC_SYMBOLS[m] for m in tk_mods) + key.upper()
 
 
 def _normalize(raw: list) -> tuple[list[dict], list[str]]:

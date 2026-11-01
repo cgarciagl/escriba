@@ -9,7 +9,6 @@ Sin streaming (o si la respuesta llega de golpe) se abre ResultWindow al final.
 
 from __future__ import annotations
 
-import ctypes
 import threading
 import time
 import tkinter as tk
@@ -22,9 +21,9 @@ from ttkbootstrap.constants import *
 from ai_clients import PROVIDER_LABELS, generate_text
 from config import ConfigManager
 from constants import APP_NAME, OPENAI_DEFAULT_MODEL
-from hotkey import send_ctrl_v
+from plataforma import activate_window, send_paste
 from ui_common import (
-    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT,
+    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, UI_FONT,
     ThinkingWindow, apply_dark_style, center_window,
 )
 
@@ -165,14 +164,14 @@ class ResultWindow:
         hdr = tk.Frame(frame, bg=_FM_BG)
         hdr.pack(fill=X, pady=(0, 8))
         tk.Label(hdr, text="✦  Texto generado",
-                 font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+                 font=(UI_FONT, 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
         badge_f = tk.Frame(hdr, bg=_FM_ACCENT)
         badge_f.pack(side=RIGHT)
         self._badge = tk.Label(
             badge_f,
             text="⏳ Generando…" if streaming else provider_badge(provider),
-            font=("Segoe UI", 8, "bold"), bg=_FM_ACCENT, fg=_FM_BG, padx=7, pady=3,
+            font=(UI_FONT, 8, "bold"), bg=_FM_ACCENT, fg=_FM_BG, padx=7, pady=3,
         )
         self._badge.pack()
 
@@ -209,7 +208,7 @@ class ResultWindow:
 
         self.text_widget = tk.Text(
             txt_frame,
-            font=("Segoe UI", 10),
+            font=(UI_FONT, 10),
             wrap=tk.WORD,
             relief="flat",
             bg=_FM_CARD, fg=_FM_TEXT,
@@ -290,17 +289,8 @@ class ResultWindow:
             pass
         try:
             pyperclip.copy(text)
-            if self.prev_hwnd:
-                fore_tid = ctypes.windll.user32.GetWindowThreadProcessId(self.prev_hwnd, None)
-                cur_tid = ctypes.windll.kernel32.GetCurrentThreadId()
-                if fore_tid and fore_tid != cur_tid:
-                    ctypes.windll.user32.AttachThreadInput(cur_tid, fore_tid, True)
-                ctypes.windll.user32.SetForegroundWindow(self.prev_hwnd)
-                ctypes.windll.user32.BringWindowToTop(self.prev_hwnd)
-                if fore_tid and fore_tid != cur_tid:
-                    ctypes.windll.user32.AttachThreadInput(cur_tid, fore_tid, False)
-                time.sleep(0.25)
-            send_ctrl_v()
+            activate_window(self.prev_hwnd)
+            send_paste()
             # Dar tiempo a la app destino a leer el portapapeles y restaurarlo.
             time.sleep(0.30)
             if original_clip:

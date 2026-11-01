@@ -4,17 +4,17 @@ Escriba — Menú flotante de acciones y ventana de prompt personalizado.
 
 from __future__ import annotations
 
-import ctypes
 import tkinter as tk
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from actions import load_actions
+from actions import display_shortcut, load_actions
 from constants import APP_NAME
+from plataforma import IS_MAC, bring_app_to_front, get_foreground_window, shortcut_label, tk_shortcut
 from ui_common import (
-    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT,
+    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
     apply_dark_style, center_window, fade_window,
 )
 from ui_result import CUSTOM_PROMPT_LABEL, start_ai_action
@@ -22,7 +22,11 @@ from ui_result import CUSTOM_PROMPT_LABEL, start_ai_action
 if TYPE_CHECKING:
     from escriba import EscribaApp
 
-CUSTOM_PROMPT_SHORTCUT = ("Ctrl+Espacio", "<Control-space>")
+# Ctrl+Espacio en Windows; ⌘↩ en macOS (⌘Espacio es Spotlight).
+CUSTOM_PROMPT_SHORTCUT = (
+    ("⌘↩", "<Command-Return>") if IS_MAC else ("Ctrl+Espacio", "<Control-space>")
+)
+RUN_PROMPT_SHORTCUT = (shortcut_label("Ctrl+Enter"), tk_shortcut("Return"))
 
 
 def group_by_section(actions: list[dict]) -> list[tuple[str, list[dict]]]:
@@ -34,7 +38,7 @@ def group_by_section(actions: list[dict]) -> list[tuple[str, list[dict]]]:
 
 
 def button_text(action: dict) -> str:
-    shortcut = action.get("shortcut") if action.get("shortcut_key") else ""
+    shortcut = display_shortcut(action["shortcut"]) if action.get("shortcut_key") else ""
     return f"{action['label']}   ·  {shortcut}" if shortcut else action["label"]
 
 
@@ -76,7 +80,7 @@ class FloatingMenu:
         # Se leen en cada apertura: los cambios en actions.json se aplican al momento.
         actions, warnings = load_actions()
 
-        self._prev_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        self._prev_hwnd = get_foreground_window()
 
         win = tb.Toplevel(self.app.root)
         win.overrideredirect(True)
@@ -93,14 +97,14 @@ class FloatingMenu:
         hdr = tb.Frame(inner)
         hdr.pack(fill=X, pady=(0, 4))
 
-        tb.Label(hdr, text="⚡", font=("Segoe UI", 13), bootstyle="info").pack(side=LEFT)
+        tb.Label(hdr, text="⚡", font=(UI_FONT, 13), bootstyle="info").pack(side=LEFT)
         tb.Label(hdr, text=f" {APP_NAME}",
-                 font=("Segoe UI", 11, "bold"), bootstyle="info").pack(side=LEFT)
+                 font=(UI_FONT, 11, "bold"), bootstyle="info").pack(side=LEFT)
 
         word_count = len(selected_text.split())
         char_count = len(selected_text.strip())
         tb.Label(hdr, text=f"  {word_count} pal. · {char_count} car.",
-                 font=("Segoe UI", 8), bootstyle="secondary").pack(side=LEFT)
+                 font=(UI_FONT, 8), bootstyle="secondary").pack(side=LEFT)
 
         tb.Button(hdr, text="✕", bootstyle="secondary-link",
                   command=self.hide, width=2).pack(side=RIGHT)
@@ -112,7 +116,7 @@ class FloatingMenu:
         prev_frame = tb.Frame(inner, padding=(8, 5))
         prev_frame.pack(fill=X, pady=(0, 10))
         tb.Label(prev_frame, text=f'"{preview}"',
-                 font=("Segoe UI", 9, "italic"),
+                 font=(UI_FONT, 9, "italic"),
                  bootstyle="secondary", wraplength=305).pack(fill=X)
 
         # ── Acciones: la primera sección sin encabezado, el resto agrupadas ──
@@ -122,9 +126,9 @@ class FloatingMenu:
                 sec_hdr = tb.Frame(inner)
                 sec_hdr.pack(fill=X, pady=(0, 4))
                 tb.Label(sec_hdr, text="</>",
-                         font=("Consolas", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
+                         font=(MONO_FONT, 8, "bold"), bootstyle="secondary").pack(side=LEFT)
                 tb.Label(sec_hdr, text=f"  {sec_name.upper()}",
-                         font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(side=LEFT)
+                         font=(UI_FONT, 8, "bold"), bootstyle="secondary").pack(side=LEFT)
             self._add_action_grid(inner, sec_actions, selected_text, ipady=5 if index == 0 else 4)
 
         # ── Prompt personalizado ───────────────────────────────────────
@@ -149,6 +153,7 @@ class FloatingMenu:
         fade_window(win, 0.97, 0.15)
         win.bind("<Escape>", lambda e: self.hide())
         win.bind("<FocusOut>", lambda e: win.after(220, self._check_focus))
+        bring_app_to_front()  # macOS: activar Escriba para recibir el teclado
         win.focus_force()
 
         if warnings:
@@ -201,18 +206,18 @@ class CustomPromptWindow:
         frame.pack(fill=BOTH, expand=True)
 
         tk.Label(frame, text="✦  Escribe tu prompt",
-                 font=("Segoe UI", 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 4))
+                 font=(UI_FONT, 12, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 4))
 
         preview = selected_text[:75] + ("…" if len(selected_text) > 75 else "")
         tk.Label(frame, text=f'Texto seleccionado: "{preview}"',
-                 font=("Segoe UI", 9, "italic"),
+                 font=(UI_FONT, 9, "italic"),
                  bg=_FM_BG, fg=_FM_MUTED, wraplength=480).pack(anchor=W, pady=(0, 8))
 
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 8))
 
         btn_frame = tk.Frame(frame, bg=_FM_BG)
         btn_frame.pack(side=BOTTOM, fill=X, pady=(8, 0))
-        tb.Button(btn_frame, text="🚀  Ejecutar  (Ctrl+Enter)",
+        tb.Button(btn_frame, text=f"🚀  Ejecutar  ({RUN_PROMPT_SHORTCUT[0]})",
                   bootstyle="warning",
                   command=self._execute).pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=4)
         tb.Button(btn_frame, text="✕  Cancelar",
@@ -227,7 +232,7 @@ class CustomPromptWindow:
 
         self.prompt_widget = tk.Text(
             txt_frame,
-            font=("Segoe UI", 10),
+            font=(UI_FONT, 10),
             wrap=tk.WORD,
             relief="flat",
             bg=_FM_CARD, fg=_FM_TEXT,
@@ -239,7 +244,7 @@ class CustomPromptWindow:
         scrollbar.config(command=self.prompt_widget.yview)
         self.prompt_widget.focus_set()
 
-        win.bind("<Control-Return>", lambda e: self._execute())
+        win.bind(RUN_PROMPT_SHORTCUT[1], lambda e: self._execute())
         win.bind("<Escape>", lambda e: win.destroy())
 
     def _execute(self):

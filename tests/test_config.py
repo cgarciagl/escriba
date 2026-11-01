@@ -246,3 +246,38 @@ class TestLegacyMigration:
 
         assert new.exists()
         assert data["model"] == "m"
+
+
+class TestKeychainSecrets:
+    @pytest.fixture
+    def keychain(self, tmp_path, monkeypatch):
+        store = {}
+        monkeypatch.setattr("config.CONFIG_FILE", str(tmp_path / "config.json"))
+        monkeypatch.setattr("config._keychain_available", lambda: True)
+        monkeypatch.setattr("config._dpapi_available", lambda: False)
+        monkeypatch.setattr("config.keychain_get", lambda n: store.get(n, ""))
+        monkeypatch.setattr("config.keychain_set", lambda n, v: store.__setitem__(n, v))
+        return store
+
+    def test_secret_goes_to_keychain_not_file(self, keychain, tmp_path):
+        ConfigManager.set_api_key("secreta")
+
+        on_disk = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+        assert keychain["api_key"] == "secreta"
+        assert on_disk["api_key"] == "" and on_disk["api_key_keychain"] is True
+        assert "secreta" not in json.dumps(on_disk)
+        assert ConfigManager.get_api_key() == "secreta"
+
+    def test_plain_key_migrates_to_keychain(self, keychain, tmp_path):
+        (tmp_path / "config.json").write_text(json.dumps({"api_key": "vieja"}), encoding="utf-8")
+
+        assert ConfigManager.get_api_key() == "vieja"
+        assert keychain["api_key"] == "vieja"
+        assert json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))["api_key"] == ""
+
+    def test_clearing_removes_marker(self, keychain, tmp_path):
+        ConfigManager.set_api_key("x")
+        ConfigManager.set_api_key("")
+        on_disk = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+        assert "api_key_keychain" not in on_disk
+        assert ConfigManager.get_api_key() == ""

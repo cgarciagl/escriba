@@ -1,4 +1,4 @@
-# ✍️ Escriba — Asistente de Texto con IA para Windows
+# ✍️ Escriba — Asistente de Texto con IA para Windows y macOS
 
 Aplicación nativa de escritorio que proporciona asistencia de IA integrada directamente en tu flujo de escritura. Funciona de manera completamente desatendida en la bandeja del sistema y se activa al presionar una combinación de teclas global, sin interferir con ninguna otra aplicación.
 
@@ -8,7 +8,8 @@ Aplicación nativa de escritorio que proporciona asistencia de IA integrada dire
 
 ## 🎯 Características
 
-- ⌨️ **Hotkey global** (`Win+Alt+E`) que funciona en cualquier aplicación sin filtrado de teclas
+- ⌨️ **Hotkey global** (`Win+Alt+E` en Windows, `⌃⌘E` en macOS) que funciona en cualquier aplicación
+- 🍎 **macOS (experimental)**: app de barra de menús con las mismas funciones; ver [macOS](#-macos-experimental)
 - 🤖 **10 acciones de IA predefinidas**: categorizadas en Texto y Contenido, Idiomas y Herramientas para Desarrolladores
 - 🧩 **Acciones personalizables**: edita, agrega o quita acciones (prompt, sección y atajo) en `actions.json`, sin recompilar
 - ⌨️ **Atajos de teclado directos**: cada acción en el menú flotante cuenta con su propio atajo rápido (`Ctrl+R`, `Ctrl+E`, `Ctrl+1`, `Ctrl+D`, etc.)
@@ -103,6 +104,39 @@ Al primer arranque, la aplicación:
    - **📋 Copiar al portapapeles** — Copia el texto generado.
    - **✕ Cerrar** — Cierra la ventana y descarta el resultado.
 6. **Historial** — Clic derecho en el ícono de la bandeja → **🕘 Historial** para reabrir una de las últimas respuestas (se guardan solo en memoria y se pierden al cerrar Escriba).
+
+## 🍎 macOS (experimental)
+
+Escriba también funciona en macOS 11 o superior. Todavía **no se ha probado a mano en un Mac**: la CI ejecuta los tests de lógica e interfaz en macOS, compila `Escriba.app` y comprueba que arranca, pero el atajo global y el pegado necesitan los permisos del sistema y solo se pueden validar en un equipo real.
+
+| Función              | Windows                         | macOS                                      |
+| -------------------- | ------------------------------- | ------------------------------------------ |
+| Atajo global         | `Win+Alt+E`                     | `⌃⌘E` (Control+Command+E)                  |
+| Atajos del menú      | `Ctrl+R`, `Ctrl+1`…             | `⌘R`, `⌘1`… (en `actions.json`, `Ctrl` = `⌘`) |
+| Prompt personalizado | `Ctrl+Espacio`, ejecutar `Ctrl+Enter` | `⌘↩`, ejecutar `⌘↩`                  |
+| Ícono                | Bandeja del sistema             | Barra de menús (sin ícono en el Dock)      |
+| API Keys             | Cifradas con DPAPI en `config.json` | Llavero de macOS                       |
+| Configuración        | `%APPDATA%\Escriba`             | `~/Library/Application Support/Escriba`    |
+| Inicio automático    | `HKCU\...\Run`                  | `~/Library/LaunchAgents/com.cgarciagl.escriba.plist` |
+
+### Permisos
+
+La primera vez, macOS pedirá dos permisos en **Ajustes del Sistema → Privacidad y seguridad**:
+
+- **Accesibilidad**: para simular `⌘C`/`⌘V` (leer la selección y sustituir el texto).
+- **Monitorización de entrada**: para detectar el atajo global.
+
+Si ejecutas desde el código fuente, los permisos se conceden a la Terminal (o a tu editor). Con la `.app` sin firmar, macOS puede volver a pedirlos cada vez que recompilas. Para distribuirla conviene firmarla y notarizarla con una cuenta de Apple Developer (`codesign_identity` en `Escriba.spec`).
+
+### Compilar en macOS
+
+```bash
+pip install -r requirements-dev.txt
+pyinstaller Escriba.spec --clean --noconfirm
+open dist/Escriba.app
+```
+
+La CI publica en cada ejecución los artefactos `Escriba-macos` (`.app` sin firmar, en zip) y `Escriba-windows` (`.exe`).
 
 ## 🔑 Configuración de API y Modelos
 
@@ -199,8 +233,10 @@ escriba/
 ├── config.py           # Persistencia de configuración y secretos cifrados (ConfigManager)
 ├── actions.py          # Carga/validación de acciones personalizadas (actions.json)
 ├── history.py          # Historial en memoria de las últimas respuestas
-├── startup.py          # Gestor de inicio automático con Windows vía registro HKCU (StartupManager)
-├── hotkey.py           # Registro de hotkey global (Win+Alt+E) y utilidades de teclado
+├── plataforma.py       # Capa de plataforma: elige la implementación de Windows o macOS
+├── hotkey.py           # Windows: hotkey global (Win+Alt+E) y Ctrl+C/V simulados
+├── startup.py          # Windows: inicio automático vía registro HKCU (StartupManager)
+├── macos.py            # macOS: atajo (pynput), Cmd+C/V (Quartz), app activa, LaunchAgent y Llavero
 ├── tray.py             # Ícono y menú de bandeja del sistema vía pystray
 ├── ui_windows.py       # Fachada que reexporta las ventanas de los módulos ui_*
 ├── ui_common.py        # Paleta, helpers, notificaciones, indicador de progreso y banner
@@ -209,7 +245,7 @@ escriba/
 ├── ui_config.py        # Ventana de configuración con pestañas
 ├── ai_clients.py       # Clientes Gemini y OpenAI-compatible, streaming, reintentos y fallback
 ├── tests/              # Suite de pruebas automatizadas con pytest (también corre en CI)
-├── .github/workflows/  # CI: ejecuta los tests en Windows en cada push y PR
+├── .github/workflows/  # CI: tests en Windows y macOS, compila y prueba Escriba.exe y Escriba.app
 ├── build/              # Archivos temporales generados por PyInstaller
 ├── dist/               # Contiene el ejecutable final Escriba.exe
 └── README.md           # Documentación principal del proyecto
@@ -266,6 +302,8 @@ Los cambios guardados desde la UI se aplican inmediatamente.
 - **`history.py`** — Historial en memoria, acotado y seguro entre hilos.
 - **`config.py`** — `ConfigManager`. Carga y guarda la configuración en `%APPDATA%\Escriba\config.json` con caché en memoria, migra la ubicación anterior y cifra la API Key con DPAPI (vía `ctypes`, sin dependencias extra).
 - **`startup.py`** — `StartupManager`. Modifica la clave de registro `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` para habilitar o deshabilitar el arranque automático.
+- **`plataforma.py`** — Interfaz única para lo que depende del sistema (atajo, copiar/pegar, ventana activa, inicio automático). En Windows usa `hotkey.py` y `startup.py`; en macOS, `macos.py`.
+- **`macos.py`** — Implementación para macOS: `pynput` para el atajo global, eventos de Quartz para `⌘C`/`⌘V`, `NSWorkspace` para recordar y reactivar la app de origen, LaunchAgent para el inicio automático y el comando `security` para el Llavero.
 
 ### Flujo de ejecución
 

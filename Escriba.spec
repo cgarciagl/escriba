@@ -1,4 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
+#
+# Windows: dist\Escriba.exe (un solo archivo, sin consola)
+# macOS:   dist/Escriba.app (bundle de barra de menús, sin ícono en el Dock)
+#
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(SPECPATH))  # para importar constants
+IS_MAC = sys.platform == 'darwin'
+
+COMMON_IMPORTS = ['constants', 'config', 'actions', 'history', 'plataforma', 'ai_clients',
+                  'ui_windows', 'ui_common', 'ui_config', 'ui_menu', 'ui_result', 'tray']
+if IS_MAC:
+    PLATFORM_IMPORTS = ['macos', 'pynput.keyboard._darwin', 'pynput.mouse._darwin',
+                        'AppKit', 'Quartz', 'pystray._darwin']
+else:
+    PLATFORM_IMPORTS = ['hotkey', 'startup']
 
 
 a = Analysis(
@@ -6,8 +23,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['constants', 'config', 'actions', 'history', 'startup', 'hotkey', 'ai_clients',
-                   'ui_windows', 'ui_common', 'ui_config', 'ui_menu', 'ui_result', 'tray'],
+    hiddenimports=COMMON_IMPORTS + PLATFORM_IMPORTS,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -37,24 +53,58 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='Escriba',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=['escriba.ico'],
-)
+if not IS_MAC:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.datas,
+        [],
+        name='Escriba',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon=['escriba.ico'],
+    )
+else:
+    from constants import APP_VERSION
+
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name='Escriba',
+        debug=False,
+        strip=False,
+        upx=False,
+        console=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,   # p. ej. "Developer ID Application: Tu Nombre (TEAMID)"
+        entitlements_file=None,
+    )
+    coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='Escriba')
+    app = BUNDLE(
+        coll,
+        name='Escriba.app',
+        icon='escriba.ico',   # PyInstaller lo convierte a .icns (requiere Pillow)
+        bundle_identifier='com.cgarciagl.escriba',
+        info_plist={
+            'CFBundleName': 'Escriba',
+            'CFBundleShortVersionString': APP_VERSION,
+            'CFBundleVersion': APP_VERSION,
+            'LSUIElement': True,             # sin ícono en el Dock
+            'LSMinimumSystemVersion': '11.0',
+            'NSHighResolutionCapable': True,
+        },
+    )

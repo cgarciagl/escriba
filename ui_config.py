@@ -24,8 +24,11 @@ from constants import (
     OPENAI_DEFAULT_BASE_URL,
     OPENAI_DEFAULT_MODEL,
 )
-from startup import StartupManager
-from ui_common import _FM_ACCENT, _FM_BG, _FM_MUTED, _FM_SEP, _FM_TEXT, apply_dark_style, center_window
+from plataforma import HOTKEY_LABEL, IS_MAC, StartupManager
+from ui_common import (
+    _FM_ACCENT, _FM_BG, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
+    apply_dark_style, center_window,
+)
 
 if TYPE_CHECKING:
     from escriba import EscribaApp
@@ -53,12 +56,12 @@ class ConfigWindow:
     # ── Helpers de maquetación ──────────────────────────────
     @staticmethod
     def _title(parent, text: str, pady=(0, 6)):
-        tk.Label(parent, text=text, font=("Segoe UI", 10, "bold"),
+        tk.Label(parent, text=text, font=(UI_FONT, 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=pady)
 
     @staticmethod
     def _hint(parent, text: str, pady=(0, 14)) -> tk.Label:
-        lbl = tk.Label(parent, text=text, font=("Segoe UI", 8), bg=_FM_BG,
+        lbl = tk.Label(parent, text=text, font=(UI_FONT, 8), bg=_FM_BG,
                        fg=_FM_MUTED, wraplength=450, justify=LEFT)
         lbl.pack(anchor=W, pady=pady)
         return lbl
@@ -92,21 +95,21 @@ class ConfigWindow:
         hdr.pack(fill=X, pady=(0, 10))
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=10, pady=8)
         badge.pack(side=LEFT, padx=(0, 12))
-        tk.Label(badge, text="⚡︎", font=("Segoe UI", 16, "bold"),
+        tk.Label(badge, text="⚡︎", font=(UI_FONT, 16, "bold"),
                  bg=_FM_ACCENT, fg=_FM_BG).pack()
         title_col = tk.Frame(hdr, bg=_FM_BG)
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
-                 font=("Segoe UI", 14, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
+                 font=(UI_FONT, 14, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
         tk.Label(title_col, text="Configuración",
-                 font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
+                 font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         # ── Pie: estado + guardar (se empaqueta antes para que siempre se vea) ──
         footer = tk.Frame(frame, bg=_FM_BG)
         footer.pack(side=BOTTOM, fill=X, pady=(10, 0))
         self.status_var = tk.StringVar()
         self.status_lbl = tk.Label(footer, textvariable=self.status_var,
-                                   font=("Segoe UI", 9), wraplength=480,
+                                   font=(UI_FONT, 9), wraplength=480,
                                    bg=_FM_BG, fg=_FM_MUTED)
         self.status_lbl.pack(anchor=W, pady=(0, 8))
         tb.Button(footer, text="💾  Guardar y Cerrar", bootstyle="warning",
@@ -132,14 +135,15 @@ class ConfigWindow:
         self._title(tab, "API Key de Google Gemini")
         self.api_key_var = tk.StringVar(value=ConfigManager.get_api_key())
         self.key_entry = tb.Entry(tab, textvariable=self.api_key_var,
-                                  show="•", font=("Consolas", 11), bootstyle="warning")
+                                  show="•", font=(MONO_FONT, 11), bootstyle="warning")
         self.key_entry.pack(fill=X, ipady=5, pady=(0, 4))
 
         url_label = tk.Label(tab, text="Obtén tu clave en → https://aistudio.google.com/apikey",
-                             font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
+                             font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
         url_label.pack(anchor=W, pady=(0, 4))
         url_label.bind("<Button-1>", lambda e: webbrowser.open("https://aistudio.google.com/apikey"))
-        self._hint(tab, "Se guarda cifrada con tu cuenta de Windows (DPAPI).")
+        self._hint(tab, "Se guarda en el Llavero de macOS." if IS_MAC
+                   else "Se guarda cifrada con tu cuenta de Windows (DPAPI).")
 
         self._title(tab, "Modelo de Gemini")
         current_model = ConfigManager.get("model", GEMINI_DEFAULT_MODEL)
@@ -152,7 +156,7 @@ class ConfigWindow:
             initial_models.insert(0, current_model)
 
         self.model_cb = tb.Combobox(model_row, textvariable=self.model_var, values=initial_models,
-                                    state="readonly", bootstyle="warning", font=("Consolas", 10))
+                                    state="readonly", bootstyle="warning", font=(MONO_FONT, 10))
         self.model_cb.pack(side=LEFT, fill=X, expand=True, ipady=4, padx=(0, 8))
 
         self.refresh_btn = tb.Button(model_row, text="🔄 Actualizar",
@@ -175,12 +179,12 @@ class ConfigWindow:
 
         self._title(tab, "URL base")
         self.alt_url_var = tk.StringVar(value=ConfigManager.get("openai_base_url", OPENAI_DEFAULT_BASE_URL))
-        tb.Entry(tab, textvariable=self.alt_url_var, font=("Consolas", 10),
+        tb.Entry(tab, textvariable=self.alt_url_var, font=(MONO_FONT, 10),
                  bootstyle="warning").pack(fill=X, ipady=4, pady=(0, 10))
 
         self._title(tab, "API Key (opcional)")
         self.alt_key_var = tk.StringVar(value=ConfigManager.get_openai_api_key())
-        tb.Entry(tab, textvariable=self.alt_key_var, show="•", font=("Consolas", 10),
+        tb.Entry(tab, textvariable=self.alt_key_var, show="•", font=(MONO_FONT, 10),
                  bootstyle="warning").pack(fill=X, ipady=4, pady=(0, 10))
 
         self._title(tab, "Modelo")
@@ -189,7 +193,7 @@ class ConfigWindow:
         self.alt_model_var = tk.StringVar(value=ConfigManager.get("openai_model", OPENAI_DEFAULT_MODEL))
         self.alt_model_cb = tb.Combobox(alt_row, textvariable=self.alt_model_var,
                                         values=[self.alt_model_var.get()],
-                                        bootstyle="warning", font=("Consolas", 10))
+                                        bootstyle="warning", font=(MONO_FONT, 10))
         self.alt_model_cb.pack(side=LEFT, fill=X, expand=True, ipady=3, padx=(0, 8))
         self.alt_refresh_btn = tb.Button(alt_row, text="🔄 Listar", bootstyle="secondary-outline",
                                          command=self._refresh_alt_models)
@@ -204,9 +208,9 @@ class ConfigWindow:
         hotkey_row = tk.Frame(tab, bg=_FM_BG)
         hotkey_row.pack(fill=X, pady=(0, 14))
         tk.Label(hotkey_row, text="Atajo global:  ",
-                 font=("Segoe UI", 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
-        tk.Label(hotkey_row, text="Win + Alt + E",
-                 font=("Consolas", 10), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+                 font=(UI_FONT, 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+        tk.Label(hotkey_row, text=HOTKEY_LABEL,
+                 font=(MONO_FONT, 10), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
 
         self.streaming_var = tk.BooleanVar(value=bool(ConfigManager.get("streaming", True)))
         tb.Checkbutton(tab, text="  Mostrar la respuesta mientras se genera (streaming)",
@@ -214,7 +218,7 @@ class ConfigWindow:
                        bootstyle="warning-round-toggle").pack(anchor=W, pady=(0, 10))
 
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
-        tb.Checkbutton(tab, text="  Iniciar automáticamente con Windows",
+        tb.Checkbutton(tab, text="  Iniciar automáticamente al iniciar sesión",
                        variable=self.autostart_var,
                        bootstyle="warning-round-toggle").pack(anchor=W, pady=(0, 16))
 

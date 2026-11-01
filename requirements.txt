@@ -1,6 +1,13 @@
 ttkbootstrap>=1.10.1
 pystray>=0.19.5
 Pillow>=10.0.0
-keyboard>=0.13.5
 pyperclip>=1.8.2
 requests>=2.31.0
+
+# Solo Windows
+keyboard>=0.13.5; sys_platform == "win32"
+
+# Solo macOS (atajo global, Cmd+C/V, app activa, barra de menús)
+pynput>=1.7.6; sys_platform == "darwin"
+pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"

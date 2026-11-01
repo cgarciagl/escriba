@@ -13,6 +13,13 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 from constants import APP_NAME
+from plataforma import HOTKEY_LABEL, IS_MAC
+
+# Fuentes del sistema (Segoe UI no existe en macOS)
+if IS_MAC:
+    UI_FONT, EMOJI_FONT, MONO_FONT = "Helvetica Neue", "Apple Color Emoji", "Menlo"
+else:
+    UI_FONT, EMOJI_FONT, MONO_FONT = "Segoe UI", "Segoe UI Emoji", "Consolas"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -102,7 +109,7 @@ class TooltipNotification:
         outer.pack(fill=BOTH, expand=True)
         inner = tk.Frame(outer, bg=_FM_BG, padx=14, pady=10)
         inner.pack(fill=BOTH, expand=True)
-        tk.Label(inner, text=message, font=("Segoe UI", 10),
+        tk.Label(inner, text=message, font=(UI_FONT, 10),
                  bg=_FM_BG, fg=_FM_TEXT, wraplength=370, justify=LEFT).pack()
 
         win.update_idletasks()
@@ -147,12 +154,12 @@ class ThinkingWindow:
         hdr.pack(fill=X, pady=(0, 6))
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=6, pady=4)
         badge.pack(side=LEFT, padx=(0, 8))
-        tk.Label(badge, text="⚡︎", font=("Segoe UI", 10, "bold"),
+        tk.Label(badge, text="⚡︎", font=(UI_FONT, 10, "bold"),
                  bg=_FM_ACCENT, fg=_FM_BG).pack()
-        tk.Label(hdr, text=APP_NAME, font=("Segoe UI", 10, "bold"),
+        tk.Label(hdr, text=APP_NAME, font=(UI_FONT, 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
-        self._label = tk.Label(inner, text=label, font=("Segoe UI", 9),
+        self._label = tk.Label(inner, text=label, font=(UI_FONT, 9),
                                bg=_FM_BG, fg=_FM_MUTED)
         self._label.pack(anchor=W, pady=(0, 10))
 
@@ -213,23 +220,23 @@ class SplashBanner:
         hdr.pack(fill=X, pady=(0, 10))
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=12, pady=10)
         badge.pack(side=LEFT, padx=(0, 12))
-        tk.Label(badge, text="⚡", font=("Segoe UI Emoji", 18),
+        tk.Label(badge, text="⚡", font=(EMOJI_FONT, 18),
                  bg=_FM_ACCENT, fg=_FM_BG).pack()
         title_col = tk.Frame(hdr, bg=_FM_BG)
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
-                 font=("Segoe UI", 16, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
+                 font=(UI_FONT, 16, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
         tk.Label(title_col, text="Asistente de Texto con IA",
-                 font=("Segoe UI", 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
+                 font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         tk.Frame(inner, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 10))
 
         hint_row = tk.Frame(inner, bg=_FM_BG)
         hint_row.pack(fill=X)
-        tk.Label(hint_row, text="Atajo: ", font=("Segoe UI", 9),
+        tk.Label(hint_row, text="Atajo: ", font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
-        tk.Label(hint_row, text="Win + Alt + E",
-                 font=("Consolas", 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+        tk.Label(hint_row, text=HOTKEY_LABEL,
+                 font=(MONO_FONT, 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
 
         position_bottom_right(win)
         fade_window(win, 0.95, 0.12)

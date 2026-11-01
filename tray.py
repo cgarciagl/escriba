@@ -12,6 +12,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from constants import APP_NAME, APP_VERSION, BASE_DIR
+from plataforma import HOTKEY_LABEL, IS_MAC
 
 if TYPE_CHECKING:
     from escriba import EscribaApp
@@ -80,10 +81,15 @@ class TrayIconManager:
         )
         self.icon = pystray.Icon(
             APP_NAME, image,
-            f"{APP_NAME} — Win+Alt+E para activar",
+            f"{APP_NAME} — {HOTKEY_LABEL} para activar",
             menu,
         )
-        threading.Thread(target=self.icon.run, daemon=True).start()
+        if IS_MAC:
+            # En macOS el ícono debe vivir en el hilo principal; run_detached lo
+            # integra con el bucle de eventos de Cocoa que ya mueve Tk.
+            self.icon.run_detached()
+        else:
+            threading.Thread(target=self.icon.run, daemon=True).start()
 
     def refresh(self):
         """Reconstruye el menú (necesario en Windows para el submenú dinámico)."""

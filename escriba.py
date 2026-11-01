@@ -1,9 +1,8 @@
 """
-Escriba - Asistente de Texto con IA para Windows v1.1.0
+Escriba - Asistente de Texto con IA para Windows y macOS v1.2.0
 ======================================================
-Hotkey: Win+Alt+E
-- Registrado con la API de Windows `RegisterHotKey` (ver hotkey.py), por lo que
-  la combinación no llega a otras aplicaciones.
+Hotkey: Win+Alt+E en Windows (RegisterHotKey, ver hotkey.py) y Ctrl+Cmd+E en
+macOS (ver macos.py). Lo dependiente del sistema se accede vía plataforma.py.
 
 Stack: ttkbootstrap, pystray, Pillow, pyperclip, ctypes, requests
 """
@@ -22,8 +21,7 @@ from ui_windows import (
     ConfigWindow, FloatingMenu, ResultWindow, TooltipNotification, SplashBanner,
 )
 from tray import TrayIconManager
-from hotkey import HotkeyManager, send_ctrl_c
-from startup import StartupManager
+from plataforma import HOTKEY_LABEL, HotkeyManager, StartupManager, init_app, send_copy
 
 
 # ─────────────────────────────────────────────────────────────
@@ -34,6 +32,7 @@ class EscribaApp:
 
     def __init__(self):
         self.root = tb.Window(themename="vapor")
+        init_app()  # macOS: sin ícono en el Dock
         self.root.title(APP_NAME)
         self.root.withdraw()
 
@@ -42,7 +41,8 @@ class EscribaApp:
         self.floating_menu = FloatingMenu(self)
         self.tooltip = TooltipNotification(self.root)
         self.tray = TrayIconManager(self)
-        self.history.on_change = self.tray.refresh
+        # El refresco del menú se hace en el hilo principal (obligatorio en macOS).
+        self.history.on_change = lambda: self.schedule(self.tray.refresh)
         self.hotkey = HotkeyManager(self.root, self._on_hotkey)
         self._lock = threading.Lock()
 
@@ -103,7 +103,7 @@ class EscribaApp:
 
     def _notify_hotkey_error(self):
         self.tooltip.show(
-            "❌ Error: No se pudo registrar el atajo Win+Alt+E.\n"
+            f"❌ Error: No se pudo registrar el atajo {HOTKEY_LABEL}.\n"
             "Es posible que otra aplicación lo esté usando.",
             "danger", 6000
         )
@@ -118,10 +118,10 @@ class EscribaApp:
         original_clip = self._safe_paste()
         self._safe_copy("")
 
-        send_ctrl_c()
+        send_copy()
         selected = self._wait_for_clipboard()
         if not selected:
-            send_ctrl_c()
+            send_copy()
             selected = self._wait_for_clipboard()
 
         if original_clip:

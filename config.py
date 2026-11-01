@@ -3,8 +3,10 @@ Escriba — Persistencia de configuración (config.json).
 
 - El archivo vive en %APPDATA%\\Escriba\\config.json (ver constants.CONFIG_DIR).
   Si existe un config.json en la ubicación anterior (junto al .exe) se migra.
-- La API Key se guarda cifrada con DPAPI de Windows (CryptProtectData), ligada
-  a la cuenta del usuario. Fuera de Windows se guarda en texto plano.
+- Los secretos (API Keys) se guardan:
+    Windows → cifrados con DPAPI (CryptProtectData) dentro de config.json
+    macOS   → en el Llavero (config.json no contiene la clave)
+    otros   → en texto plano (solo desarrollo / CI)
 """
 
 import base64
@@ -28,6 +30,20 @@ LEGACY_CONFIG_FILE = constants.LEGACY_CONFIG_FILE
 # ─────────────────────────────────────────────────────────────
 def _dpapi_available() -> bool:
     return sys.platform == "win32"
+
+
+def _keychain_available() -> bool:
+    return sys.platform == "darwin"
+
+
+def keychain_get(name: str) -> str:
+    from macos import keychain_get as _get
+    return _get(name)
+
+
+def keychain_set(name: str, value: str):
+    from macos import keychain_set as _set
+    _set(name, value)
 
 
 def _dpapi(data: bytes, protect: bool) -> bytes:
@@ -122,11 +138,16 @@ class ConfigManager:
         cls.save(data)
 
     # ── Secretos (cifrados con DPAPI en Windows) ────────────
-    # Cada secreto `name` se guarda como `name_enc` (cifrado) o, fuera de
-    # Windows, como `name` en texto plano.
+    # Cada secreto `name` se guarda como `name_enc` (DPAPI, Windows), en el
+    # Llavero con la marca `name_keychain` (macOS) o como `name` en texto plano.
     @classmethod
     def get_secret(cls, name: str) -> str:
         data = cls.load()
+        if _keychain_available() and data.get(f"{name}_keychain"):
+            try:
+                return keychain_get(name)
+            except Exception:
+                return ""
         encrypted = data.get(f"{name}_enc")
         if encrypted:
             try:
@@ -134,8 +155,8 @@ class ConfigManager:
             except Exception:
                 return ""
         plain = data.get(name, "") or ""
-        # Migración: un secreto guardado en texto plano se cifra en cuanto se lee.
-        if plain and _dpapi_available():
+        # Migración: un secreto guardado en texto plano se protege en cuanto se lee.
+        if plain and (_dpapi_available() or _keychain_available()):
             try:
                 cls.set_secret(name, plain)
             except Exception:
@@ -146,11 +167,17 @@ class ConfigManager:
     def set_secret(cls, name: str, value: str):
         data = cls.load()
         value = (value or "").strip()
-        if value and _dpapi_available():
+        data.pop(f"{name}_enc", None)
+        data.pop(f"{name}_keychain", None)
+        if _keychain_available():
+            keychain_set(name, value)
+            data[name] = ""
+            if value:
+                data[f"{name}_keychain"] = True  # marca: el valor está en el Llavero
+        elif value and _dpapi_available():
             data[f"{name}_enc"] = encrypt_secret(value)
             data[name] = ""
         else:
-            data.pop(f"{name}_enc", None)
             data[name] = value
         cls.save(data)
 

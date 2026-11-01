@@ -15,7 +15,7 @@ def mock_escriba_deps():
             with patch("escriba.FloatingMenu"):
                 with patch("escriba.TooltipNotification"):
                     with patch("escriba.TrayIconManager"):
-                        with patch("escriba.HotkeyManager"):
+                        with patch("escriba.HotkeyManager"), patch("escriba.init_app"):
                             yield mock_window_instance
 
 
@@ -23,7 +23,7 @@ def mock_escriba_deps():
 def app(mock_escriba_deps):
     with (
         patch("escriba.pyperclip") as mock_pyperclip,
-        patch("escriba.send_ctrl_c") as mock_send_ctrl_c,
+        patch("escriba.send_copy") as mock_send_ctrl_c,
         patch("escriba.time.sleep") as mock_sleep,
     ):
         eapp = EscribaApp()

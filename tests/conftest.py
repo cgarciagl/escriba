@@ -33,6 +33,9 @@ def reset_config_cache(tmp_path, monkeypatch):
     # Ningún test debe leer ni escribir el config.json real del usuario.
     monkeypatch.setattr("config.CONFIG_FILE", str(tmp_path / "isolated" / "config.json"))
     monkeypatch.setattr("config.LEGACY_CONFIG_FILE", str(tmp_path / "no-legacy" / "config.json"))
+    # Nunca tocar el Llavero ni DPAPI reales; los tests que lo necesitan lo simulan.
+    monkeypatch.setattr("config._keychain_available", lambda: False)
+    monkeypatch.setattr("config._dpapi_available", lambda: False)
     ConfigManager._cache = None
     yield
     ConfigManager._cache = None

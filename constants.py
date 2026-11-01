@@ -19,12 +19,23 @@ else:
 # Constantes de la aplicación
 # ─────────────────────────────────────────────────────────────
 APP_NAME     = "Escriba"
-APP_VERSION  = "1.1.0"
+APP_VERSION  = "1.2.0"
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
-# La configuración vive en %APPDATA%\Escriba (escribible aunque el .exe esté en
-# Program Files). Fuera de Windows se usa la carpeta de la aplicación.
-CONFIG_DIR         = os.path.join(os.environ["APPDATA"], APP_NAME) if os.environ.get("APPDATA") else BASE_DIR
+# Carpeta de configuración (escribible aunque la app esté en Program Files o
+# en /Applications):
+#   Windows → %APPDATA%\Escriba
+#   macOS   → ~/Library/Application Support/Escriba
+#   otros   → carpeta de la aplicación (desarrollo / CI)
+def _config_dir() -> str:
+    if sys.platform == "darwin":
+        return os.path.join(os.path.expanduser("~/Library/Application Support"), APP_NAME)
+    if os.environ.get("APPDATA"):
+        return os.path.join(os.environ["APPDATA"], APP_NAME)
+    return BASE_DIR
+
+
+CONFIG_DIR         = _config_dir()
 CONFIG_FILE        = os.path.join(CONFIG_DIR, "config.json")
 LEGACY_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")  # ubicación usada hasta v1.0.0
 

@@ -3,8 +3,14 @@ import json
 import pytest
 
 import actions
-from actions import load_actions, shortcut_to_tk, write_defaults
+from actions import display_shortcut, load_actions, shortcut_to_tk, write_defaults
 from constants import AI_ACTIONS
+
+
+@pytest.fixture(autouse=True)
+def windows_shortcuts(monkeypatch):
+    # Las expectativas usan la convención de Windows; la de macOS se prueba aparte.
+    monkeypatch.setattr("actions.IS_MAC", False)
 
 
 @pytest.fixture
@@ -22,11 +28,35 @@ class TestShortcutToTk:
         ("Alt+F2", "<Alt-F2>"),
     ])
     def test_valid(self, shortcut, expected):
-        assert shortcut_to_tk(shortcut) == expected
+        assert shortcut_to_tk(shortcut, mac=False) == expected
 
     @pytest.mark.parametrize("shortcut", ["", "R", "Ctrl+", "Meta+R", "Ctrl+Ctrl+R", "Ctrl+Enter", None])
     def test_invalid(self, shortcut):
-        assert shortcut_to_tk(shortcut) is None
+        assert shortcut_to_tk(shortcut, mac=False) is None
+        assert shortcut_to_tk(shortcut, mac=True) is None
+
+    @pytest.mark.parametrize("shortcut,expected", [
+        ("Ctrl+R", "<Command-r>"),
+        ("Cmd+R", "<Command-r>"),
+        ("Alt+Shift+1", "<Option-Shift-1>"),
+    ])
+    def test_mac_maps_ctrl_to_command(self, shortcut, expected):
+        assert shortcut_to_tk(shortcut, mac=True) == expected
+
+    def test_cmd_maps_to_control_on_windows(self):
+        assert shortcut_to_tk("Cmd+R", mac=False) == "<Control-r>"
+
+
+class TestDisplayShortcut:
+    def test_windows_unchanged(self):
+        assert display_shortcut("Ctrl+R", mac=False) == "Ctrl+R"
+
+    def test_mac_symbols(self):
+        assert display_shortcut("Ctrl+R", mac=True) == "⌘R"
+        assert display_shortcut("Ctrl+Shift+T", mac=True) == "⌘⇧T"
+
+    def test_invalid_left_as_is(self):
+        assert display_shortcut("raro", mac=True) == "raro"
 
 
 class TestLoadActions:

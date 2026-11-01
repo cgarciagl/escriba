@@ -58,9 +58,12 @@ class TestPureHelpers:
         ]
 
     def test_button_text_shows_only_valid_shortcuts(self):
+        from actions import display_shortcut
         from ui_menu import button_text
 
-        assert button_text({"label": "X", "shortcut": "Ctrl+J", "shortcut_key": "<Control-j>"}).endswith("Ctrl+J")
+        # "Ctrl+J" en Windows, "⌘J" en macOS
+        expected = display_shortcut("Ctrl+J")
+        assert button_text({"label": "X", "shortcut": "Ctrl+J", "shortcut_key": "<Control-j>"}).endswith(expected)
         assert button_text({"label": "X", "shortcut": "malo", "shortcut_key": None}) == "X"
 
 
@@ -149,9 +152,11 @@ class TestWindowsBuild:
         from ui_menu import FloatingMenu
 
         menu = FloatingMenu(app)
-        with patch("ui_menu.ctypes.windll.user32.GetForegroundWindow", return_value=1):
+        with patch("ui_menu.get_foreground_window", return_value=1), \
+             patch("ui_menu.bring_app_to_front"):
             menu.show("Un texto de prueba")
         _pump(app.root)
         bound = menu.window.bind()
-        assert "<Control-Key-r>" in bound or "<Control-r>" in bound
+        # Tk normaliza la secuencia (<Control-Key-r> en Windows, <Mod1-Key-r> en macOS)
+        assert any(b.endswith("Key-r>") for b in bound), bound
         menu.hide()

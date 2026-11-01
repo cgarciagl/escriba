@@ -7,6 +7,55 @@ on:
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Tests de lógica
+        run: python -m pytest -q -rf --ignore=tests/test_ui.py
+      - name: Tests de interfaz (Tk real, proceso aparte)
+        run: python -m pytest -q -rf tests/test_ui.py
+
+  build-macos:
+    # Comprueba que la .app se genera (sin firmar). Se publica como artefacto.
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pyinstaller Escriba.spec --clean --noconfirm
+      - run: test -x dist/Escriba.app/Contents/MacOS/Escriba
+      - name: Prueba de humo (la app arranca y sigue viva)
+        run: |
+          dist/Escriba.app/Contents/MacOS/Escriba > smoke.log 2>&1 &
+          PID=$!
+          sleep 10
+          if kill -0 $PID 2>/dev/null; then
+            echo "La app sigue en ejecución"; kill $PID
+          else
+            echo "La app terminó antes de tiempo:"; cat smoke.log; exit 1
+          fi
+      - run: ditto -c -k --keepParent dist/Escriba.app Escriba-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Escriba-macos
+          path: Escriba-macos.zip
+
+  build-windows:
+    # Compila Escriba.exe, comprueba que arranca y lo publica como artefacto.
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,4 +64,16 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest -q
+      - run: pyinstaller Escriba.spec --clean --noconfirm
+      - name: Prueba de humo (la app arranca y sigue viva)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\Escriba.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { Write-Error "La app terminó antes de tiempo (código $($p.ExitCode))"; exit 1 }
+          Write-Host "La app sigue en ejecución"
+          Stop-Process -Id $p.Id -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Escriba-windows
+          path: dist/Escriba.exe
