@@ -75,6 +75,12 @@ jobs:
           Stop-Process -Id $p.Id -Force
       - name: Capturas
         run: python tools/capturas.py
+      - name: Volcar capturas
+        shell: python
+        run: |
+          import base64, glob, os
+          for f in sorted(glob.glob("shots/*.png")):
+              print("SHOT", os.path.basename(f), base64.b64encode(open(f, "rb").read()).decode())
       - uses: actions/upload-artifact@v4
         with:
           name: capturas
