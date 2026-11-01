@@ -20,8 +20,13 @@ else:
 # ─────────────────────────────────────────────────────────────
 APP_NAME     = "Escriba"
 APP_VERSION  = "1.0.0"
-CONFIG_FILE  = os.path.join(BASE_DIR, "config.json")
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
+# La configuración vive en %APPDATA%\Escriba (escribible aunque el .exe esté en
+# Program Files). Fuera de Windows se usa la carpeta de la aplicación.
+CONFIG_DIR         = os.path.join(os.environ["APPDATA"], APP_NAME) if os.environ.get("APPDATA") else BASE_DIR
+CONFIG_FILE        = os.path.join(CONFIG_DIR, "config.json")
+LEGACY_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")  # ubicación usada hasta v1.0.0
 
 
 # ─────────────────────────────────────────────────────────────
@@ -36,8 +41,6 @@ GEMINI_FALLBACK_MODELS = [
     "gemini-2.5-flash-lite",
     "gemini-2.5-pro",
     "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
 ]
 
 

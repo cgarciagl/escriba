@@ -12,7 +12,7 @@ class TestConfigManagerLoad:
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": True}
+        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": False}
         assert config_file.exists()
         assert json.loads(config_file.read_text(encoding="utf-8")) == data
 
@@ -34,7 +34,7 @@ class TestConfigManagerLoad:
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": True}
+        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": False}
 
     def test_cache_avoids_reload(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.json"
@@ -181,3 +181,68 @@ class TestConfigManagerModel:
 
         ConfigManager.set_model("gemini-2.5-pro")
         assert ConfigManager.get_model() == "gemini-2.5-pro"
+
+
+class TestApiKeyStorage:
+    def test_plain_storage_when_dpapi_unavailable(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("config.CONFIG_FILE", str(tmp_path / "config.json"))
+        monkeypatch.setattr("config._dpapi_available", lambda: False)
+
+        ConfigManager.set_api_key("  secreta  ")
+
+        assert ConfigManager.get_api_key() == "secreta"
+        assert "api_key_enc" not in ConfigManager.load()
+
+    def test_encrypted_storage_when_dpapi_available(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.json"
+        monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
+        monkeypatch.setattr("config._dpapi_available", lambda: True)
+        monkeypatch.setattr("config.encrypt_secret", lambda v: "ENC:" + v[::-1])
+        monkeypatch.setattr("config.decrypt_secret", lambda v: v[4:][::-1])
+
+        ConfigManager.set_api_key("secreta")
+
+        on_disk = json.loads(config_file.read_text(encoding="utf-8"))
+        assert on_disk["api_key"] == ""
+        assert on_disk["api_key_enc"] == "ENC:aterces"
+        assert ConfigManager.get_api_key() == "secreta"
+
+    def test_plain_key_is_migrated_to_encrypted(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"api_key": "vieja"}), encoding="utf-8")
+        monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
+        monkeypatch.setattr("config._dpapi_available", lambda: True)
+        monkeypatch.setattr("config.encrypt_secret", lambda v: "ENC:" + v)
+        monkeypatch.setattr("config.decrypt_secret", lambda v: v[4:])
+
+        assert ConfigManager.get_api_key() == "vieja"
+
+        on_disk = json.loads(config_file.read_text(encoding="utf-8"))
+        assert on_disk["api_key"] == ""
+        assert on_disk["api_key_enc"] == "ENC:vieja"
+
+    def test_undecryptable_key_returns_empty(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"api_key": "", "api_key_enc": "basura"}), encoding="utf-8")
+        monkeypatch.setattr("config.CONFIG_FILE", str(config_file))
+
+        def boom(_):
+            raise OSError("no")
+
+        monkeypatch.setattr("config.decrypt_secret", boom)
+        assert ConfigManager.get_api_key() == ""
+
+
+class TestLegacyMigration:
+    def test_copies_legacy_config(self, tmp_path, monkeypatch):
+        legacy = tmp_path / "old" / "config.json"
+        legacy.parent.mkdir()
+        legacy.write_text(json.dumps({"api_key": "x", "model": "m", "autostart": True}), encoding="utf-8")
+        new = tmp_path / "appdata" / "Escriba" / "config.json"
+        monkeypatch.setattr("config.CONFIG_FILE", str(new))
+        monkeypatch.setattr("config.LEGACY_CONFIG_FILE", str(legacy))
+
+        data = ConfigManager.load()
+
+        assert new.exists()
+        assert data["model"] == "m"

@@ -1,5 +1,5 @@
 import threading
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -62,18 +62,27 @@ class TestCaptureSelectedText:
         result = eapp._capture_selected_text()
 
         assert result == "selected text"
-        mock_pyperclip.copy.assert_called_once_with("original")
+        assert mock_pyperclip.copy.call_args_list == [call(""), call("original")]
         assert mock_send.call_count == 1
 
-    def test_retry_on_same_text(self, app):
+    def test_waits_until_clipboard_is_filled(self, app):
         eapp, mock_pyperclip, mock_send, _ = app
-        mock_pyperclip.paste.side_effect = ["same", "same", "different"]
+        mock_pyperclip.paste.side_effect = ["original", "", "", "selected"]
 
         result = eapp._capture_selected_text()
 
-        assert result == "different"
-        assert mock_send.call_count == 2
-        mock_pyperclip.copy.assert_called_once_with("same")
+        assert result == "selected"
+        assert mock_send.call_count == 1
+
+    def test_no_selection_returns_empty_not_old_clipboard(self, app):
+        eapp, mock_pyperclip, mock_send, _ = app
+        mock_pyperclip.paste.side_effect = ["original"] + [""] * 100
+
+        result = eapp._capture_selected_text()
+
+        assert result == ""
+        assert mock_send.call_count == 2  # reintenta una vez
+        assert mock_pyperclip.copy.call_args_list[-1] == call("original")
 
     def test_no_restore_when_original_empty(self, app):
         eapp, mock_pyperclip, mock_send, _ = app
@@ -82,7 +91,7 @@ class TestCaptureSelectedText:
         result = eapp._capture_selected_text()
 
         assert result == "selected text"
-        mock_pyperclip.copy.assert_not_called()
+        mock_pyperclip.copy.assert_called_once_with("")
 
 
 class TestOnHotkey:
@@ -102,7 +111,7 @@ class TestOnHotkey:
 
         eapp._on_hotkey(error=False)
 
-        mock_pyperclip.copy.assert_called_once_with("original")
+        assert mock_pyperclip.copy.call_args_list[-1] == call("original")
         eapp.root.after.assert_called_once_with(
             0, eapp.floating_menu.show, "selected text"
         )

@@ -28,7 +28,7 @@ from constants import (
 )
 from config import ConfigManager
 from startup import StartupManager
-from ai_clients import GeminiClient, generate_with_fallback
+from ai_clients import GeminiClient, generate_text
 from hotkey import send_ctrl_v
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ def run_ai_action(app, prompt, text, prev_hwnd, thinking):
             msg = f"⏳ Modelo ocupado ({attempt}/{max_retries}). Reintentando en {sec}s…"
             thinking.update_status(msg)
 
-        result, provider = generate_with_fallback(prompt, text, on_retry=on_retry)
+        result, provider = generate_text(prompt, text, on_retry=on_retry)
         app.schedule(close)
         app.schedule(lambda: ResultWindow(
             app, result, prev_hwnd,
@@ -458,7 +458,7 @@ class ConfigWindow:
     def _save(self):
         key = self.api_key_var.get().strip()
         model = self.model_var.get().strip() or GEMINI_DEFAULT_MODEL
-        ConfigManager.set("api_key", key)
+        ConfigManager.set_api_key(key)
         ConfigManager.set("model", model)
         if self.autostart_var.get():
             StartupManager.enable()
@@ -887,6 +887,11 @@ class ResultWindow:
         ).start()
 
     def _do_replace(self, text: str):
+        original_clip = ""
+        try:
+            original_clip = pyperclip.paste()
+        except Exception:
+            pass
         try:
             pyperclip.copy(text)
             if self.prev_hwnd:
@@ -901,6 +906,10 @@ class ResultWindow:
                     ctypes.windll.user32.AttachThreadInput(cur_tid, fore_tid, False)
                 time.sleep(0.25)
             send_ctrl_v()
+            # Dar tiempo a la app destino a leer el portapapeles y restaurarlo.
+            time.sleep(0.30)
+            if original_clip:
+                pyperclip.copy(original_clip)
             self.app.root.after(
                 0, lambda: self.app.tooltip.show("✅ Texto sustituido.", "success"))
         except Exception as e:

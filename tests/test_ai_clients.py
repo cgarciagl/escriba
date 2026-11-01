@@ -6,7 +6,7 @@ import requests
 from constants import GEMINI_DEFAULT_MODEL, GEMINI_FALLBACK_MODELS
 from ai_clients import (
     GeminiClient,
-    generate_with_fallback,
+    generate_text,
     is_retryable_error,
 )
 
@@ -262,12 +262,28 @@ class TestIsRetryableError:
         assert is_ret is False
 
 
-class TestGenerateWithFallback:
+class TestGenerateText:
     def test_uses_gemini_with_callback(self):
         callback = MagicMock()
         with patch("ai_clients.GeminiClient.generate", return_value="gemini result") as mock_gemini:
-            result, provider = generate_with_fallback("prompt", "text", on_retry=callback)
+            result, provider = generate_text("prompt", "text", on_retry=callback)
 
             assert result == "gemini result"
             assert provider == "gemini"
             mock_gemini.assert_called_once_with("prompt", "text", on_retry=callback)
+
+
+class TestErrorMessages:
+    def test_own_runtime_errors_are_not_double_wrapped(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"candidates": []}
+            mock_response.raise_for_status.return_value = None
+            mock_post.return_value = mock_response
+
+            with pytest.raises(RuntimeError) as exc_info:
+                GeminiClient.generate("prompt", "text")
+            assert not str(exc_info.value).startswith("Gemini:")

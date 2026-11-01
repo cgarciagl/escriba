@@ -31,7 +31,7 @@ Aplicación nativa de escritorio que proporciona asistencia de IA integrada dire
 | **Foco de ventana**     | `ctypes` (WinAPI: `AttachThreadInput`, `SetForegroundWindow`, `BringWindowToTop`)      |
 | **Inicio con Windows**  | `winreg` (escritura en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`)           |
 | **Motor de IA**         | `requests` → Google Gemini API (`v1beta`) con reintentos y retroceso exponencial       |
-| **Configuración**       | `config.json` (gestión mediante `ConfigManager` con caché en memoria)                  |
+| **Configuración**       | `%APPDATA%\Escriba\config.json` (`ConfigManager`, API Key cifrada con DPAPI)           |
 | **Distribución**        | PyInstaller (`Escriba.spec`, ejecutable monousuario sin consola)                       |
 
 ## 🚀 Inicio Rápido
@@ -59,8 +59,8 @@ python escriba.py
 
 Al primer arranque, la aplicación:
 
-- Crea automáticamente `config.json` con la configuración predeterminada
-- Registra el inicio automático con Windows (si está habilitado en configuración)
+- Crea automáticamente `%APPDATA%\Escriba\config.json` con la configuración predeterminada (si existía un `config.json` junto al ejecutable, lo migra)
+- El inicio automático con Windows viene **desactivado**; se activa desde la ventana de Configuración
 - Muestra un banner de bienvenida y se aloja en la bandeja del sistema
 
 > **Nota:** Para procesar solicitudes con IA, es necesario configurar una API Key de Google Gemini. Haz clic derecho en el ícono de Escriba en la bandeja del sistema y selecciona **Configuración**.
@@ -126,7 +126,15 @@ En la ventana de **Configuración** puedes seleccionar el modelo de Gemini:
 Para generar un archivo `.exe` distribuible que no requiere tener Python instalado:
 
 ```bash
+pip install -r requirements-dev.txt
 pyinstaller Escriba.spec --clean --noconfirm
+```
+
+### Ejecutar las pruebas
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
 ```
 
 El ejecutable se generará en `dist\Escriba.exe`.
@@ -137,8 +145,8 @@ El ejecutable se generará en `dist\Escriba.exe`.
 escriba/
 ├── escriba.py          # Punto de entrada principal — orquesta hotkey, tray, UI y ciclo de vida
 ├── Escriba.spec        # Especificación de PyInstaller para compilar el ejecutable
-├── requirements.txt    # Dependencias de Python (pip install -r requirements.txt)
-├── config.json         # Configuración persistente del usuario (creado automáticamente)
+├── requirements.txt    # Dependencias de ejecución (pip install -r requirements.txt)
+├── requirements-dev.txt # Dependencias de desarrollo: pytest y PyInstaller
 ├── constants.py        # Constantes, modelos Gemini y definición de las 10 acciones de IA
 ├── config.py           # Gestor de persistencia de configuración (ConfigManager)
 ├── startup.py          # Gestor de inicio automático con Windows vía registro HKCU (StartupManager)
@@ -146,7 +154,8 @@ escriba/
 ├── tray.py             # Ícono y menú de bandeja del sistema vía pystray
 ├── ui_windows.py       # Ventanas de la interfaz (FloatingMenu, ResultWindow, ConfigWindow, etc.)
 ├── ai_clients.py       # Cliente GeminiClient con reintentos exponenciales y consulta de modelos
-├── tests/              # Suite de pruebas automatizadas con pytest
+├── tests/              # Suite de pruebas automatizadas con pytest (también corre en CI)
+├── .github/workflows/  # CI: ejecuta los tests en Windows en cada push y PR
 ├── build/              # Archivos temporales generados por PyInstaller
 ├── dist/               # Contiene el ejecutable final Escriba.exe
 └── README.md           # Documentación principal del proyecto
@@ -154,13 +163,13 @@ escriba/
 
 ## ⚙️ Configuración (`config.json`)
 
-Archivo generado automáticamente en el primer arranque con la configuración por defecto:
+Archivo generado automáticamente en el primer arranque en `%APPDATA%\Escriba\config.json` (escribible aunque la app esté instalada en `Program Files`), con la configuración por defecto:
 
 ```json
 {
   "api_key": "",
   "model": "gemini-3.5-flash-lite",
-  "autostart": true
+  "autostart": false
 }
 ```
 
@@ -168,7 +177,8 @@ Archivo generado automáticamente en el primer arranque con la configuración po
 
 | Clave       | Tipo    | Descripción                                                                          |
 | ----------- | ------- | ------------------------------------------------------------------------------------ |
-| `api_key`   | string  | Clave de API de Google Gemini (requerida para realizar consultas)                    |
+| `api_key`   | string  | Clave en texto plano. Solo se usa fuera de Windows; en Windows queda vacía y se migra a `api_key_enc` |
+| `api_key_enc` | string | Clave de API de Google Gemini cifrada con DPAPI (ligada a tu cuenta de Windows). Se establece desde la UI |
 | `model`     | string  | Modelo de Google Gemini seleccionado (por defecto: `gemini-3.5-flash-lite`)          |
 | `autostart` | boolean | Si es `true`, la app se registra para iniciar automáticamente al iniciar sesión en Windows |
 
@@ -177,7 +187,7 @@ Archivo generado automáticamente en el primer arranque con la configuración po
 Puedes modificar la configuración de dos formas:
 
 1. **Desde la UI** — Haz clic derecho en el ícono de la bandeja de Escriba → **Configuración**.
-2. **Manual** — Edita el archivo `config.json` en la carpeta raíz de la aplicación.
+2. **Manual** — Edita `%APPDATA%\Escriba\config.json`. Si escribes la API Key en `api_key` en texto plano, Escriba la cifrará automáticamente la próxima vez que la lea.
 
 Los cambios guardados desde la UI se aplican inmediatamente.
 
@@ -189,8 +199,8 @@ Los cambios guardados desde la UI se aplican inmediatamente.
 - **`hotkey.py`** — `HotkeyManager`. Registra `Win+Alt+E` a nivel de sistema operativo utilizando la función WinAPI `RegisterHotKey`, asegurando la captura sin conflictos ni fugas de teclas. Incluye funciones de asistencia de teclado para enviar secuencias seguras de `Ctrl+C` y `Ctrl+V`.
 - **`tray.py`** — `TrayIconManager`. Crea el ícono en la bandeja del sistema con opciones para abrir Configuración, ver información o salir.
 - **`ui_windows.py`** — Componentes de interfaz gráfica construidos con `ttkbootstrap` y `tkinter`: `FloatingMenu`, `ResultWindow`, `ConfigWindow`, `ThinkingWindow`, `CustomPromptWindow` y `TooltipNotification`.
-- **`ai_clients.py`** — Clase `GeminiClient` y función `generate_with_fallback`. Realiza peticiones a la API REST de Google Gemini, detecta errores transitorios (`is_retryable_error`), aplica pausas con retroceso exponencial y consulta modelos habilitados.
-- **`config.py`** — `ConfigManager`. Carga y guarda la configuración en `config.json` con soporte para caché en memoria.
+- **`ai_clients.py`** — Clase `GeminiClient` y función `generate_text`. Realiza peticiones a la API REST de Google Gemini, detecta errores transitorios (`is_retryable_error`), aplica pausas con retroceso exponencial y consulta modelos habilitados.
+- **`config.py`** — `ConfigManager`. Carga y guarda la configuración en `%APPDATA%\Escriba\config.json` con caché en memoria, migra la ubicación anterior y cifra la API Key con DPAPI (vía `ctypes`, sin dependencias extra).
 - **`startup.py`** — `StartupManager`. Modifica la clave de registro `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` para habilitar o deshabilitar el arranque automático.
 
 ### Flujo de ejecución

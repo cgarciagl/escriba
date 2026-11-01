@@ -2,8 +2,8 @@
 Escriba - Asistente de Texto con IA para Windows v1.0.0
 ======================================================
 Hotkey: Win+Alt+E
-- Registrado con `keyboard` library (suppress=True).
-  Garantiza que la tecla NUNCA filtra a otras aplicaciones.
+- Registrado con la API de Windows `RegisterHotKey` (ver hotkey.py), por lo que
+  la combinación no llega a otras aplicaciones.
 
 Stack: ttkbootstrap, pystray, Pillow, pyperclip, ctypes, requests
 """
@@ -98,20 +98,33 @@ class EscribaApp:
         )
 
     def _capture_selected_text(self) -> str:
-        """Copia texto seleccionado y restaura portapapeles original."""
-        original_clip = self._safe_paste()
-        send_ctrl_c()
-        time.sleep(0.40)
-        selected = self._safe_paste()
+        """Copia el texto seleccionado y restaura el portapapeles original.
 
-        if selected == original_clip:
+        Se vacía el portapapeles antes de enviar Ctrl+C: así, si no hay
+        selección, el resultado es "" en lugar del contenido previo del
+        portapapeles (que antes se enviaba a la IA por error).
+        """
+        original_clip = self._safe_paste()
+        self._safe_copy("")
+
+        send_ctrl_c()
+        selected = self._wait_for_clipboard()
+        if not selected:
             send_ctrl_c()
-            time.sleep(0.35)
-            selected = self._safe_paste()
+            selected = self._wait_for_clipboard()
 
         if original_clip:
             self._safe_copy(original_clip)
         return selected
+
+    def _wait_for_clipboard(self, timeout: float = 0.6, step: float = 0.05) -> str:
+        """Espera (sondeando) a que el portapapeles tenga contenido."""
+        for _ in range(max(1, int(timeout / step))):
+            time.sleep(step)
+            text = self._safe_paste()
+            if text:
+                return text
+        return ""
 
     def _safe_paste(self) -> str:
         try:

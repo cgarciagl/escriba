@@ -51,8 +51,8 @@ Start-Process "C:\Sistemas\Repos\escriba\dist\Escriba.exe"
 |---|---|
 | `escriba.py` | Punto de entrada. Clase `EscribaApp` que orquesta hotkey, tray y ventanas. |
 | `constants.py` | Constantes globales (`APP_NAME`, rutas, API URLs, `AI_ACTIONS`). |
-| `config.py` | `ConfigManager` — lectura/escritura de `config.json` con cache en memoria. |
-| `ai_clients.py` | Clientes IA: `OpenRouterClient` (API key) + `FreeAIClient` (Pollinations, sin key). Fallback automático. |
+| `config.py` | `ConfigManager` — lectura/escritura de `%APPDATA%\\Escriba\\config.json` con cache en memoria; API Key cifrada con DPAPI (`get_api_key`/`set_api_key`). |
+| `ai_clients.py` | `GeminiClient` (API oficial de Google Gemini, reintentos con backoff exponencial) y `generate_text()`, punto de entrada único para la UI. |
 | `hotkey.py` | `HotkeyManager` — registra `Win+Alt+E` via `RegisterHotKey`. Helpers `send_ctrl_c`, `send_ctrl_v`. |
 | `ui_windows.py` | Toda la UI: `FloatingMenu`, `ResultWindow`, `ConfigWindow`, `ThinkingWindow`, `SplashBanner`, `TooltipNotification`, `CustomPromptWindow`. |
 | `tray.py` | `TrayIconManager` — ícono en la bandeja del sistema via `pystray`. |
@@ -64,14 +64,14 @@ Start-Process "C:\Sistemas\Repos\escriba\dist\Escriba.exe"
 1. `EscribaApp.__init__` crea el root `ttkbootstrap.Window` (tema "vapor") y todas las ventanas.
 2. `run()` carga config, inicia el tray icon, muestra `SplashBanner`, y arranca el hotkey manager.
 3. Al pulsar Win+Alt+E → `_on_hotkey` → `_capture_selected_text` (simula Ctrl+C, lee portapapeles, restaura el original) → muestra `FloatingMenu`.
-4. El usuario elige una acción → `ThinkingWindow` (indicador de progreso) → `generate_with_fallback` en hilo secundario → `ResultWindow` con el resultado.
+4. El usuario elige una acción → `ThinkingWindow` (indicador de progreso) → `generate_text` en hilo secundario → `ResultWindow` con el resultado.
 5. Desde `ResultWindow` el usuario puede copiar, editar, regenerar, o **sustituir** el texto en la aplicación original (simula Ctrl+V).
 
-### Clientes de IA y fallback
+### Cliente de IA
 
-- **Primario:** OpenRouter (`openrouter.ai/api/v1`) — requiere API key en `config.json`.
-- **Fallback gratuito:** Pollinations AI (`text.pollinations.ai`) — sin API key, con cooldown de 10s entre llamadas.
-- `generate_with_fallback()` intenta OpenRouter primero; si falla o no hay key, usa Pollinations.
+- **Proveedor único:** Google Gemini (`generativelanguage.googleapis.com/v1beta`), API Key en la configuración (cifrada).
+- `GeminiClient.generate()` reintenta errores transitorios (429/5xx, red, "modelo ocupado") con retroceso exponencial y jitter.
+- `generate_text()` es el punto de entrada de la UI; si se agregan proveedores, el fallback va ahí.
 
 ---
 
@@ -80,7 +80,8 @@ Start-Process "C:\Sistemas\Repos\escriba\dist\Escriba.exe"
 - El archivo principal es `escriba.py`. No crear archivos Python adicionales salvo que el usuario lo pida.
 - La compilación siempre usa `Escriba.spec` (no `pyinstaller escriba.py` directo).
 - El EXE compilado queda en `dist\Escriba.exe`.
-- No modificar `config.json` — es generado en tiempo de ejecución.
+- No modificar `config.json` — es generado en tiempo de ejecución (en `%APPDATA%\\Escriba`).
+- Los tests deben poder correr fuera de Windows (`tests/conftest.py` simula `winreg`, `ctypes.windll`, etc.): `python -m pytest -q`.
 - Stack: `ttkbootstrap`, `pystray`, `Pillow`, `pyperclip`, `ctypes`, `requests`, `keyboard`. No agregar dependencias sin confirmar con el usuario.
 - La UI usa `ttkbootstrap` con tema "vapor" y colores custom definidos en `ui_windows.py` (paleta `_FM_*`).
 - Los hilos secundarios usan `app.schedule()` para actualizar la UI en el hilo principal de Tk.
