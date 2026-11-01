@@ -21,7 +21,6 @@ from constants import GEMINI_DEFAULT_MODEL
 CONFIG_FILE = constants.CONFIG_FILE
 LEGACY_CONFIG_FILE = constants.LEGACY_CONFIG_FILE
 
-_ENC_KEY = "api_key_enc"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -122,36 +121,56 @@ class ConfigManager:
         data[key] = value
         cls.save(data)
 
-    # ── API Key (cifrada con DPAPI en Windows) ──────────────
+    # ── Secretos (cifrados con DPAPI en Windows) ────────────
+    # Cada secreto `name` se guarda como `name_enc` (cifrado) o, fuera de
+    # Windows, como `name` en texto plano.
     @classmethod
-    def get_api_key(cls) -> str:
+    def get_secret(cls, name: str) -> str:
         data = cls.load()
-        encrypted = data.get(_ENC_KEY)
+        encrypted = data.get(f"{name}_enc")
         if encrypted:
             try:
                 return decrypt_secret(encrypted)
             except Exception:
                 return ""
-        plain = data.get("api_key", "") or ""
-        # Migración: una clave guardada en texto plano se cifra en cuanto se lee.
+        plain = data.get(name, "") or ""
+        # Migración: un secreto guardado en texto plano se cifra en cuanto se lee.
         if plain and _dpapi_available():
             try:
-                cls.set_api_key(plain)
+                cls.set_secret(name, plain)
             except Exception:
                 pass
         return plain
 
     @classmethod
-    def set_api_key(cls, key: str):
+    def set_secret(cls, name: str, value: str):
         data = cls.load()
-        key = (key or "").strip()
-        if key and _dpapi_available():
-            data[_ENC_KEY] = encrypt_secret(key)
-            data["api_key"] = ""
+        value = (value or "").strip()
+        if value and _dpapi_available():
+            data[f"{name}_enc"] = encrypt_secret(value)
+            data[name] = ""
         else:
-            data.pop(_ENC_KEY, None)
-            data["api_key"] = key
+            data.pop(f"{name}_enc", None)
+            data[name] = value
         cls.save(data)
+
+    @classmethod
+    def get_api_key(cls) -> str:
+        """API Key de Google Gemini."""
+        return cls.get_secret("api_key")
+
+    @classmethod
+    def set_api_key(cls, key: str):
+        cls.set_secret("api_key", key)
+
+    @classmethod
+    def get_openai_api_key(cls) -> str:
+        """API Key del proveedor compatible con OpenAI (opcional para Ollama)."""
+        return cls.get_secret("openai_api_key")
+
+    @classmethod
+    def set_openai_api_key(cls, key: str):
+        cls.set_secret("openai_api_key", key)
 
     @classmethod
     def is_configured(cls) -> bool:

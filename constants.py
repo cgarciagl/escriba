@@ -19,7 +19,7 @@ else:
 # Constantes de la aplicación
 # ─────────────────────────────────────────────────────────────
 APP_NAME     = "Escriba"
-APP_VERSION  = "1.0.0"
+APP_VERSION  = "1.1.0"
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 # La configuración vive en %APPDATA%\Escriba (escribible aunque el .exe esté en
@@ -45,7 +45,19 @@ GEMINI_FALLBACK_MODELS = [
 
 
 # ─────────────────────────────────────────────────────────────
-# Acciones de IA disponibles en el menú flotante
+# Proveedor alternativo compatible con la API de OpenAI
+# (Ollama local, OpenAI, OpenRouter, LM Studio, etc.)
+# ─────────────────────────────────────────────────────────────
+OPENAI_DEFAULT_BASE_URL = "http://localhost:11434/v1"   # Ollama
+OPENAI_DEFAULT_MODEL    = "llama3.2"
+
+HISTORY_MAX_ITEMS = 10
+
+
+# ─────────────────────────────────────────────────────────────
+# Acciones de IA PREDETERMINADAS del menú flotante.
+# El usuario puede reemplazarlas con %APPDATA%\Escriba\actions.json
+# (ver actions.py). Los atajos evitan Ctrl+X/S/F por su significado habitual.
 # ─────────────────────────────────────────────────────────────
 AI_ACTIONS = [
     {
@@ -55,7 +67,6 @@ AI_ACTIONS = [
         "bootstyle":    "info-outline",
         "section":      "Texto y Contenido",
         "shortcut":     "Ctrl+R",
-        "shortcut_key": "<Control-r>",
     },
     {
         "label":        "◉  Explicar",
@@ -64,7 +75,6 @@ AI_ACTIONS = [
         "bootstyle":    "info-outline",
         "section":      "Texto y Contenido",
         "shortcut":     "Ctrl+E",
-        "shortcut_key": "<Control-e>",
     },
     {
         "label":        "⇲  Extender",
@@ -72,16 +82,14 @@ AI_ACTIONS = [
                         "Devuelve ÚNICAMENTE el texto extendido.",
         "bootstyle":    "info-outline",
         "section":      "Texto y Contenido",
-        "shortcut":     "Ctrl+X",
-        "shortcut_key": "<Control-x>",
+        "shortcut":     "Ctrl+L",
     },
     {
         "label":        "≡  Resumir",
         "prompt":       "Genera un resumen ejecutivo del siguiente texto destacando los puntos clave.",
         "bootstyle":    "info-outline",
         "section":      "Texto y Contenido",
-        "shortcut":     "Ctrl+S",
-        "shortcut_key": "<Control-s>",
+        "shortcut":     "Ctrl+B",
     },
     {
         "label":        "✉  Mejorar Correo",
@@ -91,7 +99,6 @@ AI_ACTIONS = [
         "bootstyle":    "info-outline",
         "section":      "Texto y Contenido",
         "shortcut":     "Ctrl+M",
-        "shortcut_key": "<Control-m>",
     },
     {
         "label":        "◐  Traducir al español",
@@ -101,7 +108,6 @@ AI_ACTIONS = [
         "bootstyle":    "warning-outline",
         "section":      "Idiomas",
         "shortcut":     "Ctrl+1",
-        "shortcut_key": "<Control-1>",
     },
     {
         "label":        "◑  Traducir al inglés",
@@ -111,7 +117,6 @@ AI_ACTIONS = [
         "bootstyle":    "warning-outline",
         "section":      "Idiomas",
         "shortcut":     "Ctrl+2",
-        "shortcut_key": "<Control-2>",
     },
     {
         "label":        "▤  Fix SQL",
@@ -119,15 +124,13 @@ AI_ACTIONS = [
         "bootstyle":    "danger-outline",
         "section":      "Para desarrolladores",
         "shortcut":     "Ctrl+D",
-        "shortcut_key": "<Control-d>",
     },
     {
         "label":        "✦  Refactorizar Código",
         "prompt":       "Reescribe el siguiente código para aplicar principios de Clean Code. Mejora el nombrado de variables, reduce la anidación y optimiza la lógica sin alterar su funcionamiento original. Solo devuelve el código. No lo devuelvas en formato markdown.",
         "bootstyle":    "secondary-outline",
         "section":      "Para desarrolladores",
-        "shortcut":     "Ctrl+F",
-        "shortcut_key": "<Control-f>",
+        "shortcut":     "Ctrl+K",
     },
     {
         "label":        "⊙  Explicar Código",
@@ -135,6 +138,5 @@ AI_ACTIONS = [
         "bootstyle":    "secondary-outline",
         "section":      "Para desarrolladores",
         "shortcut":     "Ctrl+P",
-        "shortcut_key": "<Control-p>",
     },
 ]

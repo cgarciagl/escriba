@@ -1,5 +1,5 @@
 """
-Escriba - Asistente de Texto con IA para Windows v1.0.0
+Escriba - Asistente de Texto con IA para Windows v1.1.0
 ======================================================
 Hotkey: Win+Alt+E
 - Registrado con la API de Windows `RegisterHotKey` (ver hotkey.py), por lo que
@@ -17,8 +17,9 @@ import pyperclip
 
 from constants import APP_NAME
 from config import ConfigManager
+from history import History
 from ui_windows import (
-    ConfigWindow, FloatingMenu, TooltipNotification, SplashBanner,
+    ConfigWindow, FloatingMenu, ResultWindow, TooltipNotification, SplashBanner,
 )
 from tray import TrayIconManager
 from hotkey import HotkeyManager, send_ctrl_c
@@ -36,10 +37,12 @@ class EscribaApp:
         self.root.title(APP_NAME)
         self.root.withdraw()
 
+        self.history = History()
         self.config_window = ConfigWindow(self)
         self.floating_menu = FloatingMenu(self)
         self.tooltip = TooltipNotification(self.root)
         self.tray = TrayIconManager(self)
+        self.history.on_change = self.tray.refresh
         self.hotkey = HotkeyManager(self.root, self._on_hotkey)
         self._lock = threading.Lock()
 
@@ -59,6 +62,14 @@ class EscribaApp:
 
     def open_config(self):
         self.config_window.show()
+
+    def open_history_entry(self, entry):
+        """Reabre una respuesta del historial (sin ventana de origen: no se puede sustituir)."""
+        ResultWindow(
+            self, entry.result, None,
+            prompt=entry.prompt, selected_text=entry.selected_text,
+            provider=entry.provider, label=entry.label,
+        )
 
     def schedule(self, callback, *args):
         """Programa una tarea en el hilo principal de Tk (Law of Demeter)."""

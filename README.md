@@ -2,15 +2,19 @@
 
 Aplicación nativa de escritorio que proporciona asistencia de IA integrada directamente en tu flujo de escritura. Funciona de manera completamente desatendida en la bandeja del sistema y se activa al presionar una combinación de teclas global, sin interferir con ninguna otra aplicación.
 
-**Escoge una de diez acciones de IA** (o redacta tu propio prompt personalizado) sobre cualquier texto seleccionado: reescribir, explicar, extender, resumir, mejorar correos, traducir (español/inglés), corregir SQL, refactorizar o explicar código. Los resultados se presentan en una ventana editable e interactiva que permite sustituir el texto original con un clic, copiar al portapapeles o regenerar la respuesta.
+**Escoge una de diez acciones de IA** (personalizables, o redacta tu propio prompt) sobre cualquier texto seleccionado: reescribir, explicar, extender, resumir, mejorar correos, traducir (español/inglés), corregir SQL, refactorizar o explicar código. Los resultados se presentan en una ventana editable e interactiva que permite sustituir el texto original con un clic, copiar al portapapeles o regenerar la respuesta.
 
-**Impulsado por Google Gemini**: utiliza la API oficial de Google Gemini con modelos optimizados de alta velocidad como `gemini-3.5-flash-lite`. Incorpora detección y selección dinámica de modelos, así como reintentos automáticos inteligentes con retroceso exponencial ante saturación temporal o límites de cuota.
+**Impulsado por Google Gemini**: utiliza la API oficial de Google Gemini con modelos optimizados de alta velocidad como `gemini-3.5-flash-lite`. Incorpora detección y selección dinámica de modelos, así como reintentos automáticos inteligentes con retroceso exponencial ante saturación temporal o límites de cuota. Opcionalmente puede usar (o recurrir a) cualquier **servidor compatible con OpenAI**, como Ollama en local.
 
 ## 🎯 Características
 
 - ⌨️ **Hotkey global** (`Win+Alt+E`) que funciona en cualquier aplicación sin filtrado de teclas
 - 🤖 **10 acciones de IA predefinidas**: categorizadas en Texto y Contenido, Idiomas y Herramientas para Desarrolladores
+- 🧩 **Acciones personalizables**: edita, agrega o quita acciones (prompt, sección y atajo) en `actions.json`, sin recompilar
 - ⌨️ **Atajos de teclado directos**: cada acción en el menú flotante cuenta con su propio atajo rápido (`Ctrl+R`, `Ctrl+E`, `Ctrl+1`, `Ctrl+D`, etc.)
+- 📡 **Respuesta en streaming**: el texto aparece en la ventana de resultado conforme se genera
+- 🔀 **Proveedor alternativo**: Ollama, OpenAI, OpenRouter o LM Studio vía API compatible con OpenAI, como principal o como respaldo automático
+- 🕘 **Historial**: las últimas 10 respuestas de la sesión, accesibles desde el menú de la bandeja
 - ✏️ **Prompt personalizado**: ventana dedicada para ingresar instrucciones libres sobre el texto seleccionado
 - ⚡ **Google Gemini Oficial**: soporte para modelos Flash (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-2.5-flash`, etc.) con descarga dinámica de modelos disponibles
 - 🔄 **Reintentos automáticos**: gestión transparente de saturación de modelos y rate limits (HTTP 429, 503) con retroceso exponencial
@@ -74,8 +78,8 @@ Al primer arranque, la aplicación:
    ### 📝 Texto y Contenido
    - ✎ **Reescribir** (`Ctrl+R`) — Mejora la claridad, fluidez y gramática conservando el sentido.
    - ◉ **Explicar** (`Ctrl+E`) — Proporciona una explicación detallada, estructurada y concisa.
-   - ⇲ **Extender** (`Ctrl+X`) — Amplía el texto de forma coherente sin añadir información inventada.
-   - ≡ **Resumir** (`Ctrl+S`) — Genera un resumen ejecutivo destacando los puntos esenciales.
+   - ⇲ **Extender** (`Ctrl+L`) — Amplía el texto de forma coherente sin añadir información inventada.
+   - ≡ **Resumir** (`Ctrl+B`) — Genera un resumen ejecutivo destacando los puntos esenciales.
    - ✉ **Mejorar Correo** (`Ctrl+M`) — Optimiza el correo buscando tono profesional, cortesía y claridad.
 
    ### 🌐 Idiomas
@@ -84,18 +88,21 @@ Al primer arranque, la aplicación:
 
    ### 💻 Para Desarrolladores
    - ▤ **Fix SQL** (`Ctrl+D`) — Valida y formatea consultas SQL con estructura compacta y seccionada.
-   - ✦ **Refactorizar Código** (`Ctrl+F`) — Aplica principios de Clean Code, reduce anidamiento y renombra variables.
+   - ✦ **Refactorizar Código** (`Ctrl+K`) — Aplica principios de Clean Code, reduce anidamiento y renombra variables.
    - ⊙ **Explicar Código** (`Ctrl+P`) — Análisis paso a paso de la lógica y funcionamiento del código.
 
    ### ✏️ Prompt Personalizado
-   - Haz clic en **Crear prompt personalizado** para abrir un diálogo donde podrás introducir cualquier instrucción libre sobre el texto seleccionado.
+   - Haz clic en **Crear prompt personalizado** (o pulsa `Ctrl+Espacio`) para abrir un diálogo donde podrás introducir cualquier instrucción libre sobre el texto seleccionado. Ejecútalo con `Ctrl+Enter`.
 
-4. **Procesamiento** — Se muestra una ventana flotante con barra de progreso mientras Gemini genera la respuesta. Si el modelo experimenta saturación temporal, la ventana mostrará el reintento automático.
+   > Los atajos evitan `Ctrl+X`, `Ctrl+S` y `Ctrl+F` por su significado habitual. Puedes cambiarlos en `actions.json`.
+
+4. **Procesamiento** — Se muestra una ventana flotante con barra de progreso hasta que llega el primer fragmento; con streaming activado, la ventana de resultado se abre y el texto aparece mientras se genera. Si el modelo experimenta saturación temporal, la ventana mostrará el reintento automático.
 5. **Interactúa con el resultado** — En la ventana de respuesta podrás:
    - **⬅️ Sustituir texto seleccionado** — Reemplaza automáticamente el texto seleccionado en la aplicación original.
    - **🔄 Volver a generar** — Solicita una nueva respuesta a Gemini con el mismo prompt.
    - **📋 Copiar al portapapeles** — Copia el texto generado.
    - **✕ Cerrar** — Cierra la ventana y descarta el resultado.
+6. **Historial** — Clic derecho en el ícono de la bandeja → **🕘 Historial** para reabrir una de las últimas respuestas (se guardan solo en memoria y se pierden al cerrar Escriba).
 
 ## 🔑 Configuración de API y Modelos
 
@@ -111,6 +118,47 @@ En la ventana de **Configuración** puedes seleccionar el modelo de Gemini:
 - **Predeterminado:** `gemini-3.5-flash-lite` (rápido, eficiente y ligero).
 - **Lista de modelos:** Incluye `gemini-3.5-flash`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.5-pro`, entre otros.
 - **Botón "🔄 Actualizar":** Con tu API Key ingresada, consulta dinámicamente la API de Gemini para listar todos los modelos disponibles en tu cuenta.
+
+### Proveedor alternativo (compatible con OpenAI)
+
+En **Configuración → Proveedor alternativo** puedes configurar cualquier servidor con el endpoint `/chat/completions`:
+
+| Servidor   | URL base                         | API Key  |
+| ---------- | -------------------------------- | -------- |
+| Ollama     | `http://localhost:11434/v1`      | No       |
+| LM Studio  | `http://localhost:1234/v1`       | No       |
+| OpenAI     | `https://api.openai.com/v1`      | Sí       |
+| OpenRouter | `https://openrouter.ai/api/v1`   | Sí       |
+
+- Elige si es el **proveedor principal** o deja Gemini como principal.
+- Activa **"Si el proveedor principal falla, usar el otro"** para un respaldo automático. El cambio solo ocurre si el primero no llegó a mostrar texto (no se mezclan respuestas de dos modelos).
+- El botón **🔄 Listar** consulta `GET /models` del servidor.
+
+### Acciones personalizadas (`actions.json`)
+
+En **Configuración → General → 📝 Editar acciones** se crea `%APPDATA%\Escriba\actions.json` con las acciones predeterminadas y se abre en tu editor. Los cambios se aplican la próxima vez que abras el menú.
+
+```json
+[
+  {
+    "label": "✎  Reescribir",
+    "prompt": "Reescribe el siguiente texto para mejorar su claridad y fluidez. Devuelve ÚNICAMENTE el texto reescrito.",
+    "section": "Texto y Contenido",
+    "bootstyle": "info-outline",
+    "shortcut": "Ctrl+R"
+  }
+]
+```
+
+| Campo       | Obligatorio | Descripción                                                                 |
+| ----------- | ----------- | --------------------------------------------------------------------------- |
+| `label`     | Sí          | Texto del botón (por convención, icono + dos espacios + nombre)             |
+| `prompt`    | Sí          | Instrucciones para la IA (se envían como *system instruction*)              |
+| `section`   | No          | Agrupa botones; la primera sección se muestra sin encabezado                |
+| `bootstyle` | No          | Estilo de `ttkbootstrap` (`info-outline`, `warning-outline`, `danger-outline`…) |
+| `shortcut`  | No          | `Ctrl`/`Alt`/`Shift` + letra, dígito o `F1`–`F12` (p. ej. `Ctrl+Shift+T`)   |
+
+Si el archivo tiene errores, Escriba usa las acciones válidas (o las predeterminadas) y muestra un aviso. **↺ Restaurar predeterminadas** sobrescribe el archivo.
 
 ### Gestión de Errores y Reintentos
 
@@ -147,13 +195,19 @@ escriba/
 ├── Escriba.spec        # Especificación de PyInstaller para compilar el ejecutable
 ├── requirements.txt    # Dependencias de ejecución (pip install -r requirements.txt)
 ├── requirements-dev.txt # Dependencias de desarrollo: pytest y PyInstaller
-├── constants.py        # Constantes, modelos Gemini y definición de las 10 acciones de IA
-├── config.py           # Gestor de persistencia de configuración (ConfigManager)
+├── constants.py        # Constantes, modelos y las 10 acciones de IA predeterminadas
+├── config.py           # Persistencia de configuración y secretos cifrados (ConfigManager)
+├── actions.py          # Carga/validación de acciones personalizadas (actions.json)
+├── history.py          # Historial en memoria de las últimas respuestas
 ├── startup.py          # Gestor de inicio automático con Windows vía registro HKCU (StartupManager)
 ├── hotkey.py           # Registro de hotkey global (Win+Alt+E) y utilidades de teclado
 ├── tray.py             # Ícono y menú de bandeja del sistema vía pystray
-├── ui_windows.py       # Ventanas de la interfaz (FloatingMenu, ResultWindow, ConfigWindow, etc.)
-├── ai_clients.py       # Cliente GeminiClient con reintentos exponenciales y consulta de modelos
+├── ui_windows.py       # Fachada que reexporta las ventanas de los módulos ui_*
+├── ui_common.py        # Paleta, helpers, notificaciones, indicador de progreso y banner
+├── ui_menu.py          # Menú flotante y ventana de prompt personalizado
+├── ui_result.py        # Ejecución de acciones (streaming) y ventana de resultado
+├── ui_config.py        # Ventana de configuración con pestañas
+├── ai_clients.py       # Clientes Gemini y OpenAI-compatible, streaming, reintentos y fallback
 ├── tests/              # Suite de pruebas automatizadas con pytest (también corre en CI)
 ├── .github/workflows/  # CI: ejecuta los tests en Windows en cada push y PR
 ├── build/              # Archivos temporales generados por PyInstaller
@@ -173,6 +227,8 @@ Archivo generado automáticamente en el primer arranque en `%APPDATA%\Escriba\co
 }
 ```
 
+Las demás claves se agregan al guardar desde la ventana de Configuración.
+
 ### Parámetros
 
 | Clave       | Tipo    | Descripción                                                                          |
@@ -181,6 +237,12 @@ Archivo generado automáticamente en el primer arranque en `%APPDATA%\Escriba\co
 | `api_key_enc` | string | Clave de API de Google Gemini cifrada con DPAPI (ligada a tu cuenta de Windows). Se establece desde la UI |
 | `model`     | string  | Modelo de Google Gemini seleccionado (por defecto: `gemini-3.5-flash-lite`)          |
 | `autostart` | boolean | Si es `true`, la app se registra para iniciar automáticamente al iniciar sesión en Windows |
+| `streaming` | boolean | Mostrar la respuesta mientras se genera (por defecto: `true`)                         |
+| `provider`  | string  | Proveedor principal: `gemini` (por defecto) u `openai`                                |
+| `fallback_enabled` | boolean | Recurrir al otro proveedor si el principal falla (por defecto: `false`)       |
+| `openai_base_url` | string | URL base del proveedor alternativo (por defecto: Ollama local)                    |
+| `openai_model` | string | Modelo del proveedor alternativo                                                     |
+| `openai_api_key_enc` | string | API Key del proveedor alternativo, cifrada con DPAPI (opcional)              |
 
 ### Edición de configuración
 
@@ -198,8 +260,10 @@ Los cambios guardados desde la UI se aplican inmediatamente.
 - **`escriba.py`** — Clase `EscribaApp`. Orquesta el mainloop de Tkinter, la conexión entre el hotkey global y las ventanas, y el ciclo de vida de la aplicación.
 - **`hotkey.py`** — `HotkeyManager`. Registra `Win+Alt+E` a nivel de sistema operativo utilizando la función WinAPI `RegisterHotKey`, asegurando la captura sin conflictos ni fugas de teclas. Incluye funciones de asistencia de teclado para enviar secuencias seguras de `Ctrl+C` y `Ctrl+V`.
 - **`tray.py`** — `TrayIconManager`. Crea el ícono en la bandeja del sistema con opciones para abrir Configuración, ver información o salir.
-- **`ui_windows.py`** — Componentes de interfaz gráfica construidos con `ttkbootstrap` y `tkinter`: `FloatingMenu`, `ResultWindow`, `ConfigWindow`, `ThinkingWindow`, `CustomPromptWindow` y `TooltipNotification`.
-- **`ai_clients.py`** — Clase `GeminiClient` y función `generate_text`. Realiza peticiones a la API REST de Google Gemini, detecta errores transitorios (`is_retryable_error`), aplica pausas con retroceso exponencial y consulta modelos habilitados.
+- **`ui_windows.py`** — Fachada que reexporta la interfaz, repartida en `ui_common.py` (paleta y ventanas pequeñas), `ui_menu.py` (`FloatingMenu`, `CustomPromptWindow`), `ui_result.py` (`ResultWindow`, `run_ai_action` con streaming) y `ui_config.py` (`ConfigWindow`).
+- **`ai_clients.py`** — `GeminiClient`, `OpenAICompatibleClient` y `generate_text()`. Envía el prompt como *system instruction*, admite streaming (SSE), detecta errores transitorios (`is_retryable_error`), reintenta con retroceso exponencial y aplica el fallback entre proveedores.
+- **`actions.py`** — Lee y valida `actions.json`; convierte atajos como `Ctrl+R` al formato de Tk.
+- **`history.py`** — Historial en memoria, acotado y seguro entre hilos.
 - **`config.py`** — `ConfigManager`. Carga y guarda la configuración en `%APPDATA%\Escriba\config.json` con caché en memoria, migra la ubicación anterior y cifra la API Key con DPAPI (vía `ctypes`, sin dependencias extra).
 - **`startup.py`** — `StartupManager`. Modifica la clave de registro `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` para habilitar o deshabilitar el arranque automático.
 
@@ -207,17 +271,18 @@ Los cambios guardados desde la UI se aplican inmediatamente.
 
 ```text
 1. EscribaApp.run() inicia la aplicación
-2. ConfigManager.load() lee o inicializa config.json
+2. ConfigManager.load() lee o inicializa %APPDATA%\Escriba\config.json
 3. StartupManager asegura el registro en Windows según configuración
 4. TrayIconManager.start() coloca el ícono en la bandeja
 5. HotkeyManager.start() registra el atajo global Win+Alt+E
 6. Al presionar Win+Alt+E:
    └─ Captura el texto seleccionado mediante simulación segura de Ctrl+C
-   └─ Despliega FloatingMenu con las 10 acciones organizadas y la opción de prompt libre
+   └─ Despliega FloatingMenu con las acciones de actions.json (o las predeterminadas) y la opción de prompt libre
    └─ El usuario escoge una acción o introduce un prompt personalizado
    └─ Se muestra ThinkingWindow con indicador de progreso
-   └─ Se envía la solicitud a Google Gemini (con reintentos si hay sobrecarga)
-   └─ Se abre ResultWindow con el texto generado
+   └─ Se envía la solicitud al proveedor configurado (reintentos y, si está activo, fallback)
+   └─ Con el primer fragmento se abre ResultWindow y el texto aparece en streaming
+   └─ La respuesta se guarda en el historial de la sesión
    └─ El usuario puede sustituir en la app original, volver a generar, copiar o cerrar
 ```
 

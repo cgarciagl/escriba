@@ -84,21 +84,22 @@ class TestAIActions:
         labels = [a["label"] for a in AI_ACTIONS]
         assert len(labels) == len(set(labels)), f"Duplicate labels: {labels}"
 
-    def test_every_action_has_shortcut(self):
+    def test_every_action_has_valid_shortcut(self):
+        from actions import shortcut_to_tk
+
         for action in AI_ACTIONS:
-            assert "shortcut" in action, (
-                f"Action '{action['label']}' missing 'shortcut'"
-            )
-            assert "shortcut_key" in action, (
-                f"Action '{action['label']}' missing 'shortcut_key'"
+            assert "shortcut" in action, f"Action '{action['label']}' missing 'shortcut'"
+            assert shortcut_to_tk(action["shortcut"]), (
+                f"Invalid shortcut '{action['shortcut']}' for '{action['label']}'"
             )
 
-    def test_shortcut_keys_are_valid(self):
-        for action in AI_ACTIONS:
-            key = action.get("shortcut_key", "")
-            assert key.startswith("<Control-"), (
-                f"Invalid shortcut_key '{key}' for '{action['label']}'"
-            )
+    def test_shortcuts_avoid_common_editing_keys(self):
+        used = {a["shortcut"] for a in AI_ACTIONS}
+        assert not used & {"Ctrl+X", "Ctrl+S", "Ctrl+F", "Ctrl+C", "Ctrl+V", "Ctrl+Z", "Ctrl+A"}
+
+    def test_shortcuts_are_unique(self):
+        shortcuts = [a["shortcut"] for a in AI_ACTIONS]
+        assert len(shortcuts) == len(set(shortcuts))
 
     def test_bootstyle_is_valid(self):
         for action in AI_ACTIONS:
