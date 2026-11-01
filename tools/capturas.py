@@ -13,6 +13,8 @@ from plataforma import enable_dpi_awareness
 enable_dpi_awareness()
 root = tb.Window(themename="vapor")
 root.geometry("1x1+0+0")
+from ui_common import configure_styles
+configure_styles(root)
 
 from history import History
 from ui_common import ThinkingWindow, TooltipNotification
@@ -53,7 +55,7 @@ with patch("ui_menu.get_foreground_window", return_value=1), \
      patch.object(root, "winfo_pointery", return_value=200):
     menu = FloatingMenu(app)
     menu.show(TEXT)
-    menu.window.geometry("+300+200")
+    menu.window.geometry("+300+40")
     shot(menu.window, "1_menu")
     menu.input.insert("1.0", "trad")
     menu._on_query_change()
@@ -67,6 +69,7 @@ with patch("ui_menu.get_foreground_window", return_value=1), \
 
 t = ThinkingWindow(root, "≡  Resumir…", on_cancel=lambda: None)
 pump()
+t.window.geometry("+300+300")
 shot(t.window, "4_pensando")
 t.close()
 
@@ -91,4 +94,10 @@ with patch("ui_config.StartupManager.is_enabled", return_value=False):
     cw = ConfigWindow(app)
     cw.show(welcome=True)
     shot(cw.window, "9_config_bienvenida")
+    cw.window.nametowidget(cw.window.winfo_children()[0]).update()
+    nb = [w for w in cw.window.winfo_children()[0].winfo_children() if w.winfo_class() == "TNotebook"][0]
+    nb.select(1)
+    shot(cw.window, "10_config_alternativo")
+    nb.select(2)
+    shot(cw.window, "11_config_general")
 print("ok")

@@ -230,7 +230,7 @@ class FloatingMenu:
                 section = item["action"].get("section", "")
                 if section != last_section:
                     tk.Label(self.list_frame, text=section, font=(UI_FONT, 8, "bold"),
-                             bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, padx=6, pady=(6, 2))
+                             bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, padx=6, pady=(5, 1))
                     last_section = section
             self._rows.append(self._make_row(index, item))
 
@@ -243,7 +243,7 @@ class FloatingMenu:
             self.window.update_idletasks()
 
     def _make_row(self, index: int, item: dict) -> list[tk.Widget]:
-        row = tk.Frame(self.list_frame, bg=_FM_BG, cursor="hand2", padx=6, pady=5)
+        row = tk.Frame(self.list_frame, bg=_FM_BG, cursor="hand2", padx=6, pady=3)
         row.pack(fill=X)
         if item["kind"] == "action":
             action = item["action"]

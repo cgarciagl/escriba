@@ -26,6 +26,9 @@ def tk_root():
     except tkinter.TclError as exc:  # sin pantalla
         pytest.skip(f"No se pudo crear la ventana Tk: {exc}")
     root.withdraw()
+    from ui_common import configure_styles
+
+    configure_styles(root)
     yield root
     root.destroy()
 

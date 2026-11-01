@@ -115,7 +115,7 @@ class ConfigWindow:
         tb.Button(footer, text="💾  Guardar y Cerrar", bootstyle="warning",
                   width=26, command=self._save).pack()
 
-        notebook = tb.Notebook(frame, bootstyle="warning")
+        notebook = tb.Notebook(frame, style="Escriba.TNotebook")
         notebook.pack(fill=BOTH, expand=True)
 
         self._build_gemini_tab(self._tab(notebook, "Gemini"))
@@ -139,7 +139,7 @@ class ConfigWindow:
         self._title(tab, "API Key de Google Gemini")
         self.api_key_var = tk.StringVar(value=ConfigManager.get_api_key())
         self.key_entry = tb.Entry(tab, textvariable=self.api_key_var,
-                                  show="•", font=(MONO_FONT, 11), bootstyle="warning")
+                                  show="•", font=(MONO_FONT, 11), style="Escriba.TEntry")
         self.key_entry.pack(fill=X, ipady=5, pady=(0, 4))
 
         url_label = tk.Label(tab, text="Obtén tu clave en → https://aistudio.google.com/apikey",
@@ -160,11 +160,11 @@ class ConfigWindow:
             initial_models.insert(0, current_model)
 
         self.model_cb = tb.Combobox(model_row, textvariable=self.model_var, values=initial_models,
-                                    state="readonly", bootstyle="warning", font=(MONO_FONT, 10))
+                                    state="readonly", style="Escriba.TCombobox", font=(MONO_FONT, 10))
         self.model_cb.pack(side=LEFT, fill=X, expand=True, ipady=4, padx=(0, 8))
 
         self.refresh_btn = tb.Button(model_row, text="🔄 Actualizar",
-                                     bootstyle="secondary-outline", command=self._refresh_models)
+                                     style="Escriba.TButton", command=self._refresh_models)
         self.refresh_btn.pack(side=LEFT, ipady=2)
         self._hint(tab, f"Predeterminado: {GEMINI_DEFAULT_MODEL} (rápido y eficiente)")
 
@@ -177,19 +177,19 @@ class ConfigWindow:
         prov_row = tk.Frame(tab, bg=_FM_BG)
         prov_row.pack(fill=X, pady=(0, 12))
         tb.Radiobutton(prov_row, text="Google Gemini", value="gemini",
-                       variable=self.provider_var, bootstyle="warning").pack(side=LEFT, padx=(0, 18))
+                       variable=self.provider_var, style="Escriba.TRadiobutton").pack(side=LEFT, padx=(0, 18))
         tb.Radiobutton(prov_row, text="Compatible con OpenAI", value="openai",
-                       variable=self.provider_var, bootstyle="warning").pack(side=LEFT)
+                       variable=self.provider_var, style="Escriba.TRadiobutton").pack(side=LEFT)
 
         self._title(tab, "URL base")
         self.alt_url_var = tk.StringVar(value=ConfigManager.get("openai_base_url", OPENAI_DEFAULT_BASE_URL))
         tb.Entry(tab, textvariable=self.alt_url_var, font=(MONO_FONT, 10),
-                 bootstyle="warning").pack(fill=X, ipady=4, pady=(0, 10))
+                 style="Escriba.TEntry").pack(fill=X, ipady=4, pady=(0, 10))
 
         self._title(tab, "API Key (opcional)")
         self.alt_key_var = tk.StringVar(value=ConfigManager.get_openai_api_key())
         tb.Entry(tab, textvariable=self.alt_key_var, show="•", font=(MONO_FONT, 10),
-                 bootstyle="warning").pack(fill=X, ipady=4, pady=(0, 10))
+                 style="Escriba.TEntry").pack(fill=X, ipady=4, pady=(0, 10))
 
         self._title(tab, "Modelo")
         alt_row = tk.Frame(tab, bg=_FM_BG)
@@ -197,16 +197,16 @@ class ConfigWindow:
         self.alt_model_var = tk.StringVar(value=ConfigManager.get("openai_model", OPENAI_DEFAULT_MODEL))
         self.alt_model_cb = tb.Combobox(alt_row, textvariable=self.alt_model_var,
                                         values=[self.alt_model_var.get()],
-                                        bootstyle="warning", font=(MONO_FONT, 10))
+                                        style="Escriba.TCombobox", font=(MONO_FONT, 10))
         self.alt_model_cb.pack(side=LEFT, fill=X, expand=True, ipady=3, padx=(0, 8))
-        self.alt_refresh_btn = tb.Button(alt_row, text="🔄 Listar", bootstyle="secondary-outline",
+        self.alt_refresh_btn = tb.Button(alt_row, text="🔄 Listar", style="Escriba.TButton",
                                          command=self._refresh_alt_models)
         self.alt_refresh_btn.pack(side=LEFT, ipady=2)
 
         self.fallback_var = tk.BooleanVar(value=bool(ConfigManager.get("fallback_enabled", False)))
         tb.Checkbutton(tab, text="  Si el proveedor principal falla, usar el otro",
                        variable=self.fallback_var,
-                       bootstyle="warning-round-toggle").pack(anchor=W, pady=(4, 0))
+                       style="Escriba.TCheckbutton").pack(anchor=W, pady=(4, 0))
 
     def _build_general_tab(self, tab):
         hotkey_row = tk.Frame(tab, bg=_FM_BG)
@@ -219,12 +219,12 @@ class ConfigWindow:
         self.streaming_var = tk.BooleanVar(value=bool(ConfigManager.get("streaming", True)))
         tb.Checkbutton(tab, text="  Mostrar la respuesta mientras se genera (streaming)",
                        variable=self.streaming_var,
-                       bootstyle="warning-round-toggle").pack(anchor=W, pady=(0, 10))
+                       style="Escriba.TCheckbutton").pack(anchor=W, pady=(0, 10))
 
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
         tb.Checkbutton(tab, text="  Iniciar automáticamente al iniciar sesión",
                        variable=self.autostart_var,
-                       bootstyle="warning-round-toggle").pack(anchor=W, pady=(0, 16))
+                       style="Escriba.TCheckbutton").pack(anchor=W, pady=(0, 16))
 
         tk.Frame(tab, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
         self._title(tab, "Acciones del menú")
@@ -232,9 +232,9 @@ class ConfigWindow:
                         "Los cambios se aplican la próxima vez que abras el menú.", pady=(0, 10))
         act_row = tk.Frame(tab, bg=_FM_BG)
         act_row.pack(fill=X)
-        tb.Button(act_row, text="📝  Editar acciones", bootstyle="warning-outline",
+        tb.Button(act_row, text="📝  Editar acciones", style="Escriba.TButton",
                   command=self._edit_actions).pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=3)
-        tb.Button(act_row, text="↺  Restaurar predeterminadas", bootstyle="secondary-outline",
+        tb.Button(act_row, text="↺  Restaurar predeterminadas", style="Escriba.TButton",
                   command=self._reset_actions).pack(side=LEFT, expand=True, fill=X, ipady=3)
 
     # ── Estado ──────────────────────────────────────────────

@@ -207,12 +207,12 @@ class ResultWindow:
         bar.pack(fill=X, pady=(0, 6))
         self.view_var = tk.StringVar(value="result")
         tb.Radiobutton(bar, text="Resultado", value="result", variable=self.view_var,
-                       bootstyle="warning-toolbutton", command=self._switch_view).pack(side=LEFT)
+                       style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
         tb.Radiobutton(bar, text="Original", value="original", variable=self.view_var,
-                       bootstyle="warning-toolbutton", command=self._switch_view).pack(side=LEFT, padx=(4, 0))
+                       style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
         tk.Label(bar, text=shortcut_label("Ctrl+O"), font=(UI_FONT, 8),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT, padx=(8, 0))
-        self._stop_btn = tb.Button(bar, text="⏹  Detener", bootstyle="danger-outline",
+        self._stop_btn = tb.Button(bar, text="⏹  Detener", style="Escriba.TButton",
                                    command=self._stop)
         if streaming and on_stop:
             self._stop_btn.pack(side=RIGHT)
@@ -227,16 +227,15 @@ class ResultWindow:
             btns, text=f"⬅  Sustituir texto   {shortcut_label('Ctrl+Enter')}",
             bootstyle="warning", command=self._replace,
         )
-        self._copy_btn = tb.Button(
-            btns, text=f"📋  Copiar   {shortcut_label('Ctrl+Shift+C')}",
-            bootstyle="warning" if not primary_is_replace else "secondary-outline",
-            command=self._copy,
-        )
+        copy_text = f"📋  Copiar   {shortcut_label('Ctrl+Shift+C')}"
+        if primary_is_replace:
+            self._copy_btn = tb.Button(btns, text=copy_text, style="Escriba.TButton", command=self._copy)
+        else:
+            self._copy_btn = tb.Button(btns, text=copy_text, bootstyle="warning", command=self._copy)
         self._regen_btn = tb.Button(
             btns, text=f"🔄  Regenerar   {shortcut_label('Ctrl+R')}",
-            bootstyle="secondary-outline", command=self._regenerate,
+            style="Escriba.TButton", command=self._regenerate,
         )
-        close_btn = tb.Button(btns, text="Cerrar   Esc", bootstyle="secondary-link", command=win.destroy)
 
         if primary_is_replace:
             self._replace_btn.pack(side=RIGHT, ipady=4)
@@ -244,7 +243,8 @@ class ResultWindow:
         else:
             self._copy_btn.pack(side=RIGHT, ipady=4)
         self._regen_btn.pack(side=LEFT, ipady=2, padx=(6, 0))
-        close_btn.pack(side=LEFT, padx=(6, 0))
+        tk.Label(btns, text="Esc cierra", font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED
+                 ).pack(side=LEFT, padx=(10, 0))
 
         # ── Área de texto: resultado (editable) y original (solo lectura) ──
         self.txt_frame = tk.Frame(frame, bg=_FM_BG)

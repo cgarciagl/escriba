@@ -307,3 +307,68 @@ class SplashBanner:
         fade_window(win, 0.95, 0.12)
         win.after(self._HOLD_MS, lambda: fade_window(win, 0.0, -0.07,
                   on_done=lambda: win.destroy() if win.winfo_exists() else None))
+
+
+# ─────────────────────────────────────────────────────────────
+# Estilos ttk con la paleta de Escriba
+# (el tema "vapor" pinta campos y botones secundarios en morado/rosa/cian)
+# ─────────────────────────────────────────────────────────────
+_FM_DISABLED = "#4b5563"
+
+
+def configure_styles(root):
+    """Registra los estilos "Escriba.*". Llamar una vez tras crear la ventana raíz."""
+    style = tb.Style()
+    flat = dict(bordercolor=_FM_BORDER, darkcolor=_FM_CARD, lightcolor=_FM_CARD, relief="flat")
+
+    # Botón secundario
+    style.configure("Escriba.TButton", background=_FM_CARD, foreground=_FM_TEXT,
+                    focuscolor=_FM_ACCENT, padding=(10, 5), font=(UI_FONT, 9), **flat)
+    style.map("Escriba.TButton",
+              background=[("disabled", _FM_BG), ("pressed", _FM_HOVER), ("active", _FM_HOVER)],
+              foreground=[("disabled", _FM_DISABLED)],
+              bordercolor=[("disabled", _FM_SEP), ("active", _FM_ACCENT), ("focus", _FM_ACCENT)])
+
+    # Selector segmentado (Resultado / Original)
+    style.configure("Escriba.Toolbutton", background=_FM_CARD, foreground=_FM_MUTED,
+                    padding=(12, 4), font=(UI_FONT, 9), **flat)
+    style.map("Escriba.Toolbutton",
+              background=[("selected", _FM_ACCENT), ("active", _FM_HOVER)],
+              foreground=[("selected", _FM_BG), ("active", _FM_TEXT)])
+
+    # Campos de texto y listas desplegables
+    style.configure("Escriba.TEntry", fieldbackground=_FM_CARD, foreground=_FM_TEXT,
+                    insertcolor=_FM_ACCENT, padding=6, bordercolor=_FM_BORDER,
+                    lightcolor=_FM_BORDER, darkcolor=_FM_BORDER)
+    style.map("Escriba.TEntry", bordercolor=[("focus", _FM_ACCENT)], lightcolor=[("focus", _FM_ACCENT)])
+    style.configure("Escriba.TCombobox", fieldbackground=_FM_CARD, foreground=_FM_TEXT,
+                    background=_FM_CARD, arrowcolor=_FM_MUTED, padding=5, insertcolor=_FM_ACCENT,
+                    bordercolor=_FM_BORDER, lightcolor=_FM_BORDER, darkcolor=_FM_BORDER)
+    style.map("Escriba.TCombobox",
+              fieldbackground=[("readonly", _FM_CARD)], foreground=[("readonly", _FM_TEXT)],
+              selectbackground=[("readonly", _FM_CARD)], selectforeground=[("readonly", _FM_TEXT)],
+              bordercolor=[("focus", _FM_ACCENT)], lightcolor=[("focus", _FM_ACCENT)])
+    root.option_add("*TCombobox*Listbox.background", _FM_CARD)
+    root.option_add("*TCombobox*Listbox.foreground", _FM_TEXT)
+    root.option_add("*TCombobox*Listbox.selectBackground", _FM_HOVER)
+    root.option_add("*TCombobox*Listbox.selectForeground", _FM_ACCENT)
+
+    # Pestañas
+    style.configure("Escriba.TNotebook", background=_FM_BG, bordercolor=_FM_BORDER,
+                    lightcolor=_FM_BG, darkcolor=_FM_BG, tabmargins=(0, 0, 0, 0))
+    style.configure("Escriba.TNotebook.Tab", background=_FM_BG, foreground=_FM_MUTED,
+                    bordercolor=_FM_BORDER, lightcolor=_FM_BG, darkcolor=_FM_BG,
+                    padding=(14, 6), font=(UI_FONT, 9))
+    style.map("Escriba.TNotebook.Tab",
+              background=[("selected", _FM_CARD), ("active", _FM_HOVER)],
+              foreground=[("selected", _FM_ACCENT), ("active", _FM_TEXT)])
+
+    # Casillas y opciones sobre el fondo de Escriba
+    style.configure("Escriba.TRadiobutton", background=_FM_BG, foreground=_FM_TEXT,
+                    indicatorcolor=_FM_CARD, font=(UI_FONT, 9))
+    style.map("Escriba.TRadiobutton", indicatorcolor=[("selected", _FM_ACCENT)],
+              background=[("active", _FM_BG)])
+    style.configure("Escriba.TCheckbutton", background=_FM_BG, foreground=_FM_TEXT,
+                    indicatorcolor=_FM_CARD, font=(UI_FONT, 9))
+    style.map("Escriba.TCheckbutton", indicatorcolor=[("selected", _FM_ACCENT)],
+              background=[("active", _FM_BG)])

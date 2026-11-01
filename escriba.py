@@ -18,6 +18,7 @@ from constants import APP_NAME
 from config import ConfigManager
 from ai_clients import is_ready
 from history import History
+from ui_common import configure_styles
 from ui_windows import (
     ConfigWindow, FloatingMenu, ResultWindow, TooltipNotification, SplashBanner,
 )
@@ -37,6 +38,7 @@ class EscribaApp:
         enable_dpi_awareness()  # Windows: texto nítido con escalado (antes de crear Tk)
         self.root = tb.Window(themename="vapor")
         init_app()  # macOS: sin ícono en el Dock
+        configure_styles(self.root)
         self.root.title(APP_NAME)
         self.root.withdraw()
 
