@@ -46,11 +46,28 @@ class TrayIconManager:
         draw.ellipse([20, 20, 44, 44], fill=(0, 210, 180, 200))
         return img
 
+    def _history_items(self):
+        """Genera el submenú de historial cada vez que se abre el menú."""
+        entries = self.app.history.entries()
+        if not entries:
+            yield pystray.MenuItem("(sin respuestas todavía)", None, enabled=False)
+            return
+        for entry in entries:
+            yield pystray.MenuItem(
+                entry.menu_title(),
+                lambda icon, item, e=entry: self.app.schedule(self.app.open_history_entry, e),
+            )
+        yield pystray.Menu.SEPARATOR
+        yield pystray.MenuItem(
+            "🗑️  Borrar historial", lambda icon, item: self.app.history.clear()
+        )
+
     def start(self):
         image = self._build_image()
         menu = pystray.Menu(
             pystray.MenuItem(f"{APP_NAME} v{APP_VERSION}", None, enabled=False),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("🕘  Historial", pystray.Menu(self._history_items)),
             pystray.MenuItem(
                 "⚙️  Configuración",
                 lambda icon, item: self.app.schedule(self.app.open_config),
@@ -67,6 +84,14 @@ class TrayIconManager:
             menu,
         )
         threading.Thread(target=self.icon.run, daemon=True).start()
+
+    def refresh(self):
+        """Reconstruye el menú (necesario en Windows para el submenú dinámico)."""
+        if self.icon:
+            try:
+                self.icon.update_menu()
+            except Exception:
+                pass
 
     def stop(self):
         if self.icon:

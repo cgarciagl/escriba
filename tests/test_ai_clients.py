@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -6,8 +7,10 @@ import requests
 from constants import GEMINI_DEFAULT_MODEL, GEMINI_FALLBACK_MODELS
 from ai_clients import (
     GeminiClient,
+    OpenAICompatibleClient,
     generate_text,
     is_retryable_error,
+    provider_order,
 )
 
 
@@ -38,7 +41,9 @@ class TestGeminiClient:
             args, kwargs = mock_post.call_args
             assert "gemini-3.5-flash-lite" in args[0]
             assert kwargs["headers"]["x-goog-api-key"] == "fake_gemini_key"
-            assert kwargs["json"]["contents"][0]["parts"][0]["text"] == "traduce\n\n---\n\nhello"
+            # Las instrucciones viajan como system instruction, separadas del texto
+            assert kwargs["json"]["systemInstruction"]["parts"][0]["text"] == "traduce"
+            assert kwargs["json"]["contents"][0]["parts"][0]["text"] == "hello"
 
     def test_generate_no_api_key(self):
         with patch("ai_clients.ConfigManager.get_api_key", return_value=""):
@@ -270,7 +275,7 @@ class TestGenerateText:
 
             assert result == "gemini result"
             assert provider == "gemini"
-            mock_gemini.assert_called_once_with("prompt", "text", on_retry=callback)
+            mock_gemini.assert_called_once_with("prompt", "text", on_retry=callback, on_chunk=None)
 
 
 class TestErrorMessages:
@@ -287,3 +292,195 @@ class TestErrorMessages:
             with pytest.raises(RuntimeError) as exc_info:
                 GeminiClient.generate("prompt", "text")
             assert not str(exc_info.value).startswith("Gemini:")
+
+
+# ─────────────────────────────────────────────────────────────
+# Streaming, proveedor alternativo y fallback
+# ─────────────────────────────────────────────────────────────
+def _sse_response(lines):
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.iter_lines.return_value = iter(lines)
+    return resp
+
+
+def _gemini_chunk(text):
+    return "data: " + json.dumps({"candidates": [{"content": {"parts": [{"text": text}]}}]})
+
+
+def _openai_chunk(text):
+    return "data: " + json.dumps({"choices": [{"delta": {"content": text}}]})
+
+
+class TestGeminiStreaming:
+    def test_streams_chunks_and_returns_full_text(self):
+        chunks = []
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.ConfigManager.get", return_value="gemini-x"),
+            patch("ai_clients.requests.post",
+                  return_value=_sse_response(["", _gemini_chunk("Hola "), _gemini_chunk("mundo ")])) as mock_post,
+        ):
+            result = GeminiClient.generate("p", "t", on_chunk=chunks.append)
+
+        assert result == "Hola mundo"
+        assert chunks == ["Hola ", "mundo "]
+        url = mock_post.call_args[0][0]
+        assert url.endswith("gemini-x:streamGenerateContent?alt=sse")
+        assert mock_post.call_args[1]["stream"] is True
+
+    def test_no_retry_after_chunks_were_emitted(self):
+        def broken_stream():
+            yield _gemini_chunk("parcial")
+            raise requests.exceptions.ConnectionError()
+
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.iter_lines.return_value = broken_stream()
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep"),
+            patch("ai_clients.requests.post", return_value=resp) as mock_post,
+        ):
+            with pytest.raises(RuntimeError, match="Error de red"):
+                GeminiClient.generate("p", "t", on_chunk=lambda _: None)
+        assert mock_post.call_count == 1
+
+    def test_retries_before_first_chunk(self):
+        resp_err = MagicMock()
+        http_resp = requests.Response()
+        http_resp.status_code = 503
+        resp_err.raise_for_status.side_effect = requests.exceptions.HTTPError(response=http_resp)
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.time.sleep"),
+            patch("ai_clients.requests.post",
+                  side_effect=[resp_err, _sse_response([_gemini_chunk("ok")])]) as mock_post,
+        ):
+            assert GeminiClient.generate("p", "t", on_chunk=lambda _: None) == "ok"
+        assert mock_post.call_count == 2
+
+    def test_empty_stream_raises(self):
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post", return_value=_sse_response([])),
+        ):
+            with pytest.raises(RuntimeError, match="vino vacía"):
+                GeminiClient.generate("p", "t", on_chunk=lambda _: None, max_retries=1)
+
+
+def _openai_settings(base="http://localhost:11434/v1", model="llama", key=""):
+    return patch("ai_clients.OpenAICompatibleClient.settings", return_value=(base, model, key))
+
+
+class TestOpenAICompatibleClient:
+    def test_non_stream_request(self):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"choices": [{"message": {"content": "  respuesta  "}}]}
+        with _openai_settings(key="sk-1"), patch("ai_clients.requests.post", return_value=resp) as mock_post:
+            assert OpenAICompatibleClient.generate("instr", "texto") == "respuesta"
+
+        args, kwargs = mock_post.call_args
+        assert args[0] == "http://localhost:11434/v1/chat/completions"
+        assert kwargs["headers"]["Authorization"] == "Bearer sk-1"
+        assert kwargs["json"]["messages"] == [
+            {"role": "system", "content": "instr"},
+            {"role": "user", "content": "texto"},
+        ]
+        assert kwargs["json"]["stream"] is False
+
+    def test_no_auth_header_without_key(self):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"choices": [{"message": {"content": "x"}}]}
+        with _openai_settings(), patch("ai_clients.requests.post", return_value=resp) as mock_post:
+            OpenAICompatibleClient.generate("p", "t")
+        assert "Authorization" not in mock_post.call_args[1]["headers"]
+
+    def test_streaming(self):
+        chunks = []
+        lines = [_openai_chunk("Ho"), _openai_chunk("la"), "data: [DONE]", _openai_chunk("ignorado")]
+        with _openai_settings(), patch("ai_clients.requests.post", return_value=_sse_response(lines)) as mock_post:
+            assert OpenAICompatibleClient.generate("p", "t", on_chunk=chunks.append) == "Hola"
+        assert chunks == ["Ho", "la"]
+        assert mock_post.call_args[1]["json"]["stream"] is True
+
+    def test_not_configured_raises_value_error(self):
+        with _openai_settings(base="", model=""):
+            with pytest.raises(ValueError, match="no configurado"):
+                OpenAICompatibleClient.generate("p", "t")
+
+    def test_connection_error_message_mentions_provider(self):
+        with (
+            _openai_settings(),
+            patch("ai_clients.time.sleep"),
+            patch("ai_clients.requests.post", side_effect=requests.exceptions.ConnectionError),
+        ):
+            with pytest.raises(RuntimeError, match="proveedor alternativo"):
+                OpenAICompatibleClient.generate("p", "t", max_retries=2)
+
+    def test_fetch_models(self):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"data": [{"id": "b"}, {"id": "a"}]}
+        with patch("ai_clients.requests.get", return_value=resp):
+            assert OpenAICompatibleClient.fetch_available_models("http://x/v1/") == ["a", "b"]
+
+    def test_fetch_models_failure_returns_empty(self):
+        with patch("ai_clients.requests.get", side_effect=requests.exceptions.ConnectionError):
+            assert OpenAICompatibleClient.fetch_available_models("http://x/v1") == []
+
+
+def _config(values):
+    return patch("ai_clients.ConfigManager.get", side_effect=lambda k, d=None: values.get(k, d))
+
+
+class TestProviderSelection:
+    def test_default_order_is_gemini_only(self):
+        with _config({}):
+            assert provider_order() == ["gemini"]
+
+    def test_fallback_added_only_when_configured(self):
+        with _config({"provider": "gemini", "fallback_enabled": True}):
+            with patch("ai_clients.OpenAICompatibleClient.is_configured", return_value=True):
+                assert provider_order() == ["gemini", "openai"]
+            with patch("ai_clients.OpenAICompatibleClient.is_configured", return_value=False):
+                assert provider_order() == ["gemini"]
+
+    def test_unknown_provider_defaults_to_gemini(self):
+        with _config({"provider": "otro"}):
+            assert provider_order() == ["gemini"]
+
+    def test_fallback_on_failure(self):
+        status = MagicMock()
+        with (
+            patch("ai_clients.provider_order", return_value=["gemini", "openai"]),
+            patch("ai_clients.GeminiClient.generate", side_effect=RuntimeError("caído")),
+            patch("ai_clients.OpenAICompatibleClient.generate", return_value="respaldo"),
+        ):
+            assert generate_text("p", "t", on_status=status) == ("respaldo", "openai")
+        status.assert_called_once()
+
+    def test_no_fallback_after_partial_stream(self):
+        def partial(prompt, text, on_retry=None, on_chunk=None):
+            on_chunk("medio texto")
+            raise RuntimeError("cortado")
+
+        with (
+            patch("ai_clients.provider_order", return_value=["gemini", "openai"]),
+            patch("ai_clients.GeminiClient.generate", side_effect=partial),
+            patch("ai_clients.OpenAICompatibleClient.generate") as mock_openai,
+        ):
+            with pytest.raises(RuntimeError, match="cortado"):
+                generate_text("p", "t", on_chunk=lambda _: None)
+        mock_openai.assert_not_called()
+
+    def test_last_error_is_raised(self):
+        with (
+            patch("ai_clients.provider_order", return_value=["gemini", "openai"]),
+            patch("ai_clients.GeminiClient.generate", side_effect=RuntimeError("uno")),
+            patch("ai_clients.OpenAICompatibleClient.generate", side_effect=RuntimeError("dos")),
+        ):
+            with pytest.raises(RuntimeError, match="dos"):
+                generate_text("p", "t")
