@@ -122,6 +122,12 @@ class ConfigWindow:
         self._build_alt_tab(self._tab(notebook, "Proveedor alternativo"))
         self._build_general_tab(self._tab(notebook, "General"))
 
+        # Indicadores ámbar sobre el fondo de Escriba (no el del tema)
+        style = tb.Style()
+        for name in ("warning.TCheckbutton", "warning.TRadiobutton"):
+            style.configure(name, background=_FM_BG, foreground=_FM_TEXT, font=(UI_FONT, 9))
+            style.map(name, background=[("active", _FM_BG)])
+
         self.key_entry.focus_set()
         if welcome:
             self._status(
@@ -177,9 +183,9 @@ class ConfigWindow:
         prov_row = tk.Frame(tab, bg=_FM_BG)
         prov_row.pack(fill=X, pady=(0, 12))
         tb.Radiobutton(prov_row, text="Google Gemini", value="gemini",
-                       variable=self.provider_var, style="Escriba.TRadiobutton").pack(side=LEFT, padx=(0, 18))
+                       variable=self.provider_var, bootstyle="warning").pack(side=LEFT, padx=(0, 18))
         tb.Radiobutton(prov_row, text="Compatible con OpenAI", value="openai",
-                       variable=self.provider_var, style="Escriba.TRadiobutton").pack(side=LEFT)
+                       variable=self.provider_var, bootstyle="warning").pack(side=LEFT)
 
         self._title(tab, "URL base")
         self.alt_url_var = tk.StringVar(value=ConfigManager.get("openai_base_url", OPENAI_DEFAULT_BASE_URL))
@@ -206,7 +212,7 @@ class ConfigWindow:
         self.fallback_var = tk.BooleanVar(value=bool(ConfigManager.get("fallback_enabled", False)))
         tb.Checkbutton(tab, text="  Si el proveedor principal falla, usar el otro",
                        variable=self.fallback_var,
-                       style="Escriba.TCheckbutton").pack(anchor=W, pady=(4, 0))
+                       bootstyle="warning").pack(anchor=W, pady=(4, 0))
 
     def _build_general_tab(self, tab):
         hotkey_row = tk.Frame(tab, bg=_FM_BG)
@@ -219,12 +225,12 @@ class ConfigWindow:
         self.streaming_var = tk.BooleanVar(value=bool(ConfigManager.get("streaming", True)))
         tb.Checkbutton(tab, text="  Mostrar la respuesta mientras se genera (streaming)",
                        variable=self.streaming_var,
-                       style="Escriba.TCheckbutton").pack(anchor=W, pady=(0, 10))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
 
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
         tb.Checkbutton(tab, text="  Iniciar automáticamente al iniciar sesión",
                        variable=self.autostart_var,
-                       style="Escriba.TCheckbutton").pack(anchor=W, pady=(0, 16))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 16))
 
         tk.Frame(tab, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
         self._title(tab, "Acciones del menú")

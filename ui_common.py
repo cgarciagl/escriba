@@ -363,6 +363,12 @@ def configure_styles(root):
               background=[("selected", _FM_CARD), ("active", _FM_HOVER)],
               foreground=[("selected", _FM_ACCENT), ("active", _FM_TEXT)])
 
+    # Barra de desplazamiento
+    style.configure("Escriba.Vertical.TScrollbar", troughcolor=_FM_CARD, background=_FM_BORDER,
+                    bordercolor=_FM_CARD, lightcolor=_FM_BORDER, darkcolor=_FM_BORDER,
+                    arrowcolor=_FM_MUTED, gripcount=0, relief="flat")
+    style.map("Escriba.Vertical.TScrollbar", background=[("active", _FM_ACCENT)])
+
     # Casillas y opciones sobre el fondo de Escriba
     style.configure("Escriba.TRadiobutton", background=_FM_BG, foreground=_FM_TEXT,
                     indicatorcolor=_FM_CARD, font=(UI_FONT, 9))

@@ -252,7 +252,7 @@ class ResultWindow:
         self.text_widget = self._make_text(self.txt_frame, result)
         self.original_widget = self._make_text(self.txt_frame, selected_text)
         self.original_widget.configure(state="disabled", fg=_FM_MUTED)
-        self._scroll = tb.Scrollbar(self.txt_frame, bootstyle="warning-round")
+        self._scroll = tb.Scrollbar(self.txt_frame, style="Escriba.Vertical.TScrollbar")
         self._show_widget(self.text_widget)
 
         self._bind_keys(win)
