@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import random
+import threading
 import time
 from typing import Callable, Iterator
 
@@ -56,6 +57,18 @@ RETRYABLE_KEYWORDS = (
 BUSY_MARKERS = ("el modelo está ocupado", "the model is overloaded")
 
 BACKOFF_MULTIPLIER = 2.0
+
+
+class CancelledByUser(Exception):
+    """El usuario canceló la petición (botón Cancelar / Detener)."""
+
+    def __init__(self):
+        super().__init__("Petición cancelada.")
+
+
+def _check_cancel(cancel_event: threading.Event | None):
+    if cancel_event is not None and cancel_event.is_set():
+        raise CancelledByUser()
 
 
 def is_retryable_error(exc: Exception) -> tuple[bool, str]:
@@ -126,7 +139,7 @@ def to_user_error(exc: Exception, retries: int, name: str, short: str) -> Except
         return RuntimeError(f"Error de red: No se pudo conectar a {name}. Revisa tu conexión a internet.")
     if isinstance(exc, requests.exceptions.Timeout):
         return RuntimeError(f"Tiempo de espera agotado al conectar con {name}.")
-    if isinstance(exc, (RuntimeError, ValueError)):
+    if isinstance(exc, (RuntimeError, ValueError, CancelledByUser)):
         # Errores propios (respuesta vacía, modelo ocupado…): ya son legibles.
         return exc
     return RuntimeError(f"{short}: {exc}")
@@ -140,26 +153,41 @@ def run_with_retries(
     on_chunk: ChunkCallback | None,
     name: str,
     short: str,
+    cancel_event: threading.Event | None = None,
 ) -> str:
-    """Ejecuta `attempt_fn` con reintentos. No reintenta si ya se emitió streaming."""
+    """Ejecuta `attempt_fn` con reintentos. No reintenta si ya se emitió streaming.
+
+    Si `cancel_event` se activa, se lanza CancelledByUser antes del siguiente
+    intento, durante la espera entre reintentos o al llegar el siguiente fragmento.
+    """
     emitted = False
 
     def chunk_proxy(piece: str):
         nonlocal emitted
+        _check_cancel(cancel_event)
         if piece:
             emitted = True
             on_chunk(piece)
 
     for attempt in range(1, retries + 1):
+        _check_cancel(cancel_event)
         try:
-            return attempt_fn(chunk_proxy if on_chunk else None)
+            result = attempt_fn(chunk_proxy if on_chunk else None)
+            _check_cancel(cancel_event)
+            return result
+        except CancelledByUser:
+            raise
         except Exception as exc:
             retryable, reason = is_retryable_error(exc)
             if retryable and not emitted and attempt < retries:
                 delay = backoff_delay(base_delay, attempt)
                 if on_retry:
                     on_retry(attempt, retries, delay, reason)
-                time.sleep(delay)
+                if cancel_event is not None:
+                    if cancel_event.wait(delay):
+                        raise CancelledByUser()
+                else:
+                    time.sleep(delay)
                 continue
             raise to_user_error(exc, retries, name, short) from exc
 
@@ -239,6 +267,7 @@ class GeminiClient:
         initial_delay: float | None = None,
         on_retry: RetryCallback | None = None,
         on_chunk: ChunkCallback | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> str:
         """Genera texto con Google Gemini, aplicando reintentos si el modelo está ocupado."""
         api_key = ConfigManager.get_api_key()
@@ -258,7 +287,7 @@ class GeminiClient:
             attempt,
             max_retries if max_retries is not None else cls.MAX_RETRIES,
             initial_delay if initial_delay is not None else cls.INITIAL_BACKOFF,
-            on_retry, on_chunk, cls.NAME, cls.SHORT,
+            on_retry, on_chunk, cls.NAME, cls.SHORT, cancel_event,
         )
 
     @staticmethod
@@ -380,6 +409,7 @@ class OpenAICompatibleClient:
         initial_delay: float | None = None,
         on_retry: RetryCallback | None = None,
         on_chunk: ChunkCallback | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> str:
         base, model, api_key = cls.settings()
         if not base or not model:
@@ -399,7 +429,7 @@ class OpenAICompatibleClient:
             attempt,
             max_retries if max_retries is not None else cls.MAX_RETRIES,
             initial_delay if initial_delay is not None else cls.INITIAL_BACKOFF,
-            on_retry, on_chunk, name, cls.SHORT,
+            on_retry, on_chunk, name, cls.SHORT, cancel_event,
         )
 
     @staticmethod
@@ -456,6 +486,11 @@ PROVIDER_LABELS = {
 }
 
 
+def is_ready() -> bool:
+    """¿Hay al menos un proveedor configurado para atender peticiones?"""
+    return any(PROVIDERS[name].is_configured() for name in provider_order())
+
+
 def provider_order() -> list[str]:
     """Proveedores a intentar, en orden, según la configuración."""
     primary = ConfigManager.get("provider", "gemini")
@@ -475,6 +510,7 @@ def generate_text(
     on_retry: RetryCallback | None = None,
     on_chunk: ChunkCallback | None = None,
     on_status: Callable[[str], None] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> tuple[str, str]:
     """Genera la respuesta con el proveedor configurado (y el alternativo si falla).
 
@@ -494,12 +530,13 @@ def generate_text(
 
     for i, name in enumerate(order):
         try:
-            result = PROVIDERS[name].generate(
-                prompt, text,
-                on_retry=on_retry,
-                on_chunk=chunk_proxy if on_chunk else None,
-            )
+            kwargs = {"on_retry": on_retry, "on_chunk": chunk_proxy if on_chunk else None}
+            if cancel_event is not None:
+                kwargs["cancel_event"] = cancel_event
+            result = PROVIDERS[name].generate(prompt, text, **kwargs)
             return result, name
+        except CancelledByUser:
+            raise
         except Exception:
             if emitted or i == len(order) - 1:
                 raise
@@ -508,3 +545,14 @@ def generate_text(
                     f"↪ {PROVIDER_LABELS[name]} falló; probando {PROVIDER_LABELS[order[i + 1]]}…"
                 )
     raise RuntimeError("No hay proveedores de IA configurados.")
+
+
+def needs_configuration(exc: Exception) -> bool:
+    """¿El error se arregla en la ventana de Configuración (clave, URL, modelo)?"""
+    if isinstance(exc, ValueError):
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in (
+        "http 400", "http 401", "http 403", "http 404",
+        "api key", "api_key", "permission", "not found", "no configurad",
+    ))

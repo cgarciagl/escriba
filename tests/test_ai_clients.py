@@ -484,3 +484,120 @@ class TestProviderSelection:
         ):
             with pytest.raises(RuntimeError, match="dos"):
                 generate_text("p", "t")
+
+
+# ─────────────────────────────────────────────────────────────
+# Cancelación y disponibilidad
+# ─────────────────────────────────────────────────────────────
+import threading
+
+from ai_clients import CancelledByUser, is_ready
+
+
+class TestCancellation:
+    def test_cancel_before_request(self):
+        ev = threading.Event()
+        ev.set()
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post") as mock_post,
+        ):
+            with pytest.raises(CancelledByUser):
+                GeminiClient.generate("p", "t", cancel_event=ev)
+        mock_post.assert_not_called()
+
+    def test_cancel_during_stream_stops_and_does_not_retry(self):
+        ev = threading.Event()
+        chunks = []
+
+        def on_chunk(piece):
+            chunks.append(piece)
+            ev.set()  # el usuario pulsa Detener tras el primer fragmento
+
+        lines = [_gemini_chunk("uno"), _gemini_chunk("dos"), _gemini_chunk("tres")]
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post", return_value=_sse_response(lines)) as mock_post,
+        ):
+            with pytest.raises(CancelledByUser):
+                GeminiClient.generate("p", "t", on_chunk=on_chunk, cancel_event=ev)
+        assert chunks == ["uno"]
+        assert mock_post.call_count == 1
+
+    def test_cancel_during_backoff_wait(self):
+        ev = threading.Event()
+        http_resp = requests.Response()
+        http_resp.status_code = 503
+        err = MagicMock()
+        err.raise_for_status.side_effect = requests.exceptions.HTTPError(response=http_resp)
+
+        def on_retry(*_):
+            ev.set()
+
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post", return_value=err) as mock_post,
+        ):
+            with pytest.raises(CancelledByUser):
+                GeminiClient.generate("p", "t", on_retry=on_retry, cancel_event=ev, initial_delay=5)
+        assert mock_post.call_count == 1
+
+    def test_result_discarded_if_cancelled_while_waiting(self):
+        ev = threading.Event()
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+
+        def fake_json():
+            ev.set()  # se canceló mientras llegaba la respuesta
+            return {"candidates": [{"content": {"parts": [{"text": "x"}]}}]}
+
+        resp.json.side_effect = fake_json
+        with (
+            patch("ai_clients.ConfigManager.get_api_key", return_value="key"),
+            patch("ai_clients.requests.post", return_value=resp),
+        ):
+            with pytest.raises(CancelledByUser):
+                GeminiClient.generate("p", "t", cancel_event=ev)
+
+    def test_no_fallback_after_cancel(self):
+        with (
+            patch("ai_clients.provider_order", return_value=["gemini", "openai"]),
+            patch("ai_clients.GeminiClient.generate", side_effect=CancelledByUser()),
+            patch("ai_clients.OpenAICompatibleClient.generate") as mock_openai,
+        ):
+            with pytest.raises(CancelledByUser):
+                generate_text("p", "t", cancel_event=threading.Event())
+        mock_openai.assert_not_called()
+
+
+class TestIsReady:
+    def test_ready_when_primary_configured(self):
+        with patch("ai_clients.provider_order", return_value=["gemini"]), \
+             patch("ai_clients.GeminiClient.is_configured", return_value=True):
+            assert is_ready()
+
+    def test_not_ready_without_any_provider(self):
+        with patch("ai_clients.provider_order", return_value=["gemini"]), \
+             patch("ai_clients.GeminiClient.is_configured", return_value=False):
+            assert not is_ready()
+
+
+from ai_clients import needs_configuration
+
+
+class TestNeedsConfiguration:
+    @pytest.mark.parametrize("exc", [
+        ValueError("API Key de Google Gemini no configurada."),
+        RuntimeError("Gemini HTTP 400: API key not valid. Please pass a valid API key."),
+        RuntimeError("Proveedor alternativo HTTP 404: model 'x' not found"),
+        RuntimeError("Gemini HTTP 403: Permission denied"),
+    ])
+    def test_config_errors(self, exc):
+        assert needs_configuration(exc)
+
+    @pytest.mark.parametrize("exc", [
+        RuntimeError("Error de red: No se pudo conectar a Google Gemini."),
+        RuntimeError("El modelo de Gemini está ocupado (HTTP 503)."),
+    ])
+    def test_transient_errors(self, exc):
+        assert not needs_configuration(exc)

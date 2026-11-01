@@ -73,7 +73,7 @@ class ConfigWindow:
         return tab
 
     # ── Construcción ────────────────────────────────────────
-    def show(self):
+    def show(self, welcome: bool = False):
         if self.window and self.window.winfo_exists():
             self.window.lift()
             self.window.focus_force()
@@ -123,6 +123,10 @@ class ConfigWindow:
         self._build_general_tab(self._tab(notebook, "General"))
 
         self.key_entry.focus_set()
+        if welcome:
+            self._status(
+                "👋 Te damos la bienvenida a Escriba. Pega tu API Key de Gemini (es gratuita) "
+                "o configura un proveedor alternativo, y pulsa Guardar.", _FM_ACCENT)
         win.bind("<Return>", lambda e: self._save())
         win.bind("<Escape>", lambda e: self._close())
         win.protocol("WM_DELETE_WINDOW", self._close)

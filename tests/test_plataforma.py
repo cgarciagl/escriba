@@ -41,3 +41,20 @@ class TestDispatch:
         finally:
             monkeypatch.undo()
             importlib.reload(plataforma)
+
+
+class TestClampToArea:
+    AREA = (0, 0, 1920, 1040)
+
+    def test_inside_unchanged(self):
+        assert plataforma.clamp_to_area(100, 100, 300, 400, self.AREA) == (100, 100)
+
+    def test_pushed_left_and_up_near_edges(self):
+        assert plataforma.clamp_to_area(1900, 1000, 300, 400, self.AREA) == (1620, 640)
+
+    def test_secondary_monitor_with_negative_origin(self):
+        area = (-1280, 0, 0, 1024)
+        assert plataforma.clamp_to_area(-50, 900, 300, 400, area) == (-300, 624)
+
+    def test_window_larger_than_area_sticks_to_top_left(self):
+        assert plataforma.clamp_to_area(500, 500, 3000, 3000, self.AREA) == (0, 0)

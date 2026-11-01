@@ -36,6 +36,12 @@ if IS_MAC:
 
     PRIMARY_MODIFIER_TK = "Command"
     SECRET_BACKEND = "keychain"
+
+    def enable_dpi_awareness():
+        pass  # macOS gestiona Retina por su cuenta
+
+    def monitor_workarea(x: int, y: int):
+        return None  # se usa el tamaño de pantalla que reporta Tk
 else:
     import ctypes
 
@@ -50,6 +56,39 @@ else:
 
     def init_app():
         pass
+
+    def enable_dpi_awareness():
+        """Declara soporte de DPI para que el texto no se vea borroso con escalado.
+
+        Debe llamarse ANTES de crear la ventana raíz de Tk.
+        """
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-monitor (Windows 8.1+)
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()     # Sistema (Vista+)
+            except Exception:
+                pass
+
+    def monitor_workarea(x: int, y: int):
+        """Área de trabajo (sin barra de tareas) del monitor que contiene (x, y)."""
+        try:
+            import ctypes.wintypes as wt
+
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [("cbSize", wt.DWORD), ("rcMonitor", wt.RECT),
+                            ("rcWork", wt.RECT), ("dwFlags", wt.DWORD)]
+
+            user32 = ctypes.windll.user32
+            monitor = user32.MonitorFromPoint(wt.POINT(int(x), int(y)), 2)  # MONITOR_DEFAULTTONEAREST
+            info = MONITORINFO()
+            info.cbSize = ctypes.sizeof(MONITORINFO)
+            if not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+                return None
+            r = info.rcWork
+            return (r.left, r.top, r.right, r.bottom)
+        except Exception:
+            return None
 
     def bring_app_to_front():
         pass
@@ -72,6 +111,18 @@ else:
         if attach:
             user32.AttachThreadInput(cur_tid, fore_tid, False)
         time.sleep(0.25)
+
+
+def clamp_to_area(x: int, y: int, width: int, height: int, area) -> tuple[int, int]:
+    """Ajusta (x, y) para que una ventana de width×height quepa dentro de area.
+
+    area = (izquierda, arriba, derecha, abajo). Si la ventana no cabe a la
+    derecha/abajo del punto, se desplaza hacia dentro del área.
+    """
+    left, top, right, bottom = area
+    x = max(left, min(x, right - width))
+    y = max(top, min(y, bottom - height))
+    return int(x), int(y)
 
 
 def tk_shortcut(windows_key: str, mac_key: str | None = None) -> str:

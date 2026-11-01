@@ -13,7 +13,7 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 from constants import APP_NAME
-from plataforma import HOTKEY_LABEL, IS_MAC
+from plataforma import HOTKEY_LABEL, IS_MAC, clamp_to_area, monitor_workarea
 
 # Fuentes del sistema (Segoe UI no existe en macOS)
 if IS_MAC:
@@ -30,9 +30,14 @@ _FM_CARD   = "#1e2436"   # fondo botón/card
 _FM_HOVER  = "#28304a"   # hover de botón
 _FM_ACCENT = "#f59e0b"   # ámbar acento
 _FM_TEXT   = "#e2e8f0"   # texto principal (blanco)
-_FM_MUTED  = "#64748b"   # texto secundario
+_FM_MUTED  = "#94a3b8"   # texto secundario (contraste ≈ 7:1 sobre _FM_BG)
 _FM_BADGE  = "#0f1320"   # fondo badge de atajo
 _FM_SEP    = "#252d42"   # línea separadora
+_FM_BORDER = "#2a3350"   # borde de ventanas y controles
+_FM_DANGER = "#ef4444"
+_FM_SUCCESS = "#22c55e"
+
+_STYLE_COLORS = {"info": _FM_ACCENT, "warning": _FM_ACCENT, "danger": _FM_DANGER, "success": _FM_SUCCESS}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -75,25 +80,60 @@ def apply_dark_style(window):
     window.option_add('*Frame.background', _FM_BG, 'userDefault')
 
 
+def scale_factor(widget) -> float:
+    """Factor de escala de la pantalla (1.0 = 96 ppp; 1.5 con escalado al 150 %)."""
+    try:
+        return max(1.0, float(widget.winfo_fpixels("1i")) / 96.0)
+    except Exception:
+        return 1.0
+
+
+def scaled(widget, pixels: int) -> int:
+    """Convierte píxeles de diseño (a 96 ppp) a píxeles reales de la pantalla."""
+    return int(round(pixels * scale_factor(widget)))
+
+
 def center_window(window, width: int, height: int):
-    """Fija el tamaño de la ventana y la centra en la pantalla."""
+    """Fija el tamaño de la ventana (escalado por DPI) y la centra en la pantalla."""
     window.update_idletasks()
+    width, height = scaled(window, width), scaled(window, height)
     sw, sh = window.winfo_screenwidth(), window.winfo_screenheight()
     window.geometry(f"{width}x{height}+{(sw - width) // 2}+{(sh - height) // 2}")
+
+
+def place_near_pointer(window, offset: int = 14):
+    """Coloca la ventana junto al puntero, sin salirse del monitor donde está."""
+    window.update_idletasks()
+    px, py = window.winfo_pointerx(), window.winfo_pointery()
+    w, h = window.winfo_reqwidth(), window.winfo_reqheight()
+    area = monitor_workarea(px, py) or (
+        0, 0, window.winfo_screenwidth(), window.winfo_screenheight() - scaled(window, 40)
+    )
+    x, y = clamp_to_area(px + offset, py + offset, w, h, area)
+    window.geometry(f"+{x}+{y}")
 
 
 # ─────────────────────────────────────────────────────────────
 # Tooltip / Notificación flotante
 # ─────────────────────────────────────────────────────────────
 class TooltipNotification:
-    """Muestra una notificación flotante con fade-in/out."""
+    """Notificación flotante en la esquina inferior derecha.
+
+    - Los avisos informativos desaparecen solos.
+    - Los errores (style="danger") se quedan hasta que el usuario los cierra.
+    - `action=("Texto del botón", callback)` añade un botón que lleva al arreglo.
+    """
 
     def __init__(self, root: tb.Window):
         self.root   = root
         self.window = None
 
-    def show(self, message: str, style: str = "info", duration: int = 3500):
+    def show(self, message: str, style: str = "info", duration: int | None = 3500,
+             action: tuple[str, callable] | None = None):
         self.hide()
+        if style == "danger":
+            duration = None  # los errores no desaparecen solos
+
         win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -101,22 +141,35 @@ class TooltipNotification:
         apply_dark_style(win)
         self.window = win
 
-        border_color = {
-            "info": _FM_ACCENT, "warning": "#f59e0b",
-            "danger": "#ef4444", "success": "#22c55e",
-        }.get(style, _FM_ACCENT)
-        outer = tk.Frame(win, bg=border_color, padx=2, pady=2)
+        color = _STYLE_COLORS.get(style, _FM_ACCENT)
+        outer = tk.Frame(win, bg=color, padx=2, pady=2)
         outer.pack(fill=BOTH, expand=True)
         inner = tk.Frame(outer, bg=_FM_BG, padx=14, pady=10)
         inner.pack(fill=BOTH, expand=True)
-        tk.Label(inner, text=message, font=(UI_FONT, 10),
-                 bg=_FM_BG, fg=_FM_TEXT, wraplength=370, justify=LEFT).pack()
+
+        row = tk.Frame(inner, bg=_FM_BG)
+        row.pack(fill=X)
+        tk.Label(row, text=message, font=(UI_FONT, 10), bg=_FM_BG, fg=_FM_TEXT,
+                 wraplength=scaled(win, 360), justify=LEFT).pack(side=LEFT, anchor=NW)
+        close = tk.Label(row, text="✕", font=(UI_FONT, 10), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
+        close.pack(side=RIGHT, anchor=NE, padx=(10, 0))
+        close.bind("<Button-1>", lambda e: self.hide())
+
+        if action:
+            label, callback = action
+
+            def run_action():
+                self.hide()
+                callback()
+
+            tb.Button(inner, text=label, bootstyle="warning-outline",
+                      command=run_action).pack(anchor=E, pady=(10, 0))
 
         win.update_idletasks()
-        position_bottom_right(win, margin_y=110)
-        fade_window(win, 0.95, 0.15)
-        win.after(duration, lambda: fade_window(win, 0.0, -0.10, on_done=self.hide))
-
+        position_bottom_right(win, margin_y=scaled(win, 110))
+        fade_window(win, 0.97, 0.15)
+        if duration:
+            win.after(duration, lambda: fade_window(win, 0.0, -0.10, on_done=self.hide))
 
     def hide(self):
         if self.window and self.window.winfo_exists():
@@ -128,13 +181,14 @@ class TooltipNotification:
 # Ventana de "Pensando…" con barra animada
 # ─────────────────────────────────────────────────────────────
 class ThinkingWindow:
-    """Indicador de progreso indeterminado mientras la IA trabaja."""
+    """Indicador de progreso mientras la IA trabaja, con botón para cancelar."""
 
-    def __init__(self, root: tb.Window, label: str):
+    def __init__(self, root: tb.Window, label: str, on_cancel=None):
         self.root   = root
         self.window = None
         self._bar   = None
         self._label = None
+        self._on_cancel = on_cancel
         self.root.after(0, self._show, label)
 
     def _show(self, label: str):
@@ -158,13 +212,18 @@ class ThinkingWindow:
                  bg=_FM_ACCENT, fg=_FM_BG).pack()
         tk.Label(hdr, text=APP_NAME, font=(UI_FONT, 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+        if self._on_cancel:
+            cancel = tk.Label(hdr, text="Cancelar", font=(UI_FONT, 9, "underline"),
+                              bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
+            cancel.pack(side=RIGHT)
+            cancel.bind("<Button-1>", lambda e: self.cancel())
 
         self._label = tk.Label(inner, text=label, font=(UI_FONT, 9),
                                bg=_FM_BG, fg=_FM_MUTED)
         self._label.pack(anchor=W, pady=(0, 10))
 
         bar = tb.Progressbar(inner, mode="indeterminate",
-                             bootstyle="warning-striped", length=240)
+                             bootstyle="warning-striped", length=scaled(win, 260))
         bar.pack(fill=X)
         bar.start(10)
         self._bar = bar
@@ -178,6 +237,12 @@ class ThinkingWindow:
             if self._label and self.window and self.window.winfo_exists():
                 self._label.config(text=text)
         self.root.after(0, _update)
+
+    def cancel(self):
+        if self._label and self.window and self.window.winfo_exists():
+            self._label.config(text="Cancelando…")
+        if self._on_cancel:
+            self._on_cancel()
 
     def close(self):
         if self.window and self.window.winfo_exists():
