@@ -106,6 +106,6 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 - Fuentes: usar `UI_FONT`, `MONO_FONT`, `EMOJI_FONT` de `ui_common.py` (Segoe UI no existe en macOS).
 - La UI usa `ttkbootstrap` con tema "vapor" como base, pero los colores salen de la paleta `_FM_*` de `ui_common.py`. Para botones secundarios, campos, combos, pestañas y scrollbars usar los estilos `Escriba.*` (no `bootstyle="secondary"`/`info`/`danger`, que el tema pinta de rosa/morado/cian). El único `bootstyle` permitido es `warning` (ámbar) para la acción principal y los indicadores de casillas.
 - Tamaños en píxeles: pasar por `scaled()`/`center_window()` para respetar el escalado de pantalla.
-- Cambios visuales: revisar las capturas de `tools/capturas.py` (artefacto "capturas" de la CI) antes de dar el trabajo por terminado.
+- Cambios visuales: revisar las capturas de `tools/capturas.py` (artefacto "capturas" de la CI) antes de dar el trabajo por terminado, y actualizar las del README en `docs/capturas/` si cambió lo que muestran.
 - Los hilos secundarios usan `app.schedule()` para actualizar la UI en el hilo principal de Tk.
 - El idioma del proyecto es español (nombres de variables, comentarios, prompts de IA, UI).

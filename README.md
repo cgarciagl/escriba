@@ -6,6 +6,47 @@ Aplicación nativa de escritorio que proporciona asistencia de IA integrada dire
 
 **Impulsado por Google Gemini**: utiliza la API oficial de Google Gemini con modelos optimizados de alta velocidad como `gemini-3.5-flash-lite`. Incorpora detección y selección dinámica de modelos, así como reintentos automáticos inteligentes con retroceso exponencial ante saturación temporal o límites de cuota. Opcionalmente puede usar (o recurrir a) cualquier **servidor compatible con OpenAI**, como Ollama en local.
 
+## 📸 Capturas
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src="docs/capturas/menu.png" alt="Menú flotante con todas las acciones agrupadas por sección y sus atajos" width="360"><br>
+      <sub><b>Menú</b>: aparece junto al cursor, con buscador y atajos</sub>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src="docs/capturas/menu-filtrado.png" alt="Menú filtrado al escribir trad: solo aparecen las acciones de traducción" width="360"><br>
+      <sub><b>Filtrar</b>: escribe para encontrar una acción</sub><br><br>
+      <img src="docs/capturas/menu-instruccion.png" alt="Menú usando el texto escrito como instrucción libre" width="360"><br>
+      <sub><b>Instrucción libre</b>: cualquier texto se puede usar como prompt</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/capturas/resultado-streaming.png" alt="Ventana de resultado mientras el texto se genera, con botón Detener" width="400"><br>
+      <sub><b>Streaming</b>: el texto aparece mientras se genera</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/capturas/resultado.png" alt="Ventana de resultado terminada con el botón Sustituir texto como acción principal" width="400"><br>
+      <sub><b>Resultado</b>: sustituir, copiar, regenerar o comparar con el original</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/capturas/configuracion.png" alt="Ventana de configuración con mensaje de bienvenida en el primer arranque" width="360"><br>
+      <sub><b>Primer arranque</b>: configuración guiada</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/capturas/configuracion-alternativo.png" alt="Pestaña de proveedor alternativo compatible con OpenAI" width="360"><br>
+      <sub><b>Proveedor alternativo</b>: Ollama, OpenAI, OpenRouter…</sub><br><br>
+      <img src="docs/capturas/error.png" alt="Aviso de error con botón Abrir configuración" width="360"><br>
+      <sub><b>Errores accionables</b></sub>
+    </td>
+  </tr>
+</table>
+
+> Capturas en Windows generadas con `tools/capturas.py`. La CI las vuelve a generar en cada ejecución (artefacto "capturas"); para actualizar las del README, cópialas a `docs/capturas/`.
+
 ## 🎯 Características
 
 - ⌨️ **Hotkey global** (`Win+Alt+E` en Windows, `⌃⌘E` en macOS) que funciona en cualquier aplicación
