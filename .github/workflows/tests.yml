@@ -73,6 +73,12 @@ jobs:
           if ($p.HasExited) { Write-Error "La app terminó antes de tiempo (código $($p.ExitCode))"; exit 1 }
           Write-Host "La app sigue en ejecución"
           Stop-Process -Id $p.Id -Force
+      - name: Capturas
+        run: python tools/capturas.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: shots/
       - uses: actions/upload-artifact@v4
         with:
           name: Escriba-windows
