@@ -601,3 +601,23 @@ class TestNeedsConfiguration:
     ])
     def test_transient_errors(self, exc):
         assert not needs_configuration(exc)
+
+
+def test_iter_sse_data_preserves_utf8_accents():
+    import io
+    from ai_clients import iter_sse_data
+
+    r = requests.Response()
+    r.headers["content-type"] = "text/event-stream"
+    r.status_code = 200
+    r.encoding = requests.utils.get_encoding_from_headers(r.headers)
+    assert r.encoding == "ISO-8859-1"
+
+    payload = json.dumps({"text": "Número promedio en el Índice"}, ensure_ascii=False)
+    raw = f"data: {payload}\n\n".encode("utf-8")
+    r.raw = io.BytesIO(raw)
+
+    lines = list(iter_sse_data(r))
+    assert len(lines) == 1
+    data = json.loads(lines[0])
+    assert data["text"] == "Número promedio en el Índice"

@@ -108,8 +108,16 @@ def backoff_delay(base_delay: float, attempt: int) -> float:
 
 
 def iter_sse_data(response) -> Iterator[str]:
-    """Itera los campos `data:` de una respuesta Server-Sent Events."""
+    """Itera los campos `data:` de una respuesta Server-Sent Events.
+
+    Fuerza UTF-8: según la especificación SSE el flujo siempre es UTF-8, pero
+    `requests` asume ISO-8859-1 para `text/event-stream` si no hay charset explícito,
+    lo que corrompe acentos y caracteres especiales (mojibake).
+    """
+    response.encoding = "utf-8"
     for line in response.iter_lines(decode_unicode=True):
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", errors="replace")
         if line and line.startswith("data:"):
             yield line[5:].strip()
 
@@ -304,6 +312,7 @@ class GeminiClient:
             f"{GEMINI_BASE}/{model}:generateContent",
             json=payload, headers=headers, timeout=60,
         )
+        response.encoding = "utf-8"
         response.raise_for_status()
         data = response.json()
         candidates = data.get("candidates", [])
@@ -435,6 +444,7 @@ class OpenAICompatibleClient:
     @staticmethod
     def _request_once(url: str, payload: dict, headers: dict) -> str:
         response = requests.post(url, json=payload, headers=headers, timeout=120)
+        response.encoding = "utf-8"
         response.raise_for_status()
         choices = response.json().get("choices", [])
         content = ""
