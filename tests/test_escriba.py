@@ -85,14 +85,24 @@ class TestCaptureSelectedText:
         assert mock_send.call_count == 2  # reintenta una vez
         assert mock_pyperclip.copy.call_args_list[-1] == call("original")
 
-    def test_no_restore_when_original_empty(self, app):
+    def test_restores_empty_clipboard_after_capture(self, app):
         eapp, mock_pyperclip, mock_send, _ = app
         mock_pyperclip.paste.side_effect = ["", "selected text"]
 
         result = eapp._capture_selected_text()
 
         assert result == "selected text"
-        mock_pyperclip.copy.assert_called_once_with("")
+        assert mock_pyperclip.copy.call_args_list == [call(""), call("")]
+
+    def test_restores_clipboard_when_copy_fails(self, app):
+        eapp, mock_pyperclip, mock_send, _ = app
+        mock_pyperclip.paste.return_value = "original"
+        mock_send.side_effect = RuntimeError("copy failed")
+
+        with pytest.raises(RuntimeError, match="copy failed"):
+            eapp._capture_selected_text()
+
+        assert mock_pyperclip.copy.call_args_list == [call(""), call("original")]
 
 
 class TestOnHotkey:
