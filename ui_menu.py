@@ -142,8 +142,8 @@ class FloatingMenu:
                              relief="flat", borderwidth=0, padx=8, pady=6, undo=True)
         self.input.pack(fill=X)
         self._placeholder = tk.Label(box, text=PLACEHOLDER, font=(UI_FONT, 10),
-                                     bg=_FM_CARD, fg=_FM_MUTED)
-        self._placeholder.place(x=scaled(win, 10), y=scaled(win, 6))
+                                     bg=_FM_CARD, fg=_FM_MUTED, bd=0, padx=0, pady=0)
+        self._placeholder.place(x=scaled(win, 10), rely=0.5, anchor=W)
         self._placeholder.bind("<Button-1>", lambda e: self.input.focus_set())
 
         # ── Lista de acciones ───────────────────────────────
@@ -210,7 +210,7 @@ class FloatingMenu:
         if query.strip():
             self._placeholder.place_forget()
         else:
-            self._placeholder.place(x=scaled(self.window, 10), y=scaled(self.window, 6))
+            self._placeholder.place(x=scaled(self.window, 10), rely=0.5, anchor=W)
         if query != self._query:
             self._query = query
             self._items = build_items(self._actions, query)

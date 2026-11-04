@@ -22,7 +22,7 @@ a = Analysis(
     ['escriba.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('escriba.ico', '.'), ('escriba_logo.png', '.')],
     hiddenimports=COMMON_IMPORTS + PLATFORM_IMPORTS,
     hookspath=[],
     hooksconfig={},

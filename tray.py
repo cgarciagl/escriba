@@ -27,14 +27,14 @@ class TrayIconManager:
 
     @staticmethod
     def _build_image() -> Image.Image:
-        ico_path = os.path.join(BASE_DIR, "escriba.ico")
-        if os.path.exists(ico_path):
-            try:
-                img = Image.open(ico_path)
-                img = img.convert("RGBA").resize((64, 64), Image.LANCZOS)
-                return img
-            except Exception:
-                pass
+        for name in ("escriba_logo.png", "escriba.ico"):
+            path = os.path.join(BASE_DIR, name)
+            if os.path.exists(path):
+                try:
+                    img = Image.open(path)
+                    return img.convert("RGBA").resize((64, 64), Image.LANCZOS)
+                except Exception:
+                    pass
         # Fallback generado
         size = 64
         img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -53,10 +53,13 @@ class TrayIconManager:
         if not entries:
             yield pystray.MenuItem("(sin respuestas todavía)", None, enabled=False)
             return
+        def _make_action(entry):
+            return lambda icon, item: self.app.schedule(self.app.open_history_entry, entry)
+
         for entry in entries:
             yield pystray.MenuItem(
                 entry.menu_title(),
-                lambda icon, item, e=entry: self.app.schedule(self.app.open_history_entry, e),
+                _make_action(entry),
             )
         yield pystray.Menu.SEPARATOR
         yield pystray.MenuItem(
@@ -72,6 +75,7 @@ class TrayIconManager:
             pystray.MenuItem(
                 "⚙️  Configuración",
                 lambda icon, item: self.app.schedule(self.app.open_config),
+                default=True,
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(

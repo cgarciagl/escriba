@@ -12,7 +12,8 @@ import tkinter as tk
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from constants import APP_NAME
+import os
+from constants import APP_NAME, BASE_DIR
 from plataforma import HOTKEY_LABEL, IS_MAC, clamp_to_area, monitor_workarea
 
 # Fuentes del sistema (Segoe UI no existe en macOS)
@@ -78,6 +79,12 @@ def apply_dark_style(window):
     window.option_add('*Label.foreground', _FM_TEXT, 'userDefault')
     window.option_add('*Label.background', _FM_BG, 'userDefault')
     window.option_add('*Frame.background', _FM_BG, 'userDefault')
+    ico_path = os.path.join(BASE_DIR, "escriba.ico")
+    if os.path.exists(ico_path) and hasattr(window, "iconbitmap"):
+        try:
+            window.iconbitmap(ico_path)
+        except Exception:
+            pass
 
 
 def scale_factor(widget) -> float:

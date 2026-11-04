@@ -303,3 +303,34 @@ class TestWindowsBuild:
             menu.show("texto")
         assert menu.window is None
         assert app.tooltip.show.call_args.kwargs["action"][0] == "Abrir configuración"
+
+    def test_placeholder_centered_and_hides_on_input(self, menu):
+        place_info = menu._placeholder.place_info()
+        assert float(place_info["rely"]) == 0.5
+        assert place_info["anchor"] == "w"
+        self._type(menu, "algo")
+        assert not menu._placeholder.winfo_ismapped()
+        self._type(menu, "")
+        assert menu._placeholder.winfo_ismapped()
+
+
+class TestTrayMenu:
+    def test_history_items_with_and_without_entries(self, app):
+        from tray import TrayIconManager
+
+        tray = TrayIconManager(app)
+        # Sin historial
+        items_empty = list(tray._history_items())
+        assert len(items_empty) == 1
+        assert "(sin respuestas todavía)" in items_empty[0].text
+
+        # Con historial
+        entry = app.history.add("Resumir", "p", "t", "Resultado de prueba", "gemini")
+        items = list(tray._history_items())
+        # Debe tener el item del historial, el separador y borrar historial
+        assert len(items) == 3
+        history_item = items[0]
+        assert "Resumir" in history_item.text
+        # Invocar la acción debe programar open_history_entry con la entrada correcta
+        history_item(None)
+        app.schedule.assert_called_with(app.open_history_entry, entry)
