@@ -247,13 +247,12 @@ class GeminiClient:
                     if not any(kw in name.lower() for kw in excluded_keywords):
                         valid_models.append(name)
 
-            if not valid_models:
-                return list(GEMINI_FALLBACK_MODELS)
-
-            # El modelo predeterminado siempre va al principio
+            # Solo ofrecer modelos que la API confirmó como compatibles.
+            # El predeterminado se prioriza únicamente si está disponible.
+            valid_models = sorted(set(valid_models))
             if GEMINI_DEFAULT_MODEL in valid_models:
                 valid_models.remove(GEMINI_DEFAULT_MODEL)
-            valid_models.insert(0, GEMINI_DEFAULT_MODEL)
+                valid_models.insert(0, GEMINI_DEFAULT_MODEL)
             return valid_models
         except Exception:
             return list(GEMINI_FALLBACK_MODELS)
