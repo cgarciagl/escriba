@@ -232,6 +232,31 @@ class TestGeminiClient:
             assert "gemini-3.1-flash-tts-preview" not in models
             assert "embedding-001" not in models
 
+    def test_fetch_available_models_does_not_insert_unavailable_default(self):
+        with patch("ai_clients.requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "models": [
+                    {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+                    {"name": "models/gemini-2.5-pro", "supportedGenerationMethods": ["generateContent"]},
+                ]
+            }
+            mock_response.raise_for_status.return_value = None
+            mock_get.return_value = mock_response
+
+            assert GeminiClient.fetch_available_models("test_key") == [
+                "gemini-2.5-flash", "gemini-2.5-pro"
+            ]
+
+    def test_fetch_available_models_empty_api_response_returns_empty(self):
+        with patch("ai_clients.requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"models": []}
+            mock_response.raise_for_status.return_value = None
+            mock_get.return_value = mock_response
+
+            assert GeminiClient.fetch_available_models("test_key") == []
+
     def test_fetch_available_models_no_key_returns_fallback(self):
         models = GeminiClient.fetch_available_models("")
         assert models == GEMINI_FALLBACK_MODELS
