@@ -14,7 +14,7 @@ if sys.platform != "win32":
     sys.modules.setdefault("keyboard", MagicMock())
     try:
         import pystray  # noqa: F401
-    except ImportError:
+    except Exception:
         sys.modules.setdefault("pystray", MagicMock())
 
 # Algunas imágenes de CI traen Python sin Tk: en ese caso se simula la capa de UI
