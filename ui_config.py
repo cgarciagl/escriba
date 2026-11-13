@@ -5,6 +5,8 @@ Escriba — Ventana de Configuración (pestañas Gemini / Alternativo / General)
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import threading
 import tkinter as tk
 import webbrowser
@@ -40,8 +42,10 @@ def open_in_editor(path: str):
     """Abre un archivo con la aplicación predeterminada del sistema."""
     if hasattr(os, "startfile"):
         os.startfile(path)  # Windows
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
     else:
-        webbrowser.open(f"file://{path}")
+        subprocess.Popen(["xdg-open", path])
 
 
 class ConfigWindow:
@@ -133,7 +137,12 @@ class ConfigWindow:
             self._status(
                 "👋 Te damos la bienvenida a Escriba. Pega tu API Key de Gemini (es gratuita) "
                 "o configura un proveedor alternativo, y pulsa Guardar.", _FM_ACCENT)
-        win.bind("<Return>", lambda e: self._save())
+        def _on_return(event):
+            wclass = event.widget.winfo_class() if event and event.widget else ""
+            if wclass not in ("TButton", "Button", "TCombobox"):
+                self._save()
+
+        win.bind("<Return>", _on_return)
         win.bind("<Escape>", lambda e: self._close())
         win.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -267,17 +276,20 @@ class ConfigWindow:
         self.refresh_btn.configure(state="disabled")
 
         def task():
-            models = GeminiClient.fetch_available_models(key)
-            self.app.schedule(self._on_models_refreshed, models)
+            models, err = GeminiClient.fetch_models_with_status(key)
+            self.app.schedule(self._on_models_refreshed, models, err)
 
         threading.Thread(target=task, daemon=True).start()
 
-    def _on_models_refreshed(self, models: list[str]):
+    def _on_models_refreshed(self, models: list[str], error: str | None = None):
         if not self._alive():
             return
         self.refresh_btn.configure(state="normal")
         self._update_model_combobox(models)
-        self._status(f"✅ Se encontraron {len(models)} modelos de Gemini.", _FM_ACCENT)
+        if error:
+            self._status(f"⚠️ No se pudieron consultar los modelos ({error}). Se muestran los predeterminados.", _WARN)
+        else:
+            self._status(f"✅ Se encontraron {len(models)} modelos de Gemini.", _FM_ACCENT)
 
     def _update_model_combobox(self, models: list[str]):
         if not self._alive():

@@ -41,13 +41,20 @@ CUSTOM_PROMPT_LABEL = "✏️  Prompt personalizado"
 _MOD = PRIMARY_MODIFIER_TK
 
 
-def provider_badge(provider: str) -> str:
+def provider_badge(provider: str, model: str = "") -> str:
     """Texto del badge: proveedor + modelo usado."""
-    if provider == "openai":
-        model = ConfigManager.get("openai_model", OPENAI_DEFAULT_MODEL)
-    else:
-        model = ConfigManager.get_model()
+    if not model:
+        if provider == "openai":
+            model = ConfigManager.get("openai_model", OPENAI_DEFAULT_MODEL)
+        else:
+            model = ConfigManager.get("model") or ConfigManager.get_model()
     return f"⚡ {PROVIDER_LABELS.get(provider, provider)} ({model})"
+
+
+def _used_model(provider: str) -> str:
+    if provider == "openai":
+        return ConfigManager.get("openai_model", OPENAI_DEFAULT_MODEL)
+    return ConfigManager.get("model") or ConfigManager.get_model()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -94,15 +101,15 @@ class _ResultSession:
         if self.window:
             self.window.append_chunk(piece)
 
-    def finish(self, result: str, provider: str):
+    def finish(self, result: str, provider: str, model: str = ""):
         self._close_thinking()
         if self.window:
-            self.window.finish(result, provider)
+            self.window.finish(result, provider, model=model)
         else:
             ResultWindow(
                 self.app, result, self.prev_hwnd,
                 prompt=self.prompt, selected_text=self.text,
-                label=self.label, provider=provider,
+                label=self.label, provider=provider, model=model,
             )
 
     def fail(self, exc: Exception):
@@ -142,8 +149,9 @@ def run_ai_action(app: EscribaApp, session: _ResultSession):
             on_status=thinking.update_status if thinking else None,
             cancel_event=session.cancel_event,
         )
-        app.history.add(session.label, session.prompt, session.text, result, provider)
-        app.schedule(session.finish, result, provider)
+        model = _used_model(provider)
+        app.history.add(session.label, session.prompt, session.text, result, provider, model=model)
+        app.schedule(session.finish, result, provider, model)
     except Exception as e:
         app.schedule(session.fail, e)
 
@@ -166,13 +174,14 @@ class ResultWindow:
     def __init__(self, app: EscribaApp, result: str, prev_hwnd,
                  prompt: str = "", selected_text: str = "",
                  provider: str = "gemini", label: str = CUSTOM_PROMPT_LABEL,
-                 streaming: bool = False, on_stop=None):
+                 streaming: bool = False, on_stop=None, model: str = ""):
         self.app = app
         self.result = result
         self.prev_hwnd = prev_hwnd
         self.prompt = prompt
         self.selected_text = selected_text
         self.provider = provider
+        self.model = model
         self.label = label
         self.streaming = streaming
         self._on_stop = on_stop
@@ -197,7 +206,7 @@ class ResultWindow:
         badge_f = tk.Frame(hdr, bg=_FM_ACCENT)
         badge_f.pack(side=RIGHT)
         self._badge = tk.Label(
-            badge_f, text="⏳ Generando…" if streaming else provider_badge(provider),
+            badge_f, text="⏳ Generando…" if streaming else provider_badge(provider, model),
             font=(UI_FONT, 8, "bold"), bg=_FM_ACCENT, fg=_FM_BG, padx=7, pady=3,
         )
         self._badge.pack()
@@ -263,7 +272,7 @@ class ResultWindow:
         else:
             self._set_actions_enabled(True)
         self.text_widget.focus_set()
-        win.protocol("WM_DELETE_WINDOW", win.destroy)
+        win.protocol("WM_DELETE_WINDOW", self._close)
 
     # ── Construcción ────────────────────────────────────────
     @staticmethod
@@ -293,8 +302,10 @@ class ResultWindow:
             f"<{_MOD}-Return>": self._replace_if_enabled,
             f"<{_MOD}-C>": self._copy_if_enabled,       # Ctrl+Shift+C (C mayúscula = con Shift)
             f"<{_MOD}-r>": self._regenerate_if_enabled,
+            f"<{_MOD}-R>": self._regenerate_if_enabled,  # con Bloq Mayús
             f"<{_MOD}-o>": self._toggle_view,
-            "<Escape>": win.destroy,
+            f"<{_MOD}-O>": self._toggle_view,            # con Bloq Mayús
+            "<Escape>": self._close,
         }
         for seq, handler in bindings.items():
             win.bind(seq, stop(handler))
@@ -339,16 +350,18 @@ class ResultWindow:
         self.text_widget.see(tk.END)
         self.text_widget.configure(state="disabled")
 
-    def finish(self, result: str, provider: str):
+    def finish(self, result: str, provider: str, model: str = ""):
         self.result = result
         self.provider = provider
+        self.model = model
         if not self._alive():
             self.streaming = False
             return
         self._end_streaming()
         self.text_widget.delete("1.0", tk.END)
         self.text_widget.insert("1.0", result)
-        self._badge.configure(text=provider_badge(provider))
+        self.text_widget.edit_reset()
+        self._badge.configure(text=provider_badge(provider, model))
         self.text_widget.focus_set()
 
     def mark_failed(self):
@@ -370,6 +383,12 @@ class ResultWindow:
         if self._on_stop:
             self._on_stop()
 
+    def _close(self):
+        if self.streaming and self._on_stop:
+            self._on_stop()
+        if self._alive():
+            self.window.destroy()
+
     # ── Acciones ────────────────────────────────────────────
     def _replace_if_enabled(self):
         if self._actions_enabled and self.can_replace:
@@ -384,12 +403,12 @@ class ResultWindow:
             self._regenerate()
 
     def _copy(self):
-        text = self.text_widget.get("1.0", tk.END).strip()
+        text = self.text_widget.get("1.0", "end-1c")
         pyperclip.copy(text)
         self.app.tooltip.show("Copiado al portapapeles.", "success", 2000)
 
     def _replace(self):
-        text = self.text_widget.get("1.0", tk.END).strip()
+        text = self.text_widget.get("1.0", "end-1c")
         self.window.destroy()
         threading.Thread(target=self._do_replace, args=(text,), daemon=True).start()
 
@@ -405,11 +424,14 @@ class ResultWindow:
             send_paste()
             # Dar tiempo a la app destino a leer el portapapeles y restaurarlo.
             time.sleep(0.30)
-            if original_clip:
-                pyperclip.copy(original_clip)
             self.app.schedule(self.app.tooltip.show, "Texto sustituido.", "success")
         except Exception as e:
             self.app.schedule(self.app.tooltip.show, f"No se pudo sustituir el texto: {e}", "danger")
+        finally:
+            try:
+                pyperclip.copy(original_clip)
+            except Exception:
+                pass
 
     def _regenerate(self):
         self.window.destroy()

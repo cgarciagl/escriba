@@ -82,7 +82,7 @@ class TestCaptureSelectedText:
         result = eapp._capture_selected_text()
 
         assert result == ""
-        assert mock_send.call_count == 2  # reintenta una vez
+        assert mock_send.call_count == 1
         assert mock_pyperclip.copy.call_args_list[-1] == call("original")
 
     def test_restores_empty_clipboard_after_capture(self, app):

@@ -69,6 +69,16 @@ class TestStartupManagerDisable:
         StartupManager.disable()
 
 
+    @patch("startup.winreg.CloseKey")
+    @patch("startup.winreg.OpenKey")
+    @patch("startup.winreg.QueryValueEx", side_effect=FileNotFoundError)
+    def test_is_enabled_closes_key_when_value_missing(self, mock_query, mock_open, mock_close):
+        mock_open.return_value = MagicMock()
+
+        assert StartupManager.is_enabled() is False
+        mock_close.assert_called_once_with(mock_open.return_value)
+
+
 class TestStartupManagerExePath:
     @patch("startup.sys")
     def test_frozen_returns_executable(self, mock_sys):
@@ -77,6 +87,14 @@ class TestStartupManagerExePath:
 
         path = StartupManager._exe_path()
         assert path == "C:\\dist\\Escriba.exe"
+
+    @patch("startup.sys")
+    def test_frozen_with_spaces_quotes_executable(self, mock_sys):
+        mock_sys.frozen = True
+        mock_sys.executable = "C:\\Program Files\\Escriba\\Escriba.exe"
+
+        path = StartupManager._exe_path()
+        assert path == '"C:\\Program Files\\Escriba\\Escriba.exe"'
 
     @patch("startup.sys")
     def test_non_frozen_returns_python_script(self, mock_sys):

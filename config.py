@@ -15,6 +15,8 @@ import json
 import os
 import shutil
 import sys
+import tempfile
+import threading
 
 import constants
 from constants import GEMINI_DEFAULT_MODEL
@@ -80,6 +82,7 @@ class ConfigManager:
     """Lee y escribe la configuración de la app en disco."""
 
     _cache: dict | None = None
+    _lock = threading.RLock()
 
     @staticmethod
     def _migrate_legacy_file():
@@ -97,35 +100,47 @@ class ConfigManager:
 
     @classmethod
     def load(cls) -> dict:
-        if cls._cache is not None:
-            return cls._cache
-        cls._migrate_legacy_file()
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                    cls._cache = json.load(f)
-                    return cls._cache
-            except Exception:
-                pass
-        # Primer arranque: crear config por defecto.
-        # El inicio automático es opt-in: se activa desde la ventana de Configuración.
-        default_config = {
-            "api_key": "",
-            "model": GEMINI_DEFAULT_MODEL,
-            "autostart": False,
-        }
-        cls.save(default_config)
-        cls._cache = default_config
-        return default_config
+        with cls._lock:
+            if cls._cache is not None:
+                return dict(cls._cache)
+            cls._migrate_legacy_file()
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                        cls._cache = json.load(f)
+                        return dict(cls._cache)
+                except Exception:
+                    pass
+            # Primer arranque: crear config por defecto.
+            # El inicio automático es opt-in: se activa desde la ventana de Configuración.
+            default_config = {
+                "api_key": "",
+                "model": GEMINI_DEFAULT_MODEL,
+                "autostart": False,
+            }
+            cls.save(default_config)
+            return dict(default_config)
 
     @classmethod
     def save(cls, data: dict):
-        cls._cache = data
-        directory = os.path.dirname(CONFIG_FILE)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        with cls._lock:
+            cls._cache = dict(data)
+            directory = os.path.dirname(CONFIG_FILE)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(
+                prefix=".config_", suffix=".tmp", dir=directory or "."
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(cls._cache, f, indent=2, ensure_ascii=False)
+                os.replace(tmp_path, CONFIG_FILE)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
 
     @classmethod
     def get(cls, key: str, default=None):
@@ -133,53 +148,56 @@ class ConfigManager:
 
     @classmethod
     def set(cls, key: str, value):
-        data = cls.load()
-        data[key] = value
-        cls.save(data)
+        with cls._lock:
+            data = cls.load()
+            data[key] = value
+            cls.save(data)
 
     # ── Secretos (cifrados con DPAPI en Windows) ────────────
     # Cada secreto `name` se guarda como `name_enc` (DPAPI, Windows), en el
     # Llavero con la marca `name_keychain` (macOS) o como `name` en texto plano.
     @classmethod
     def get_secret(cls, name: str) -> str:
-        data = cls.load()
-        if _keychain_available() and data.get(f"{name}_keychain"):
-            try:
-                return keychain_get(name)
-            except Exception:
-                return ""
-        encrypted = data.get(f"{name}_enc")
-        if encrypted:
-            try:
-                return decrypt_secret(encrypted)
-            except Exception:
-                return ""
-        plain = data.get(name, "") or ""
-        # Migración: un secreto guardado en texto plano se protege en cuanto se lee.
-        if plain and (_dpapi_available() or _keychain_available()):
-            try:
-                cls.set_secret(name, plain)
-            except Exception:
-                pass
-        return plain
+        with cls._lock:
+            data = cls.load()
+            if _keychain_available() and data.get(f"{name}_keychain"):
+                try:
+                    return keychain_get(name)
+                except Exception:
+                    return ""
+            encrypted = data.get(f"{name}_enc")
+            if encrypted:
+                try:
+                    return decrypt_secret(encrypted)
+                except Exception:
+                    return ""
+            plain = data.get(name, "") or ""
+            # Migración: un secreto guardado en texto plano se protege en cuanto se lee.
+            if plain and (_dpapi_available() or _keychain_available()):
+                try:
+                    cls.set_secret(name, plain)
+                except Exception:
+                    pass
+            return plain
 
     @classmethod
     def set_secret(cls, name: str, value: str):
-        data = cls.load()
-        value = (value or "").strip()
-        data.pop(f"{name}_enc", None)
-        data.pop(f"{name}_keychain", None)
-        if _keychain_available():
-            keychain_set(name, value)
-            data[name] = ""
-            if value:
-                data[f"{name}_keychain"] = True  # marca: el valor está en el Llavero
-        elif value and _dpapi_available():
-            data[f"{name}_enc"] = encrypt_secret(value)
-            data[name] = ""
-        else:
-            data[name] = value
-        cls.save(data)
+        with cls._lock:
+            data = cls.load()
+            value = (value or "").strip()
+            data.pop(f"{name}_enc", None)
+            data.pop(f"{name}_keychain", None)
+            if _keychain_available():
+                keychain_set(name, value)
+                data[name] = ""
+                if value:
+                    data[f"{name}_keychain"] = True  # marca: el valor está en el Llavero
+            elif value and _dpapi_available():
+                data[f"{name}_enc"] = encrypt_secret(value)
+                data[name] = ""
+            else:
+                data[name] = value
+            cls.save(data)
 
     @classmethod
     def get_api_key(cls) -> str:

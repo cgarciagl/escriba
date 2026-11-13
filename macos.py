@@ -213,9 +213,14 @@ def keychain_set(name: str, value: str):
             capture_output=True, text=True,
         )
         return
+    # Pasar la clave por stdin (security -i) evita exponerla en la lista de procesos (ps).
+    def _q(arg: str) -> str:
+        return '"' + arg.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+    cmd = f"add-generic-password -U -s {_q(KEYCHAIN_SERVICE)} -a {_q(name)} -w {_q(value)}\n"
     result = subprocess.run(
-        ["security", "add-generic-password", "-U", "-s", KEYCHAIN_SERVICE, "-a", name, "-w", value],
-        capture_output=True, text=True,
+        ["security", "-i"],
+        input=cmd, capture_output=True, text=True,
     )
     if result.returncode != 0:
         raise OSError(f"Llavero: {result.stderr.strip() or 'no se pudo guardar el secreto'}")

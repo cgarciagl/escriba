@@ -193,6 +193,11 @@ class FloatingMenu:
                 handler = stop(lambda a=action: self._on_action(a))
                 self.input.bind(key, handler)
                 win.bind(key, handler)
+                # Soportar Bloq Mayús activado para atajos de una letra (ej. <Control-r> -> <Control-R>).
+                if len(key) >= 4 and key[-2].isalpha() and key[-2].islower() and key[-3] == "-":
+                    upper_key = key[:-2] + key[-2].upper() + ">"
+                    self.input.bind(upper_key, handler)
+                    win.bind(upper_key, handler)
 
     def _newline(self):
         self.input.insert(tk.INSERT, "\n")

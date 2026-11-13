@@ -223,11 +223,11 @@ class GeminiClient:
         return bool(ConfigManager.get_api_key().strip())
 
     @classmethod
-    def fetch_available_models(cls, api_key: str | None = None) -> list[str]:
-        """Descarga la lista de modelos Gemini válidos para generateContent."""
+    def fetch_models_with_status(cls, api_key: str | None = None) -> tuple[list[str], str | None]:
+        """Descarga la lista de modelos Gemini válidos y devuelve (modelos, error_o_None)."""
         key = api_key or ConfigManager.get_api_key()
         if not key:
-            return list(GEMINI_FALLBACK_MODELS)
+            return list(GEMINI_FALLBACK_MODELS), None
 
         try:
             response = requests.get(GEMINI_BASE, headers={"x-goog-api-key": key}, timeout=10)
@@ -253,9 +253,16 @@ class GeminiClient:
             if GEMINI_DEFAULT_MODEL in valid_models:
                 valid_models.remove(GEMINI_DEFAULT_MODEL)
                 valid_models.insert(0, GEMINI_DEFAULT_MODEL)
-            return valid_models
-        except Exception:
-            return list(GEMINI_FALLBACK_MODELS)
+            return valid_models, None
+        except Exception as exc:
+            err = to_user_error(exc, 1, cls.NAME, cls.SHORT)
+            return list(GEMINI_FALLBACK_MODELS), str(err)
+
+    @classmethod
+    def fetch_available_models(cls, api_key: str | None = None) -> list[str]:
+        """Descarga la lista de modelos Gemini válidos para generateContent."""
+        models, _ = cls.fetch_models_with_status(api_key)
+        return models
 
     @staticmethod
     def build_payload(prompt: str, text: str) -> dict:
@@ -281,7 +288,7 @@ class GeminiClient:
         if not api_key:
             raise ValueError("API Key de Google Gemini no configurada.")
 
-        model = ConfigManager.get("model", GEMINI_DEFAULT_MODEL)
+        model = ConfigManager.get("model") or GEMINI_DEFAULT_MODEL
         payload = cls.build_payload(prompt, text)
         headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
 
@@ -471,6 +478,8 @@ class OpenAICompatibleClient:
                 choices = data.get("choices") or [{}]
                 piece = (choices[0].get("delta") or {}).get("content") or ""
                 if piece:
+                    if not pieces:
+                        _check_not_busy(piece)
                     pieces.append(piece)
                     on_chunk(piece)
         finally:

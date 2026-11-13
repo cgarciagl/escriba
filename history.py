@@ -24,6 +24,7 @@ class HistoryEntry:
     result: str
     provider: str
     timestamp: datetime = field(default_factory=datetime.now)
+    model: str = ""
 
     def menu_title(self, width: int = 40) -> str:
         """Texto corto para el menú de la bandeja: "14:05 · Resumir · Lorem…"."""
@@ -49,8 +50,8 @@ class History:
             except Exception:
                 pass
 
-    def add(self, label: str, prompt: str, selected_text: str, result: str, provider: str) -> HistoryEntry:
-        entry = HistoryEntry(label, prompt, selected_text, result, provider)
+    def add(self, label: str, prompt: str, selected_text: str, result: str, provider: str, model: str = "") -> HistoryEntry:
+        entry = HistoryEntry(label, prompt, selected_text, result, provider, model=model)
         with self._lock:
             self._items.appendleft(entry)
         self._notify()

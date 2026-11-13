@@ -54,8 +54,11 @@ class TestKeychain:
         with patch("macos.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
             macos.keychain_set("api_key", "nueva")
         args = run.call_args[0][0]
-        assert args[:3] == ["security", "add-generic-password", "-U"]
-        assert args[-2:] == ["-w", "nueva"]
+        assert args == ["security", "-i"]
+        stdin_cmd = run.call_args[1]["input"]
+        assert "add-generic-password -U" in stdin_cmd
+        assert '"api_key"' in stdin_cmd
+        assert '"nueva"' in stdin_cmd
 
     def test_set_empty_deletes_entry(self):
         with patch("macos.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:

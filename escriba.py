@@ -77,7 +77,7 @@ class EscribaApp:
         ResultWindow(
             self, entry.result, None,
             prompt=entry.prompt, selected_text=entry.selected_text,
-            provider=entry.provider, label=entry.label,
+            provider=entry.provider, label=entry.label, model=entry.model,
         )
 
     def schedule(self, callback, *args):
@@ -129,17 +129,13 @@ class EscribaApp:
 
         try:
             send_copy()
-            selected = self._wait_for_clipboard()
-            if not selected:
-                send_copy()
-                selected = self._wait_for_clipboard()
-            return selected
+            return self._wait_for_clipboard(timeout=0.35)
         finally:
             # Restaurar también cuando el portapapeles estaba vacío. Omitir
             # esta escritura dejaba la selección copiada después de usar Escriba.
             self._safe_copy(original_clip)
 
-    def _wait_for_clipboard(self, timeout: float = 0.6, step: float = 0.05) -> str:
+    def _wait_for_clipboard(self, timeout: float = 0.35, step: float = 0.05) -> str:
         """Espera (sondeando) a que el portapapeles tenga contenido."""
         for _ in range(max(1, int(timeout / step))):
             time.sleep(step)
