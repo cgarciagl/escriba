@@ -47,6 +47,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pyinstaller Escriba.spec --clean --noconfirm
       - run: test -x dist/Escriba.app/Contents/MacOS/Escriba
+      - run: codesign --force --deep --sign - dist/Escriba.app
       - name: Prueba de humo (la app arranca y sigue viva)
         run: |
           dist/Escriba.app/Contents/MacOS/Escriba > smoke.log 2>&1 &

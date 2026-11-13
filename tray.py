@@ -85,7 +85,7 @@ class TrayIconManager:
         )
         self.icon = pystray.Icon(
             APP_NAME, image,
-            f"{APP_NAME} — {HOTKEY_LABEL} para activar",
+            f"{APP_NAME} - {HOTKEY_LABEL} para activar",
             menu,
         )
         if IS_MAC:
