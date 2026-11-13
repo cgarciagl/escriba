@@ -19,7 +19,7 @@ else:
 # Constantes de la aplicación
 # ─────────────────────────────────────────────────────────────
 APP_NAME     = "Escriba"
-APP_VERSION  = "0.0.5"
+APP_VERSION  = "0.0.6"
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
 if sys.platform == "darwin":
     DEFAULT_HOTKEY = "Ctrl+Cmd+E"
