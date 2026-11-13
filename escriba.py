@@ -62,12 +62,17 @@ class EscribaApp:
             
         self.tray.start()
         SplashBanner(self.root)
-        self.root.after(500, self.hotkey.start)
+        self.root.after(500, lambda: self.hotkey.start(config.get("hotkey")))
         # Primer arranque: sin proveedor configurado, guiar al usuario a Configuración.
         if not is_ready():
             self.root.after(1800, lambda: self.config_window.show(welcome=True))
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.root.mainloop()
+
+    def reload_hotkey(self, hotkey: str | None = None):
+        """Reinicia el listener del atajo global con la nueva combinación."""
+        self.hotkey.stop()
+        self.root.after(120, lambda: self.hotkey.start(hotkey))
 
     def open_config(self):
         self.config_window.show()
@@ -111,8 +116,9 @@ class EscribaApp:
             self._lock.release()
 
     def _notify_hotkey_error(self):
+        hk = ConfigManager.get("hotkey") or HOTKEY_LABEL
         self.tooltip.show(
-            f"❌ Error: No se pudo registrar el atajo {HOTKEY_LABEL}.\n"
+            f"❌ Error: No se pudo registrar el atajo {hk}.\n"
             "Es posible que otra aplicación lo esté usando.",
             "danger", 6000
         )

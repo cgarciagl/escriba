@@ -14,10 +14,12 @@ from __future__ import annotations
 import tkinter as tk
 from typing import TYPE_CHECKING
 
+import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from actions import action_icon, action_name, display_shortcut, filter_actions, load_actions
+from actions import action_icon, action_name, display_shortcut, expand_prompt_vars, filter_actions, load_actions
 from ai_clients import is_ready
+from config import ConfigManager
 from constants import APP_NAME
 from plataforma import bring_app_to_front, get_foreground_window
 from ui_common import (
@@ -30,8 +32,10 @@ if TYPE_CHECKING:
     from escriba import EscribaApp
 
 PLACEHOLDER = "Busca una acción o escribe tu propia instrucción"
-MAX_ROWS = 12
+PLACEHOLDER_COMPOSE = "Escribe qué quieres generar o redactar…"
+MAX_LIST_HEIGHT = 340
 MAX_INPUT_LINES = 4
+LONG_TEXT_CHARS = 10000
 
 
 def group_by_section(actions: list[dict]) -> list[tuple[str, list[dict]]]:
@@ -48,12 +52,34 @@ def button_text(action: dict) -> str:
     return f"{action['label']}   ·  {shortcut}" if shortcut else action["label"]
 
 
-def build_items(actions: list[dict], query: str) -> list[dict]:
+def build_items(actions: list[dict], query: str, has_selection: bool = True) -> list[dict]:
     """Filas a mostrar: acciones filtradas y, si hay texto, la instrucción libre al final."""
-    items = [{"kind": "action", "action": a} for a in filter_actions(actions, query)]
+    items = (
+        [{"kind": "action", "action": a} for a in filter_actions(actions, query)]
+        if has_selection
+        else []
+    )
     if query.strip():
         items.append({"kind": "custom", "prompt": query.strip()})
     return items
+
+
+def _with_frequent_first(actions: list[dict]) -> list[dict]:
+    """Coloca arriba hasta 2 acciones muy usadas (uso >= 2) sin duplicarlas."""
+    usage = ConfigManager.get("action_usage", {}) or {}
+    if not isinstance(usage, dict):
+        return actions
+    ranked = sorted(
+        (a for a in actions if usage.get(a["label"], 0) >= 2),
+        key=lambda a: usage.get(a["label"], 0),
+        reverse=True,
+    )[:2]
+    if not ranked:
+        return actions
+    top_labels = {a["label"] for a in ranked}
+    promoted = [{**a, "section": "★ Frecuentes"} for a in ranked]
+    rest = [a for a in actions if a["label"] not in top_labels]
+    return promoted + rest
 
 
 def _truncate(text: str, width: int) -> str:
@@ -72,21 +98,20 @@ class FloatingMenu:
         self.window = None
         self._prev_hwnd = None
         self._text = ""
+        self._has_selection = True
         self._actions: list[dict] = []
         self._items: list[dict] = []
         self._rows: list[list[tk.Widget]] = []
         self._sel = 0
         self._query = ""
+        self._canvas = None
+        self._inner_list = None
+        self._canvas_win = None
+        self._vscroll = None
 
     # ── Apertura ────────────────────────────────────────────
     def show(self, selected_text: str):
         self.hide()
-        if not selected_text.strip():
-            self.app.tooltip.show(
-                "No se detectó texto seleccionado. Selecciona texto y vuelve a usar el atajo.",
-                "warning",
-            )
-            return
         if not is_ready():
             self.app.tooltip.show(
                 "Configura un proveedor de IA antes de usar Escriba.",
@@ -96,8 +121,10 @@ class FloatingMenu:
             return
 
         # Se leen en cada apertura: los cambios en actions.json se aplican al momento.
-        self._actions, warnings = load_actions()
+        actions, warnings = load_actions()
+        self._actions = _with_frequent_first(actions)
         self._text = selected_text
+        self._has_selection = bool(selected_text.strip())
         self._query = ""
         self._sel = 0
         self._prev_hwnd = get_foreground_window()
@@ -118,20 +145,28 @@ class FloatingMenu:
         tk.Label(hdr, text="⚡", font=(UI_FONT, 11), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
         tk.Label(hdr, text=f" {APP_NAME}", font=(UI_FONT, 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
-        words = len(selected_text.split())
-        tk.Label(hdr, text=f"  ·  {words} palabra{'s' if words != 1 else ''}",
-                 font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+        if self._has_selection:
+            words = len(selected_text.split())
+            tk.Label(hdr, text=f"  ·  {words} palabra{'s' if words != 1 else ''}",
+                     font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+            if len(selected_text) > LONG_TEXT_CHARS:
+                tk.Label(hdr, text="  ·  Texto largo",
+                         font=(UI_FONT, 8, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+        else:
+            tk.Label(hdr, text="  ·  Modo redacción (sin selección)",
+                     font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
         close = tk.Label(hdr, text="✕", font=(UI_FONT, 10), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
         close.pack(side=RIGHT)
         close.bind("<Button-1>", lambda e: self.hide())
 
         # ── Vista previa del texto ──────────────────────────
-        prev = tk.Frame(inner, bg=_FM_BG)
-        prev.pack(fill=X, pady=(0, 10))
-        tk.Frame(prev, bg=_FM_ACCENT, width=2).pack(side=LEFT, fill=Y)
-        tk.Label(prev, text=f"“{_truncate(selected_text, 90)}”", font=(UI_FONT, 9, "italic"),
-                 bg=_FM_BG, fg=_FM_MUTED, wraplength=scaled(win, 340), justify=LEFT
-                 ).pack(side=LEFT, padx=(8, 0))
+        if self._has_selection:
+            prev = tk.Frame(inner, bg=_FM_BG)
+            prev.pack(fill=X, pady=(0, 10))
+            tk.Frame(prev, bg=_FM_ACCENT, width=2).pack(side=LEFT, fill=Y)
+            tk.Label(prev, text=f"“{_truncate(selected_text, 90)}”", font=(UI_FONT, 9, "italic"),
+                     bg=_FM_BG, fg=_FM_MUTED, wraplength=scaled(win, 340), justify=LEFT
+                     ).pack(side=LEFT, padx=(8, 0))
 
         # ── Buscador / instrucción libre ────────────────────
         box = tk.Frame(inner, bg=_FM_CARD, highlightthickness=1,
@@ -141,14 +176,32 @@ class FloatingMenu:
                              bg=_FM_CARD, fg=_FM_TEXT, insertbackground=_FM_ACCENT,
                              relief="flat", borderwidth=0, padx=8, pady=6, undo=True)
         self.input.pack(fill=X)
-        self._placeholder = tk.Label(box, text=PLACEHOLDER, font=(UI_FONT, 10),
+        ph_text = PLACEHOLDER if self._has_selection else PLACEHOLDER_COMPOSE
+        self._placeholder = tk.Label(box, text=ph_text, font=(UI_FONT, 10),
                                      bg=_FM_CARD, fg=_FM_MUTED, bd=0, padx=0, pady=0)
         self._placeholder.place(x=scaled(win, 10), rely=0.5, anchor=W)
         self._placeholder.bind("<Button-1>", lambda e: self.input.focus_set())
 
-        # ── Lista de acciones ───────────────────────────────
+        # ── Lista de acciones con scroll ────────────────────
         self.list_frame = tk.Frame(inner, bg=_FM_BG)
         self.list_frame.pack(fill=X, pady=(6, 0))
+        self._canvas = tk.Canvas(self.list_frame, bg=_FM_BG, highlightthickness=0, bd=0, height=0)
+        self._vscroll = tb.Scrollbar(self.list_frame, orient="vertical",
+                                     command=self._canvas.yview, style="Escriba.Vertical.TScrollbar")
+        self._canvas.configure(yscrollcommand=self._vscroll.set)
+        self._inner_list = tk.Frame(self._canvas, bg=_FM_BG)
+        self._canvas_win = self._canvas.create_window((0, 0), window=self._inner_list, anchor="nw")
+        self._canvas.pack(side=LEFT, fill=BOTH, expand=True)
+        self._inner_list.bind(
+            "<Configure>",
+            lambda e: self._sync_scroll_region(),
+        )
+        self._canvas.bind(
+            "<Configure>",
+            lambda e: self._canvas.itemconfigure(self._canvas_win, width=e.width),
+        )
+        self._canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self._inner_list.bind("<MouseWheel>", self._on_mousewheel)
 
         # ── Pie con ayudas de teclado ───────────────────────
         tk.Frame(inner, bg=_FM_SEP, height=1).pack(fill=X, pady=(8, 6))
@@ -156,7 +209,7 @@ class FloatingMenu:
                  font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         self._bind_keys(win)
-        self._items = build_items(self._actions, "")
+        self._items = build_items(self._actions, "", has_selection=self._has_selection)
         self._render()
 
         place_near_pointer(win)
@@ -169,6 +222,25 @@ class FloatingMenu:
         if warnings:
             self.app.tooltip.show("actions.json tiene avisos:\n" + "\n".join(warnings[:4]),
                                   "warning", 8000)
+
+    def _on_mousewheel(self, event):
+        if self._canvas and self._vscroll.winfo_ismapped():
+            delta = -1 if event.delta > 0 else 1
+            self._canvas.yview_scroll(delta, "units")
+
+    def _sync_scroll_region(self):
+        if not self._canvas or not self._inner_list or not self.window or not self.window.winfo_exists():
+            return
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        req_h = self._inner_list.winfo_reqheight()
+        max_h = scaled(self.window, MAX_LIST_HEIGHT)
+        self._canvas.configure(height=min(req_h, max_h))
+        if req_h > max_h:
+            if not self._vscroll.winfo_ismapped():
+                self._vscroll.pack(side=RIGHT, fill=Y)
+        else:
+            if self._vscroll.winfo_ismapped():
+                self._vscroll.pack_forget()
 
     # ── Teclado ─────────────────────────────────────────────
     def _bind_keys(self, win):
@@ -187,6 +259,8 @@ class FloatingMenu:
         self.input.bind("<KeyRelease>", lambda e: self._on_query_change())
         win.bind("<Escape>", lambda e: self.hide())
 
+        if not self._has_selection:
+            return
         for action in self._actions:
             key = action.get("shortcut_key")
             if key:
@@ -218,44 +292,43 @@ class FloatingMenu:
             self._placeholder.place(x=scaled(self.window, 10), rely=0.5, anchor=W)
         if query != self._query:
             self._query = query
-            self._items = build_items(self._actions, query)
+            self._items = build_items(self._actions, query, has_selection=self._has_selection)
             self._sel = 0
             self._render()
 
     # ── Lista ───────────────────────────────────────────────
     def _render(self):
-        for child in self.list_frame.winfo_children():
+        container = self._inner_list
+        for child in container.winfo_children():
             child.destroy()
         self._rows = []
 
         grouped = not self._query.strip()
         last_section = None
-        for index, item in enumerate(self._items[:MAX_ROWS]):
+        for index, item in enumerate(self._items):
             if grouped and item["kind"] == "action":
                 section = item["action"].get("section", "")
                 if section != last_section:
-                    tk.Label(self.list_frame, text=section, font=(UI_FONT, 8, "bold"),
+                    tk.Label(container, text=section, font=(UI_FONT, 8, "bold"),
                              bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, padx=6, pady=(5, 1))
                     last_section = section
             self._rows.append(self._make_row(index, item))
 
-        hidden = len(self._items) - MAX_ROWS
-        if hidden > 0:
-            tk.Label(self.list_frame, text=f"y {hidden} más: escribe para filtrar",
-                     font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, padx=6, pady=(4, 0))
         self._highlight()
         if self.window:
             self.window.update_idletasks()
+            self._sync_scroll_region()
 
     def _make_row(self, index: int, item: dict) -> list[tk.Widget]:
-        row = tk.Frame(self.list_frame, bg=_FM_BG, cursor="hand2", padx=6, pady=3)
+        row = tk.Frame(self._inner_list, bg=_FM_BG, cursor="hand2", padx=6, pady=3)
         row.pack(fill=X)
         if item["kind"] == "action":
             action = item["action"]
             icon, text = action_icon(action), action_name(action)
             key = display_shortcut(action["shortcut"]) if action.get("shortcut_key") else ""
         else:
-            icon, text, key = "✏", f"Usar como instrucción: “{_truncate(item['prompt'], 38)}”", "Enter"
+            verb = "Usar como instrucción" if self._has_selection else "Generar"
+            icon, text, key = "✏", f"{verb}: “{_truncate(item['prompt'], 38)}”", "Enter"
 
         icon_lbl = tk.Label(row, text=icon, width=2, font=(UI_FONT, 11), bg=_FM_BG, fg=_FM_ACCENT)
         icon_lbl.pack(side=LEFT)
@@ -271,6 +344,7 @@ class FloatingMenu:
         for w in widgets:
             w.bind("<Button-1>", lambda e, i=index: self._run_index(i))
             w.bind("<Enter>", lambda e, i=index: self._set_selection(i))
+            w.bind("<MouseWheel>", self._on_mousewheel)
         return widgets
 
     def _highlight(self):
@@ -279,6 +353,23 @@ class FloatingMenu:
             for w in widgets[:3]:  # la insignia del atajo conserva su fondo
                 w.configure(bg=bg)
 
+    def _ensure_visible(self, index: int):
+        if not self._canvas or not self._rows or not (0 <= index < len(self._rows)):
+            return
+        total_h = self._inner_list.winfo_reqheight()
+        if total_h <= 0:
+            return
+        row = self._rows[index][0]
+        y0 = row.winfo_y()
+        y1 = y0 + row.winfo_height()
+        top_frac, bot_frac = self._canvas.yview()
+        view_h = total_h
+        if y0 < top_frac * view_h:
+            self._canvas.yview_moveto(y0 / view_h)
+        elif y1 > bot_frac * view_h:
+            vis_h = (bot_frac - top_frac) * view_h
+            self._canvas.yview_moveto(max(0.0, (y1 - vis_h) / view_h))
+
     def _set_selection(self, index: int):
         if 0 <= index < len(self._rows):
             self._sel = index
@@ -286,7 +377,9 @@ class FloatingMenu:
 
     def _move(self, delta: int):
         if self._rows:
-            self._set_selection((self._sel + delta) % len(self._rows))
+            new_idx = (self._sel + delta) % len(self._rows)
+            self._set_selection(new_idx)
+            self._ensure_visible(new_idx)
 
     def _run_selected(self):
         self._run_index(self._sel)
@@ -316,10 +409,27 @@ class FloatingMenu:
             self.window.destroy()
         self.window = None
 
+    @staticmethod
+    def _record_usage(label: str):
+        try:
+            usage = ConfigManager.get("action_usage", {}) or {}
+            if not isinstance(usage, dict):
+                usage = {}
+            usage[label] = int(usage.get(label, 0)) + 1
+            ConfigManager.set("action_usage", usage)
+        except Exception:
+            pass
+
     def _on_action(self, action: dict):
         self.hide()
-        start_ai_action(self.app, action["prompt"], self._text, self._prev_hwnd, action["label"])
+        self._record_usage(action["label"])
+        prompt = expand_prompt_vars(action["prompt"])
+        start_ai_action(
+            self.app, prompt, self._text, self._prev_hwnd, action["label"],
+            auto_replace=bool(action.get("auto_replace")),
+        )
 
     def _on_custom_prompt(self, prompt: str):
         self.hide()
-        start_ai_action(self.app, prompt, self._text, self._prev_hwnd, CUSTOM_PROMPT_LABEL)
+        expanded = expand_prompt_vars(prompt)
+        start_ai_action(self.app, expanded, self._text, self._prev_hwnd, CUSTOM_PROMPT_LABEL)

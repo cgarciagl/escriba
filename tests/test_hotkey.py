@@ -147,3 +147,17 @@ class TestHotkeyManager:
 
         hm = HotkeyManager(root, callback)
         hm.stop()
+
+
+class TestParseHotkey:
+    def test_parses_custom_combinations(self):
+        from hotkey import parse_hotkey
+
+        assert parse_hotkey("Ctrl+Alt+K") == (0x0002 | 0x0001, ord("K"))
+        assert parse_hotkey("Ctrl+Shift+Space") == (0x0002 | 0x0004, 0x20)
+
+    def test_invalid_falls_back_to_win_alt_e(self):
+        from hotkey import parse_hotkey
+
+        assert parse_hotkey("") == (0x0008 | 0x0001, 0x45)
+        assert parse_hotkey("InvalidMod+E") == (0x0008 | 0x0001, 0x45)

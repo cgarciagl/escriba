@@ -81,6 +81,14 @@ class TestBuildItems:
         assert [i["kind"] for i in items] == ["custom"]
         assert items[0]["prompt"] == "hazlo poético"
 
+    def test_compose_mode_without_selection_hides_actions(self):
+        from ui_menu import build_items
+
+        actions = [{"label": "✎  Reescribir", "section": "T"}]
+        assert build_items(actions, "", has_selection=False) == []
+        items = build_items(actions, "redacta un correo", has_selection=False)
+        assert items == [{"kind": "custom", "prompt": "redacta un correo"}]
+
 
 def _make_result(app, **kwargs):
     from ui_result import ResultWindow

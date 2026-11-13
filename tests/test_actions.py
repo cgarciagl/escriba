@@ -173,3 +173,24 @@ class TestPaletteSearch:
 
     def test_normalize(self):
         assert normalize_text("  Ñandú ÁÉÍ ") == "nandu aei"
+
+
+class TestSaveAndVars:
+    def test_save_actions_persists_auto_replace(self, tmp_path, monkeypatch):
+        import actions
+        target = str(tmp_path / "actions.json")
+        monkeypatch.setattr(actions, "ACTIONS_FILE", target)
+
+        actions.save_actions([
+            {"label": "✎  Test", "prompt": "Haz algo", "auto_replace": True},
+        ])
+        loaded, warnings = actions.load_actions()
+        assert warnings == []
+        assert loaded[0]["auto_replace"] is True
+
+    def test_expand_prompt_vars_replaces_clipboard(self, monkeypatch):
+        import pyperclip
+        from actions import expand_prompt_vars
+
+        monkeypatch.setattr(pyperclip, "paste", lambda: "texto copiado")
+        assert expand_prompt_vars("Usa: {clipboard}") == "Usa: texto copiado"

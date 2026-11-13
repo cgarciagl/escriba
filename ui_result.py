@@ -16,6 +16,8 @@ Atajos de la ventana de resultado (⌘ en lugar de Ctrl en macOS):
 
 from __future__ import annotations
 
+import difflib
+import re
 import threading
 import time
 import tkinter as tk
@@ -30,7 +32,7 @@ from config import ConfigManager
 from constants import APP_NAME, OPENAI_DEFAULT_MODEL
 from plataforma import PRIMARY_MODIFIER_TK, activate_window, send_paste, shortcut_label
 from ui_common import (
-    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, UI_FONT,
+    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
     ThinkingWindow, apply_dark_style, center_window,
 )
 
@@ -57,18 +59,43 @@ def _used_model(provider: str) -> str:
     return ConfigManager.get("model") or ConfigManager.get_model()
 
 
+def _paste_to_origin(app: EscribaApp, prev_hwnd, text: str):
+    """Pega `text` en `prev_hwnd` y restaura el portapapeles original."""
+    original_clip = ""
+    try:
+        original_clip = pyperclip.paste()
+    except Exception:
+        pass
+    try:
+        pyperclip.copy(text)
+        activate_window(prev_hwnd)
+        send_paste()
+        time.sleep(0.30)
+        app.schedule(app.tooltip.show, "Texto sustituido.", "success")
+    except Exception as e:
+        app.schedule(app.tooltip.show, f"No se pudo sustituir el texto: {e}", "danger")
+    finally:
+        try:
+            pyperclip.copy(original_clip)
+        except Exception:
+            pass
+
+
 # ─────────────────────────────────────────────────────────────
 # Sesión de una petición (puente entre el hilo de trabajo y Tk)
 # ─────────────────────────────────────────────────────────────
 class _ResultSession:
     """Los métodos on_* se llaman desde el hilo de trabajo; el resto, en Tk."""
 
-    def __init__(self, app: EscribaApp, prompt: str, text: str, prev_hwnd, label: str):
+    def __init__(self, app: EscribaApp, prompt: str, text: str, prev_hwnd, label: str,
+                 auto_replace: bool = False):
         self.app = app
         self.prompt = prompt
         self.text = text
         self.prev_hwnd = prev_hwnd
         self.label = label
+        self.auto_replace = auto_replace
+        self.model = ""
         self.cancel_event = threading.Event()
         self.thinking: ThinkingWindow | None = None
         self.window: ResultWindow | None = None
@@ -101,15 +128,24 @@ class _ResultSession:
         if self.window:
             self.window.append_chunk(piece)
 
-    def finish(self, result: str, provider: str, model: str = ""):
+    def finish(self, result: str, provider: str):
         self._close_thinking()
+        if self.auto_replace and self.prev_hwnd and not self.window:
+            threading.Thread(
+                target=_paste_to_origin,
+                args=(self.app, self.prev_hwnd, result),
+                daemon=True,
+            ).start()
+            return
         if self.window:
-            self.window.finish(result, provider, model=model)
+            if self.model:
+                self.window.model = self.model
+            self.window.finish(result, provider)
         else:
             ResultWindow(
                 self.app, result, self.prev_hwnd,
                 prompt=self.prompt, selected_text=self.text,
-                label=self.label, provider=provider, model=model,
+                label=self.label, provider=provider, model=self.model,
             )
 
     def fail(self, exc: Exception):
@@ -127,13 +163,16 @@ class _ResultSession:
             action = ("Abrir configuración", self.app.open_config)
         else:
             action = ("Reintentar", lambda: start_ai_action(
-                self.app, self.prompt, self.text, self.prev_hwnd, self.label))
+                self.app, self.prompt, self.text, self.prev_hwnd, self.label,
+                auto_replace=self.auto_replace))
         self.app.tooltip.show(str(exc), "danger", action=action)
 
 
 def run_ai_action(app: EscribaApp, session: _ResultSession):
     """Ejecuta la petición de una sesión (llamar en un hilo secundario)."""
-    streaming = bool(ConfigManager.get("streaming", True))
+    streaming = bool(ConfigManager.get("streaming", True)) and not (
+        session.auto_replace and session.prev_hwnd
+    )
     thinking = session.thinking
 
     def on_retry(attempt, max_retries, delay, reason):
@@ -149,17 +188,17 @@ def run_ai_action(app: EscribaApp, session: _ResultSession):
             on_status=thinking.update_status if thinking else None,
             cancel_event=session.cancel_event,
         )
-        model = _used_model(provider)
-        app.history.add(session.label, session.prompt, session.text, result, provider, model=model)
-        app.schedule(session.finish, result, provider, model)
+        session.model = _used_model(provider)
+        app.history.add(session.label, session.prompt, session.text, result, provider, model=session.model)
+        app.schedule(session.finish, result, provider)
     except Exception as e:
         app.schedule(session.fail, e)
 
 
 def start_ai_action(app: EscribaApp, prompt: str, text: str, prev_hwnd, label: str,
-                    status: str | None = None) -> _ResultSession:
+                    status: str | None = None, auto_replace: bool = False) -> _ResultSession:
     """Muestra el indicador de progreso y lanza la acción en un hilo."""
-    session = _ResultSession(app, prompt, text, prev_hwnd, label)
+    session = _ResultSession(app, prompt, text, prev_hwnd, label, auto_replace=auto_replace)
     session.thinking = ThinkingWindow(app.root, status or f"{label.strip()}…", on_cancel=session.cancel)
     threading.Thread(target=run_ai_action, args=(app, session), daemon=True).start()
     return session
@@ -211,7 +250,7 @@ class ResultWindow:
         )
         self._badge.pack()
 
-        # ── Selector Resultado / Original + Detener ─────────
+        # ── Selector Resultado / Original / Cambios + Detener ──
         bar = tk.Frame(frame, bg=_FM_BG)
         bar.pack(fill=X, pady=(0, 6))
         self.view_var = tk.StringVar(value="result")
@@ -219,6 +258,9 @@ class ResultWindow:
                        style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
         tb.Radiobutton(bar, text="Original", value="original", variable=self.view_var,
                        style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
+        if selected_text.strip():
+            tb.Radiobutton(bar, text="Cambios", value="diff", variable=self.view_var,
+                           style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
         tk.Label(bar, text=shortcut_label("Ctrl+O"), font=(UI_FONT, 8),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT, padx=(8, 0))
         self._stop_btn = tb.Button(bar, text="⏹  Detener", style="Escriba.TButton",
@@ -226,10 +268,21 @@ class ResultWindow:
         if streaming and on_stop:
             self._stop_btn.pack(side=RIGHT)
 
-        # ── Botones (se empaquetan antes para que siempre se vean) ──
+        # ── Botones y barra de ajuste (se empaquetan antes para que siempre se vean) ──
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(side=BOTTOM, fill=X, pady=(8, 0))
         btns = tk.Frame(frame, bg=_FM_BG)
         btns.pack(side=BOTTOM, fill=X, pady=(8, 0))
+
+        refine_row = tk.Frame(frame, bg=_FM_BG)
+        refine_row.pack(side=BOTTOM, fill=X, pady=(8, 0))
+        self._refine_var = tk.StringVar()
+        self._refine_entry = tb.Entry(refine_row, textvariable=self._refine_var,
+                                      font=(UI_FONT, 9), style="Escriba.TEntry")
+        self._refine_entry.pack(side=LEFT, fill=X, expand=True, ipady=2, padx=(0, 6))
+        self._refine_btn = tb.Button(refine_row, text="✨  Ajustar", style="Escriba.TButton",
+                                     command=self._refine)
+        self._refine_btn.pack(side=LEFT)
+        self._refine_entry.bind("<Return>", lambda e: self._refine())
 
         primary_is_replace = self.can_replace
         self._replace_btn = tb.Button(
@@ -255,12 +308,18 @@ class ResultWindow:
         tk.Label(btns, text="Esc cierra", font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED
                  ).pack(side=LEFT, padx=(10, 0))
 
-        # ── Área de texto: resultado (editable) y original (solo lectura) ──
+        # ── Área de texto: resultado, original y diff ────────
         self.txt_frame = tk.Frame(frame, bg=_FM_BG)
         self.txt_frame.pack(fill=BOTH, expand=True)
         self.text_widget = self._make_text(self.txt_frame, result)
         self.original_widget = self._make_text(self.txt_frame, selected_text)
         self.original_widget.configure(state="disabled", fg=_FM_MUTED)
+        self.diff_widget = self._make_text(self.txt_frame, "")
+        self.diff_widget.tag_configure("diff_add", background="#14532d", foreground="#86efac")
+        self.diff_widget.tag_configure("diff_del", background="#7f1d1d", foreground="#fca5a5")
+        self.diff_widget.tag_configure("diff_ctx", foreground=_FM_MUTED)
+        self.diff_widget.configure(state="disabled")
+        self._configure_markdown_tags(self.text_widget)
         self._scroll = tb.Scrollbar(self.txt_frame, style="Escriba.Vertical.TScrollbar")
         self._show_widget(self.text_widget)
 
@@ -270,6 +329,7 @@ class ResultWindow:
             self.text_widget.configure(state="disabled", fg=_FM_MUTED)
             self._set_actions_enabled(False)
         else:
+            self._apply_markdown_tags()
             self._set_actions_enabled(True)
         self.text_widget.focus_set()
         win.protocol("WM_DELETE_WINDOW", self._close)
@@ -283,8 +343,48 @@ class ResultWindow:
         widget.insert("1.0", content)
         return widget
 
+    @staticmethod
+    def _configure_markdown_tags(widget: tk.Text):
+        widget.tag_configure("md_bold", font=(UI_FONT, 10, "bold"), foreground="#f8fafc")
+        widget.tag_configure("md_heading", font=(UI_FONT, 11, "bold"), foreground=_FM_ACCENT)
+        widget.tag_configure("md_code", font=(MONO_FONT, 9), background="#0f1320", foreground="#fcd34d")
+
+    def _apply_markdown_tags(self):
+        w = self.text_widget
+        for tag in ("md_bold", "md_heading", "md_code"):
+            w.tag_remove(tag, "1.0", tk.END)
+        content = w.get("1.0", "end-1c")
+        for m in re.finditer(r"```[\s\S]*?```|`[^`\n]+`", content):
+            w.tag_add("md_code", f"1.0+{m.start()}c", f"1.0+{m.end()}c")
+        for m in re.finditer(r"\*\*[^*\n]+\*\*", content):
+            w.tag_add("md_bold", f"1.0+{m.start()}c", f"1.0+{m.end()}c")
+        for m in re.finditer(r"(?m)^#{1,3}\s+.+$", content):
+            w.tag_add("md_heading", f"1.0+{m.start()}c", f"1.0+{m.end()}c")
+
+    def _render_diff(self):
+        current = self.text_widget.get("1.0", "end-1c").splitlines(keepends=True)
+        orig = self.selected_text.splitlines(keepends=True)
+        w = self.diff_widget
+        w.configure(state="normal")
+        w.delete("1.0", tk.END)
+        sm = difflib.SequenceMatcher(None, orig, current)
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == "equal":
+                w.insert(tk.END, "".join(current[j1:j2]), "diff_ctx")
+            elif tag in ("replace", "delete"):
+                for line in orig[i1:i2]:
+                    w.insert(tk.END, f"- {line}" if not line.endswith("\n") else f"- {line}", "diff_del")
+                    if not line.endswith("\n"):
+                        w.insert(tk.END, "\n", "diff_del")
+            if tag in ("replace", "insert"):
+                for line in current[j1:j2]:
+                    w.insert(tk.END, f"+ {line}" if not line.endswith("\n") else f"+ {line}", "diff_add")
+                    if not line.endswith("\n"):
+                        w.insert(tk.END, "\n", "diff_add")
+        w.configure(state="disabled")
+
     def _show_widget(self, widget: tk.Text):
-        for w in (self.text_widget, self.original_widget, self._scroll):
+        for w in (self.text_widget, self.original_widget, self.diff_widget, self._scroll):
             w.pack_forget()
         self._scroll.pack(side=RIGHT, fill=Y)
         widget.pack(fill=BOTH, expand=True)
@@ -311,11 +411,16 @@ class ResultWindow:
             win.bind(seq, stop(handler))
             self.text_widget.bind(seq, stop(handler))
             self.original_widget.bind(seq, stop(handler))
+            self.diff_widget.bind(seq, stop(handler))
 
     # ── Vista ───────────────────────────────────────────────
     def _switch_view(self):
-        if self.view_var.get() == "original":
+        mode = self.view_var.get()
+        if mode == "original":
             self._show_widget(self.original_widget)
+        elif mode == "diff":
+            self._render_diff()
+            self._show_widget(self.diff_widget)
         else:
             self._show_widget(self.text_widget)
             self.text_widget.focus_set()
@@ -332,6 +437,8 @@ class ResultWindow:
         self._actions_enabled = enabled
         state = "normal" if enabled else "disabled"
         self._copy_btn.configure(state=state)
+        self._refine_btn.configure(state=state)
+        self._refine_entry.configure(state=state)
         self._regen_btn.configure(state="normal" if enabled and self.prompt else "disabled")
         self._replace_btn.configure(state="normal" if enabled and self.can_replace else "disabled")
 
@@ -353,7 +460,8 @@ class ResultWindow:
     def finish(self, result: str, provider: str, model: str = ""):
         self.result = result
         self.provider = provider
-        self.model = model
+        if model:
+            self.model = model
         if not self._alive():
             self.streaming = False
             return
@@ -361,7 +469,8 @@ class ResultWindow:
         self.text_widget.delete("1.0", tk.END)
         self.text_widget.insert("1.0", result)
         self.text_widget.edit_reset()
-        self._badge.configure(text=provider_badge(provider, model))
+        self._apply_markdown_tags()
+        self._badge.configure(text=provider_badge(provider, self.model))
         self.text_widget.focus_set()
 
     def mark_failed(self):
@@ -413,25 +522,20 @@ class ResultWindow:
         threading.Thread(target=self._do_replace, args=(text,), daemon=True).start()
 
     def _do_replace(self, text: str):
-        original_clip = ""
-        try:
-            original_clip = pyperclip.paste()
-        except Exception:
-            pass
-        try:
-            pyperclip.copy(text)
-            activate_window(self.prev_hwnd)
-            send_paste()
-            # Dar tiempo a la app destino a leer el portapapeles y restaurarlo.
-            time.sleep(0.30)
-            self.app.schedule(self.app.tooltip.show, "Texto sustituido.", "success")
-        except Exception as e:
-            self.app.schedule(self.app.tooltip.show, f"No se pudo sustituir el texto: {e}", "danger")
-        finally:
-            try:
-                pyperclip.copy(original_clip)
-            except Exception:
-                pass
+        _paste_to_origin(self.app, self.prev_hwnd, text)
+
+    def _refine(self):
+        if not self._actions_enabled:
+            return
+        instruction = self._refine_var.get().strip()
+        if not instruction:
+            return
+        current = self.text_widget.get("1.0", "end-1c")
+        self.window.destroy()
+        start_ai_action(
+            self.app, instruction, current, self.prev_hwnd,
+            "✨  Ajustar", status="✨  Ajustando resultado…",
+        )
 
     def _regenerate(self):
         self.window.destroy()

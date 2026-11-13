@@ -114,23 +114,52 @@ def activate_window(handle) -> None:
 # ─────────────────────────────────────────────────────────────
 # Atajo global
 # ─────────────────────────────────────────────────────────────
-class HotkeyManager:
-    """Registra Ctrl+Cmd+E con pynput (se evita Option: altera el carácter de E)."""
+def _to_pynput(hotkey: str | None) -> str:
+    """Convierte 'Ctrl+Cmd+E' → '<ctrl>+<cmd>+e'. Si no es válido, usa el predeterminado."""
+    if not hotkey or not isinstance(hotkey, str):
+        return HOTKEY_PYNPUT
+    parts = [p.strip().lower() for p in hotkey.split("+") if p.strip()]
+    if len(parts) < 2:
+        return HOTKEY_PYNPUT
+    mod_map = {"ctrl": "<ctrl>", "control": "<ctrl>", "cmd": "<cmd>", "command": "<cmd>",
+               "alt": "<alt>", "option": "<alt>", "shift": "<shift>"}
+    out = []
+    for p in parts[:-1]:
+        m = mod_map.get(p)
+        if not m:
+            return HOTKEY_PYNPUT
+        out.append(m)
+    key = parts[-1]
+    if key in ("space", "espacio"):
+        out.append("<space>")
+    elif len(key) == 1 and key.isalnum():
+        out.append(key)
+    else:
+        return HOTKEY_PYNPUT
+    return "+".join(out)
 
-    def __init__(self, root, callback):
+
+class HotkeyManager:
+    """Registra el atajo global con pynput (por defecto Ctrl+Cmd+E)."""
+
+    def __init__(self, root, callback, hotkey: str | None = None):
         self.root = root
         self.callback = callback
+        self.hotkey = hotkey
         self._listener = None
 
     def _fire(self):
         # Igual que en Windows: el trabajo va en otro hilo para no bloquear el listener.
         threading.Thread(target=self.callback, daemon=True).start()
 
-    def start(self):
+    def start(self, hotkey: str | None = None):
+        if hotkey is not None:
+            self.hotkey = hotkey
         try:
             from pynput import keyboard
 
-            self._listener = keyboard.GlobalHotKeys({HOTKEY_PYNPUT: self._fire})
+            combo = _to_pynput(self.hotkey)
+            self._listener = keyboard.GlobalHotKeys({combo: self._fire})
             self._listener.start()
         except Exception:
             if self.callback:

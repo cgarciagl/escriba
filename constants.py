@@ -21,6 +21,12 @@ else:
 APP_NAME     = "Escriba"
 APP_VERSION  = "1.3.0"
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
+DEFAULT_HOTKEY = "Ctrl+Cmd+E" if sys.platform == "darwin" else "Win+Alt+E"
+HOTKEY_PRESETS = (
+    ["Ctrl+Cmd+E", "Ctrl+Cmd+Space", "Ctrl+Shift+E", "Ctrl+Alt+E"]
+    if sys.platform == "darwin"
+    else ["Win+Alt+E", "Ctrl+Alt+E", "Ctrl+Shift+E", "Win+Shift+E"]
+)
 
 # Carpeta de configuración (escribible aunque la app esté en Program Files o
 # en /Applications):

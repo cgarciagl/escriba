@@ -40,33 +40,76 @@ def send_ctrl_v():
 # Hotkey Manager — RegisterHotKey (Win API)
 # ─────────────────────────────────────────────────────────────
 _MOD_ALT     = 0x0001
+_MOD_CONTROL = 0x0002
+_MOD_SHIFT   = 0x0004
 _MOD_WIN     = 0x0008
 _VK_E        = 0x45
 _WM_HOTKEY   = 0x0312
 _WM_QUIT     = 0x0012
 _HOTKEY_ID   = 1
 
+_MOD_MAP = {
+    "alt": _MOD_ALT,
+    "ctrl": _MOD_CONTROL,
+    "control": _MOD_CONTROL,
+    "shift": _MOD_SHIFT,
+    "win": _MOD_WIN,
+    "super": _MOD_WIN,
+}
+_SPECIAL_VKS = {
+    "space": 0x20,
+    "espacio": 0x20,
+    **{f"f{i}": 0x6F + i for i in range(1, 13)},
+}
+
+
+def parse_hotkey(hotkey: str | None) -> tuple[int, int]:
+    """Convierte 'Win+Alt+E' → (mods, vk). Si no es válido, devuelve Win+Alt+E."""
+    default = (_MOD_WIN | _MOD_ALT, _VK_E)
+    if not hotkey or not isinstance(hotkey, str):
+        return default
+    parts = [p.strip().lower() for p in hotkey.split("+") if p.strip()]
+    if len(parts) < 2:
+        return default
+    mods = 0
+    for p in parts[:-1]:
+        flag = _MOD_MAP.get(p)
+        if not flag:
+            return default
+        mods |= flag
+    key = parts[-1]
+    if len(key) == 1 and key.isalnum():
+        vk = ord(key.upper())
+    elif key in _SPECIAL_VKS:
+        vk = _SPECIAL_VKS[key]
+    else:
+        return default
+    return mods, vk
+
 
 class HotkeyManager:
     """
-    Registra Win+Alt+E usando RegisterHotKey (Windows API).
+    Registra el atajo global usando RegisterHotKey (Windows API).
     Más fiable que la librería `keyboard` para combinaciones con la tecla Win.
     """
 
-    def __init__(self, root, callback):
+    def __init__(self, root, callback, hotkey: str | None = None):
         self.root      = root
         self.callback  = callback
+        self.hotkey    = hotkey
         self._thread   = None
         self._tid      = None  # thread id para PostThreadMessage
 
-    def start(self):
+    def start(self, hotkey: str | None = None):
+        if hotkey is not None:
+            self.hotkey = hotkey
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
     def _loop(self):
         self._tid = ctypes.windll.kernel32.GetCurrentThreadId()
-        ok = ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_ID,
-                                                  _MOD_WIN | _MOD_ALT, _VK_E)
+        mods, vk = parse_hotkey(self.hotkey)
+        ok = ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_ID, mods, vk)
         if not ok:
             # Notificar error de registro (ej. puerto ocupado o combinación en uso)
             if self.callback:

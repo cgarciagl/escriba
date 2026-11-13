@@ -116,6 +116,8 @@ def _normalize(raw: list) -> tuple[list[dict], list[str]]:
             "shortcut": "",
             "shortcut_key": None,
         }
+        if item.get("auto_replace"):
+            action["auto_replace"] = True
 
         shortcut = str(item.get("shortcut") or "").strip()
         if shortcut:
@@ -160,7 +162,38 @@ def load_actions() -> tuple[list[dict], list[str]]:
 
 def _serializable(actions: list[dict]) -> list[dict]:
     keys = ("label", "prompt", "section", "bootstyle", "shortcut")
-    return [{k: a[k] for k in keys if a.get(k)} for a in actions]
+    out = []
+    for a in actions:
+        item = {k: a[k] for k in keys if a.get(k)}
+        if a.get("auto_replace"):
+            item["auto_replace"] = True
+        out.append(item)
+    return out
+
+
+def save_actions(actions: list[dict]) -> list[str]:
+    """Valida y guarda las acciones en actions.json. Devuelve advertencias."""
+    normalized, warnings = _normalize(actions)
+    os.makedirs(os.path.dirname(ACTIONS_FILE), exist_ok=True)
+    with open(ACTIONS_FILE, "w", encoding="utf-8") as f:
+        json.dump(_serializable(normalized), f, indent=2, ensure_ascii=False)
+    return warnings
+
+
+def expand_prompt_vars(prompt: str) -> str:
+    """Expande variables opcionales en el prompt: {clipboard} y {lang}."""
+    if "{clipboard}" in prompt:
+        try:
+            import pyperclip
+            clip = pyperclip.paste() or ""
+        except Exception:
+            clip = ""
+        prompt = prompt.replace("{clipboard}", clip)
+    if "{lang}" in prompt:
+        import locale
+        lang = (locale.getlocale()[0] or "es").split("_")[0]
+        prompt = prompt.replace("{lang}", lang)
+    return prompt
 
 
 def write_defaults(overwrite: bool = False) -> str:
