@@ -11,8 +11,11 @@ if sys.platform != "win32":
     sys.modules.setdefault("winreg", MagicMock())
     if not hasattr(ctypes, "windll"):
         ctypes.windll = MagicMock()
-    for _mod in ("keyboard", "pystray"):
-        sys.modules.setdefault(_mod, MagicMock())
+    sys.modules.setdefault("keyboard", MagicMock())
+    try:
+        import pystray  # noqa: F401
+    except ImportError:
+        sys.modules.setdefault("pystray", MagicMock())
 
 # Algunas imágenes de CI traen Python sin Tk: en ese caso se simula la capa de UI
 # (los tests de lógica no la necesitan; la UI se prueba en el runner de Windows).
