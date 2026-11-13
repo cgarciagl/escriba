@@ -18,7 +18,8 @@ if IS_MAC:
                         'AppKit', 'Quartz', 'pystray._darwin']
 elif IS_LINUX:
     PLATFORM_IMPORTS = ['linux_platform', 'pynput.keyboard._xorg', 'pynput.mouse._xorg',
-                        'pystray._xorg', 'pystray._appindicator']
+                        'pystray._xorg', 'pystray._appindicator',
+                        'PIL._tkinter_finder', 'PIL._imagingtk']
 else:
     PLATFORM_IMPORTS = ['hotkey', 'startup']
 
