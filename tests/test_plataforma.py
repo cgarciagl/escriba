@@ -42,6 +42,23 @@ class TestDispatch:
             monkeypatch.undo()
             importlib.reload(plataforma)
 
+    def test_linux_branch_selects_linux_implementation(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        try:
+            mod = importlib.reload(plataforma)
+            import linux_platform
+
+            assert mod.IS_LINUX is True
+            assert mod.IS_MAC is False
+            assert mod.IS_WINDOWS is False
+            assert mod.HotkeyManager is linux_platform.HotkeyManager
+            assert mod.StartupManager is linux_platform.StartupManager
+            assert mod.SECRET_BACKEND == "plain"
+            assert mod.HOTKEY_LABEL == linux_platform.HOTKEY_LABEL
+        finally:
+            monkeypatch.undo()
+            importlib.reload(plataforma)
+
 
 class TestClampToArea:
     AREA = (0, 0, 1920, 1040)

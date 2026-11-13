@@ -21,23 +21,29 @@ else:
 APP_NAME     = "Escriba"
 APP_VERSION  = "0.0.5"
 STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
-DEFAULT_HOTKEY = "Ctrl+Cmd+E" if sys.platform == "darwin" else "Win+Alt+E"
-HOTKEY_PRESETS = (
-    ["Ctrl+Cmd+E", "Ctrl+Cmd+Space", "Ctrl+Shift+E", "Ctrl+Alt+E"]
-    if sys.platform == "darwin"
-    else ["Win+Alt+E", "Ctrl+Alt+E", "Ctrl+Shift+E", "Win+Shift+E"]
-)
+if sys.platform == "darwin":
+    DEFAULT_HOTKEY = "Ctrl+Cmd+E"
+    HOTKEY_PRESETS = ["Ctrl+Cmd+E", "Ctrl+Cmd+Space", "Ctrl+Shift+E", "Ctrl+Alt+E"]
+elif sys.platform == "win32":
+    DEFAULT_HOTKEY = "Win+Alt+E"
+    HOTKEY_PRESETS = ["Win+Alt+E", "Ctrl+Alt+E", "Ctrl+Shift+E", "Win+Shift+E"]
+else:
+    DEFAULT_HOTKEY = "Ctrl+Alt+E"
+    HOTKEY_PRESETS = ["Ctrl+Alt+E", "Ctrl+Shift+E", "Super+Alt+E", "Ctrl+Alt+Space"]
 
-# Carpeta de configuración (escribible aunque la app esté en Program Files o
-# en /Applications):
+# Carpeta de configuración (escribible aunque la app esté en Program Files,
+# /Applications o /usr/local/bin):
 #   Windows → %APPDATA%\Escriba
 #   macOS   → ~/Library/Application Support/Escriba
-#   otros   → carpeta de la aplicación (desarrollo / CI)
+#   Linux   → $XDG_CONFIG_HOME/Escriba (o ~/.config/Escriba)
 def _config_dir() -> str:
     if sys.platform == "darwin":
         return os.path.join(os.path.expanduser("~/Library/Application Support"), APP_NAME)
     if os.environ.get("APPDATA"):
         return os.path.join(os.environ["APPDATA"], APP_NAME)
+    if sys.platform.startswith("linux"):
+        xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        return os.path.join(xdg, APP_NAME)
     return BASE_DIR
 
 

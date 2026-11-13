@@ -2,11 +2,11 @@
 
 # ⚡ Escriba
 
-**Asistente de texto con IA para Windows y macOS, integrado en tu flujo de escritura.**
+**Asistente de texto con IA para Windows, macOS y Linux, integrado en tu flujo de escritura.**
 
 [![Tests & Build](https://github.com/cgarciagl/escriba/actions/workflows/tests.yml/badge.svg)](https://github.com/cgarciagl/escriba/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/cgarciagl/escriba?color=f59e0b&label=Release)](https://github.com/cgarciagl/escriba/releases/latest)
-![Plataformas](https://img.shields.io/badge/Plataformas-Windows%20%7C%20macOS-1e2436?labelColor=0f1320)
+![Plataformas](https://img.shields.io/badge/Plataformas-Windows%20%7C%20macOS%20%7C%20Linux-1e2436?labelColor=0f1320)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 
 [Descargar última versión](https://github.com/cgarciagl/escriba/releases/latest) · [Capturas](#-capturas) · [Cómo usar](#%EF%B8%8F-cómo-usar) · [Configuración](#%EF%B8%8F-configuración-y-proveedores) · [Desarrollo](#%EF%B8%8F-compilar-y-probar)
@@ -15,7 +15,7 @@
 
 ---
 
-**Escriba** se ejecuta de forma silenciosa en la bandeja del sistema (o barra de menús en macOS) y se activa desde cualquier aplicación mediante un atajo global (`Win+Alt+E` en Windows, `⌃⌘E` en macOS, configurable).
+**Escriba** se ejecuta de forma silenciosa en la bandeja del sistema (o barra de menús en macOS) y se activa desde cualquier aplicación mediante un atajo global (`Win+Alt+E` en Windows, `⌃⌘E` en macOS, `Ctrl+Alt+E` en Linux, configurable).
 
 Selecciona un texto para transformarlo con acciones predefinidas o instrucciones libres —o invócalo **sin selección** para redactar desde cero—, previsualiza la respuesta en *streaming*, compara los cambios línea a línea, refínala con ajustes iterativos y sustituye el texto original con un solo atajo.
 
@@ -99,6 +99,7 @@ Descarga la última versión desde [GitHub Releases](https://github.com/cgarciag
 
 * **Windows:** `Escriba.exe` (ejecutable autónomo sin consola ni instalación previa de Python).
 * **macOS:** `Escriba-macos.zip` (contiene `Escriba.app` para barra de menús).
+* **Linux (X11):** `Escriba-linux.tar.gz` (ejecutable autónomo `Escriba`; requiere `xclip` y `xdotool` en el sistema).
 
 ### Opción 2: Desde código fuente
 
@@ -116,7 +117,7 @@ En el primer arranque, Escriba crea su carpeta de configuración, muestra el ban
 ## ⌨️ Cómo usar
 
 1. **Selecciona texto** en cualquier aplicación (o sitúa el cursor donde quieras redactar desde cero).
-2. **Pulsa** `Win+Alt+E` (Windows) o `⌃⌘E` (macOS).
+2. **Pulsa** `Win+Alt+E` (Windows), `⌃⌘E` (macOS) o `Ctrl+Alt+E` (Linux).
 3. **Elige una acción** escribiendo para filtrar, moviéndote con `↑`/`↓` o usando su atajo directo:
 
 | Sección | Acción | Atajo | Descripción |
@@ -169,7 +170,7 @@ Configura cualquier servidor con `/chat/completions`:
 Activa **"Si el proveedor principal falla, usar el otro"** para habilitar el *fallback* automático (solo se activa si el primero falla antes de emitir texto).
 
 ### Acciones personalizadas (`Acciones` / `actions.json`)
-Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando directamente `actions.json` (`%APPDATA%\Escriba\actions.json` en Windows, `~/Library/Application Support/Escriba/actions.json` en macOS):
+Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando directamente `actions.json` (`%APPDATA%\Escriba\actions.json` en Windows, `~/Library/Application Support/Escriba/actions.json` en macOS, `~/.config/Escriba/actions.json` en Linux):
 
 ```json
 [
@@ -187,7 +188,7 @@ Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando 
 * **`auto_replace`:** si es `true`, sustituye el texto en la aplicación de origen automáticamente al terminar la generación.
 
 ### Configuración persistente (`config.json`)
-Se almacena en `%APPDATA%\Escriba\config.json` (Windows) o `~/Library/Application Support/Escriba/config.json` (macOS):
+Se almacena en `%APPDATA%\Escriba\config.json` (Windows), `~/Library/Application Support/Escriba/config.json` (macOS) o `~/.config/Escriba/config.json` (Linux, con permisos `0600`):
 
 | Clave | Tipo | Descripción |
 | --- | --- | --- |
@@ -199,26 +200,25 @@ Se almacena en `%APPDATA%\Escriba\config.json` (Windows) o `~/Library/Applicatio
 | `openai_api_key_enc` | string | API Key del proveedor alternativo (DPAPI / Llavero) |
 | `hotkey` | string | Atajo global personalizado (p. ej. `"Win+Alt+E"`, `"Ctrl+Alt+K"`) |
 | `streaming` | boolean | Mostrar respuesta mientras se genera (por defecto: `true`) |
-| `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
+| | `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
 | `action_usage` | object | Contadores de uso para promover acciones frecuentes |
 
 ---
 
-## 🍎 macOS (experimental)
+## 🍎 macOS y 🐧 Linux (experimental)
 
-Escriba es compatible con **macOS 11+** (Apple Silicon e Intel). La CI ejecuta la suite de pruebas completa y compila `Escriba.app` en `macos-latest`.
+Escriba es compatible con **macOS 11+** (Apple Silicon e Intel) y **Linux (X11)**. La CI ejecuta la suite de pruebas completa y compila los artefactos para Windows, macOS y Linux.
 
-| Aspecto | Windows | macOS |
-| --- | --- | --- |
-| Atajo global por defecto | `Win+Alt+E` | `⌃⌘E` (`Ctrl+Cmd+E`) |
-| Portapapeles / Pegado | WinAPI + `keyboard` | Quartz (`CGEvent`) |
-| Ventana activa | WinAPI (`AttachThreadInput`) | `NSWorkspace` / `NSRunningApplication` |
-| Secretos | DPAPI (`crypt32.dll`) | Llavero (`security -i`) |
-| Inicio automático | Registro `HKCU\...\Run` | `~/Library/LaunchAgents/com.cgarciagl.escriba.plist` |
+| Aspecto | Windows | macOS | Linux (X11) |
+| --- | --- | --- | --- |
+| Atajo global por defecto | `Win+Alt+E` | `⌃⌘E` (`Ctrl+Cmd+E`) | `Ctrl+Alt+E` |
+| Portapapeles / Pegado | WinAPI + `keyboard` | Quartz (`CGEvent`) | `pynput` + `xclip` |
+| Ventana activa | WinAPI (`AttachThreadInput`) | `NSWorkspace` / `NSRunningApplication` | `xdotool` |
+| Secretos | DPAPI (`crypt32.dll`) | Llavero (`security -i`) | `config.json` (`chmod 0600`) |
+| Inicio automático | Registro `HKCU\...\Run` | `~/Library/LaunchAgents/com.cgarciagl.escriba.plist` | `~/.config/autostart/escriba.desktop` |
 
-La primera vez, macOS solicitará permisos en **Ajustes del Sistema → Privacidad y seguridad**:
-* **Accesibilidad** (para leer la selección y pegar la respuesta con `⌘C`/`⌘V`).
-* **Monitorización de entrada** (para detectar el atajo global).
+* **macOS:** la primera vez solicitará permisos en **Ajustes del Sistema → Privacidad y seguridad** (**Accesibilidad** y **Monitorización de entrada**).
+* **Linux:** requiere una sesión **X11** (en Wayland los atajos globales y el foco entre ventanas no están soportados) y tener instalados `xclip` y `xdotool` (en Debian/Ubuntu: `sudo apt install xclip xdotool python3-tk`).
 
 ---
 
@@ -248,10 +248,11 @@ pyinstaller Escriba.spec --clean --noconfirm
 
 * En **Windows** genera `dist\Escriba.exe`.
 * En **macOS** genera `dist/Escriba.app`.
+* En **Linux** genera `dist/Escriba`.
 
 ### Publicar una nueva versión
 
-Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.5 && git push origin v0.0.5`), el workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) ejecuta todas las pruebas, compila ambos binarios y crea automáticamente la Release en GitHub con `Escriba.exe` y `Escriba-macos.zip`.
+Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.5 && git push origin v0.0.5`), el workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) ejecuta todas las pruebas, compila los tres binarios y crea automáticamente la Release en GitHub con `Escriba.exe`, `Escriba-macos.zip` y `Escriba-linux.tar.gz`.
 
 ---
 
@@ -260,16 +261,17 @@ Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.5 && git push origin
 ```text
 escriba/
 ├── escriba.py          # Orquestador principal: hotkey, tray, captura y ciclo de vida
-├── Escriba.spec        # Especificación PyInstaller (Windows .exe y macOS .app)
+├── Escriba.spec        # Especificación PyInstaller (Windows .exe, macOS .app, Linux)
 ├── constants.py        # Versión, rutas base, modelos y acciones predeterminadas
 ├── config.py           # ConfigManager (thread-safe, escritura atómica, DPAPI/Llavero)
 ├── actions.py          # Validación, guardado, filtrado y variables de actions.json
 ├── history.py          # Historial en memoria acotado y seguro entre hilos
 ├── ai_clients.py       # GeminiClient, OpenAICompatibleClient, SSE streaming y reintentos
-├── plataforma.py       # Capa de abstracción Windows / macOS
+├── plataforma.py       # Capa de abstracción Windows / macOS / Linux
 ├── hotkey.py           # Windows: RegisterHotKey configurable y helpers de teclado
 ├── startup.py          # Windows: arranque automático en Registro HKCU
 ├── macos.py            # macOS: pynput, Quartz, NSWorkspace, LaunchAgent y Llavero
+├── linux_platform.py   # Linux (X11): pynput, xdotool y autostart .desktop
 ├── tray.py             # Ícono y menú dinámico en bandeja / barra de menús
 ├── ui_windows.py       # Fachada de módulos de interfaz
 ├── ui_common.py        # Paleta oscura, estilos ttk, DPI awareness y notificaciones
@@ -285,4 +287,4 @@ escriba/
 
 ## 📄 Créditos
 
-Proyecto independiente multiplataforma (Windows y macOS) desarrollado con Python, [`ttkbootstrap`](https://ttkbootstrap.readthedocs.io/), [`pystray`](https://pystray.readthedocs.io/), [`Pillow`](https://python-pillow.org/) y las APIs de Google Gemini / OpenAI-compatible.
+Proyecto independiente multiplataforma (Windows, macOS y Linux) desarrollado con Python, [`ttkbootstrap`](https://ttkbootstrap.readthedocs.io/), [`pystray`](https://pystray.readthedocs.io/), [`Pillow`](https://python-pillow.org/) y las APIs de Google Gemini / OpenAI-compatible.

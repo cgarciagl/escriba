@@ -2,18 +2,23 @@
 #
 # Windows: dist\Escriba.exe (un solo archivo, sin consola)
 # macOS:   dist/Escriba.app (bundle de barra de menús, sin ícono en el Dock)
+# Linux:   dist/Escriba (ejecutable autónomo X11)
 #
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(SPECPATH))  # para importar constants
 IS_MAC = sys.platform == 'darwin'
+IS_LINUX = sys.platform.startswith('linux')
 
 COMMON_IMPORTS = ['constants', 'config', 'actions', 'history', 'plataforma', 'ai_clients',
                   'ui_windows', 'ui_common', 'ui_config', 'ui_menu', 'ui_result', 'tray']
 if IS_MAC:
     PLATFORM_IMPORTS = ['macos', 'pynput.keyboard._darwin', 'pynput.mouse._darwin',
                         'AppKit', 'Quartz', 'pystray._darwin']
+elif IS_LINUX:
+    PLATFORM_IMPORTS = ['linux_platform', 'pynput.keyboard._xorg', 'pynput.mouse._xorg',
+                        'pystray._xorg', 'pystray._appindicator']
 else:
     PLATFORM_IMPORTS = ['hotkey', 'startup']
 
@@ -73,7 +78,7 @@ if not IS_MAC:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=['escriba.ico'],
+        icon=None if IS_LINUX else ['escriba.ico'],
     )
 else:
     from constants import APP_VERSION

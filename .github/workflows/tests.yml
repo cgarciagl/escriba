@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +19,20 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Dependencias del sistema (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-tk xclip xdotool xvfb
       - run: pip install -r requirements-dev.txt
       - name: Tests de lógica
         run: python -m pytest -q -rf --ignore=tests/test_ui.py
       - name: Tests de interfaz (Tk real, proceso aparte)
-        run: python -m pytest -q -rf tests/test_ui.py
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a python -m pytest -q -rf tests/test_ui.py
+          else
+            python -m pytest -q -rf tests/test_ui.py
+          fi
+        shell: bash
 
   build-macos:
     # Comprueba que la .app se genera (sin firmar). Se publica como artefacto.
@@ -85,9 +94,40 @@ jobs:
           name: Escriba-windows
           path: dist/Escriba.exe
 
+  build-linux:
+    # Compila el binario de Linux (X11), comprueba que arranca bajo Xvfb y lo empaqueta.
+    needs: test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Dependencias del sistema
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-tk xclip xdotool xvfb
+      - run: pip install -r requirements-dev.txt
+      - run: pyinstaller Escriba.spec --clean --noconfirm
+      - run: test -x dist/Escriba
+      - name: Prueba de humo (la app arranca y sigue viva)
+        run: |
+          xvfb-run -a dist/Escriba > smoke.log 2>&1 &
+          PID=$!
+          sleep 10
+          if kill -0 $PID 2>/dev/null; then
+            echo "La app sigue en ejecución"; kill $PID
+          else
+            echo "La app terminó antes de tiempo:"; cat smoke.log; exit 1
+          fi
+      - run: tar -czf Escriba-linux.tar.gz -C dist Escriba
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Escriba-linux
+          path: Escriba-linux.tar.gz
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-macos, build-windows]
+    needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -100,6 +140,10 @@ jobs:
         with:
           name: Escriba-macos
           path: release-assets/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: Escriba-linux
+          path: release-assets/linux
       - name: Publicar Release en GitHub
         env:
           GH_TOKEN: ${{ github.token }}
@@ -107,6 +151,7 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             release-assets/windows/Escriba.exe \
             release-assets/macos/Escriba-macos.zip \
+            release-assets/linux/Escriba-linux.tar.gz \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Escriba ${GITHUB_REF_NAME}" \
             --generate-notes

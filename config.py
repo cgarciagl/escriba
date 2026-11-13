@@ -134,6 +134,8 @@ class ConfigManager:
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     json.dump(cls._cache, f, indent=2, ensure_ascii=False)
+                if os.name != "nt":
+                    os.chmod(tmp_path, 0o600)
                 os.replace(tmp_path, CONFIG_FILE)
             except Exception:
                 try:

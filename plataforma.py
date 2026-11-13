@@ -20,6 +20,7 @@ import time
 
 IS_MAC = sys.platform == "darwin"
 IS_WINDOWS = sys.platform == "win32"
+IS_LINUX = sys.platform.startswith("linux")
 
 if IS_MAC:
     from macos import (  # noqa: F401
@@ -42,7 +43,7 @@ if IS_MAC:
 
     def monitor_workarea(x: int, y: int):
         return None  # se usa el tamaño de pantalla que reporta Tk
-else:
+elif IS_WINDOWS:
     import ctypes
 
     from hotkey import HotkeyManager  # noqa: F401
@@ -52,7 +53,7 @@ else:
 
     HOTKEY_LABEL = "Win + Alt + E"
     PRIMARY_MODIFIER_TK = "Control"
-    SECRET_BACKEND = "dpapi" if IS_WINDOWS else "plain"
+    SECRET_BACKEND = "dpapi"
 
     def init_app():
         pass
@@ -111,6 +112,27 @@ else:
         if attach:
             user32.AttachThreadInput(cur_tid, fore_tid, False)
         time.sleep(0.25)
+else:
+    from linux_platform import (  # noqa: F401
+        HOTKEY_LABEL,
+        HotkeyManager,
+        StartupManager,
+        activate_window,
+        bring_app_to_front,
+        get_foreground_window,
+        init_app,
+        send_copy,
+        send_paste,
+    )
+
+    PRIMARY_MODIFIER_TK = "Control"
+    SECRET_BACKEND = "plain"
+
+    def enable_dpi_awareness():
+        pass  # X11 / Tk gestiona el escalado por su cuenta
+
+    def monitor_workarea(x: int, y: int):
+        return None  # se usa el tamaño de pantalla que reporta Tk
 
 
 def clamp_to_area(x: int, y: int, width: int, height: int, area) -> tuple[int, int]:

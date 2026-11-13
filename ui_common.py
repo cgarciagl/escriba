@@ -14,11 +14,13 @@ from ttkbootstrap.constants import *
 
 import os
 from constants import APP_NAME, BASE_DIR
-from plataforma import HOTKEY_LABEL, IS_MAC, clamp_to_area, monitor_workarea
+from plataforma import HOTKEY_LABEL, IS_LINUX, IS_MAC, clamp_to_area, monitor_workarea
 
-# Fuentes del sistema (Segoe UI no existe en macOS)
+# Fuentes del sistema (Segoe UI no existe en macOS ni en Linux)
 if IS_MAC:
     UI_FONT, EMOJI_FONT, MONO_FONT = "Helvetica Neue", "Apple Color Emoji", "Menlo"
+elif IS_LINUX:
+    UI_FONT, EMOJI_FONT, MONO_FONT = "DejaVu Sans", "Noto Color Emoji", "DejaVu Sans Mono"
 else:
     UI_FONT, EMOJI_FONT, MONO_FONT = "Segoe UI", "Segoe UI Emoji", "Consolas"
 

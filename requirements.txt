@@ -11,3 +11,6 @@ keyboard>=0.13.5; sys_platform == "win32"
 pynput>=1.7.6; sys_platform == "darwin"
 pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
 pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"
+
+# Solo Linux (atajo global y Ctrl+C/V en X11)
+pynput>=1.7.6; sys_platform == "linux"
