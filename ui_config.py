@@ -21,6 +21,7 @@ from ai_clients import GeminiClient, OpenAICompatibleClient
 from config import ConfigManager
 from constants import (
     APP_NAME,
+    APP_VERSION,
     DEFAULT_HOTKEY,
     GEMINI_DEFAULT_MODEL,
     GEMINI_FALLBACK_MODELS,
@@ -29,6 +30,7 @@ from constants import (
     OPENAI_DEFAULT_MODEL,
 )
 from plataforma import HOTKEY_LABEL, IS_MAC, StartupManager
+from updater import check_for_update
 from ui_common import (
     _FM_ACCENT, _FM_BG, _FM_BORDER, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
     apply_dark_style, center_window,
@@ -414,7 +416,22 @@ class ConfigWindow:
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
         tb.Checkbutton(tab, text="  Iniciar automáticamente al iniciar sesión",
                        variable=self.autostart_var,
-                       bootstyle="warning").pack(anchor=W, pady=(0, 16))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+
+        self.auto_update_var = tk.BooleanVar(value=bool(ConfigManager.get("auto_update_check", True)))
+        tb.Checkbutton(tab, text="  Buscar actualizaciones automáticamente al iniciar",
+                       variable=self.auto_update_var,
+                       bootstyle="warning").pack(anchor=W, pady=(0, 12))
+
+        upd_row = tk.Frame(tab, bg=_FM_BG)
+        upd_row.pack(fill=X, pady=(0, 14))
+        tk.Label(upd_row, text=f"Versión actual: v{APP_VERSION}",
+                 font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+        self.check_update_btn = tb.Button(
+            upd_row, text="🔄  Buscar actualizaciones", style="Escriba.TButton",
+            command=self._check_updates,
+        )
+        self.check_update_btn.pack(side=RIGHT, ipady=2)
 
         tk.Frame(tab, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
         self._title(tab, "Acciones del menú")
@@ -524,6 +541,30 @@ class ConfigWindow:
         except Exception as e:
             self._status(f"❌ No se pudo restaurar: {e}", "#ef4444")
 
+    # ── Actualizaciones ─────────────────────────────────────
+    def _check_updates(self):
+        self._status("⏳ Buscando actualizaciones…")
+        self.check_update_btn.configure(state="disabled")
+
+        def task():
+            info, err = check_for_update()
+            self.app.schedule(self._on_manual_update_check, info, err)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _on_manual_update_check(self, info, error: str | None = None):
+        if not self._alive():
+            return
+        self.check_update_btn.configure(state="normal")
+        if error:
+            self._status(f"⚠️ No se pudo comprobar actualizaciones ({error}).", _WARN)
+        elif info:
+            self._status(f"🚀 Nueva versión disponible: v{info.version}.", _FM_ACCENT)
+            if hasattr(self.app, "_notify_update"):
+                self.app._notify_update(info)
+        else:
+            self._status(f"✅ Estás al día (v{APP_VERSION}).", _FM_ACCENT)
+
     # ── Guardar ─────────────────────────────────────────────
     def _save(self):
         provider = self.provider_var.get()
@@ -549,6 +590,7 @@ class ConfigWindow:
         ConfigManager.set_openai_api_key(self.alt_key_var.get().strip())
         ConfigManager.set("fallback_enabled", bool(self.fallback_var.get()))
         ConfigManager.set("streaming", bool(self.streaming_var.get()))
+        ConfigManager.set("auto_update_check", bool(self.auto_update_var.get()))
         ConfigManager.set("hotkey", new_hotkey)
         if new_hotkey != prev_hotkey and hasattr(self.app, "reload_hotkey"):
             self.app.reload_hotkey(new_hotkey)

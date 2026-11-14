@@ -18,9 +18,11 @@ else:
 # ─────────────────────────────────────────────────────────────
 # Constantes de la aplicación
 # ─────────────────────────────────────────────────────────────
-APP_NAME     = "Escriba"
-APP_VERSION  = "0.0.6"
-STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
+APP_NAME              = "Escriba"
+APP_VERSION           = "0.0.6"
+GITHUB_REPO           = "cgarciagl/escriba"
+UPDATE_CHECK_INTERVAL = 86400  # 24 horas en segundos
+STARTUP_KEY           = r"Software\Microsoft\Windows\CurrentVersion\Run"
 if sys.platform == "darwin":
     DEFAULT_HOTKEY = "Ctrl+Cmd+E"
     HOTKEY_PRESETS = ["Ctrl+Cmd+E", "Ctrl+Cmd+Space", "Ctrl+Shift+E", "Ctrl+Alt+E"]

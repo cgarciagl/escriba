@@ -10,21 +10,26 @@ Stack: ttkbootstrap, pystray, Pillow, pyperclip, ctypes, requests
 import os
 import time
 import threading
+import webbrowser
 
 import ttkbootstrap as tb
 import pyperclip
 
-from constants import APP_NAME
+from constants import APP_NAME, APP_VERSION
 from config import ConfigManager
 from ai_clients import is_ready
 from history import History
 from ui_common import configure_styles
 from ui_windows import (
-    ConfigWindow, FloatingMenu, ResultWindow, TooltipNotification, SplashBanner,
+    ConfigWindow, FloatingMenu, ResultWindow, ThinkingWindow, TooltipNotification, SplashBanner,
 )
 from tray import TrayIconManager
 from plataforma import (
     HOTKEY_LABEL, HotkeyManager, StartupManager, enable_dpi_awareness, init_app, send_copy,
+)
+from updater import (
+    ReleaseInfo, UpdateCancelled, apply_update_and_restart, can_self_update,
+    check_for_update, download_and_prepare, should_auto_check,
 )
 
 
@@ -66,8 +71,80 @@ class EscribaApp:
         # Primer arranque: sin proveedor configurado, guiar al usuario a Configuración.
         if not is_ready():
             self.root.after(1800, lambda: self.config_window.show(welcome=True))
+        self.root.after(3500, self._maybe_check_updates)
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.root.mainloop()
+
+    def _maybe_check_updates(self):
+        """Comprueba si hay una nueva versión en GitHub (como máximo cada 24 h)."""
+        if not should_auto_check():
+            return
+
+        def task():
+            info, _ = check_for_update()
+            if info:
+                self.schedule(self._notify_update, info)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _notify_update(self, info: ReleaseInfo):
+        """Muestra una notificación discreta cuando hay una versión nueva."""
+        msg = (
+            f"🚀 Nueva versión disponible: Escriba v{info.version}\n"
+            f"Estás usando la v{APP_VERSION}."
+        )
+        if can_self_update():
+            action = ("Actualizar ahora", lambda: self.start_update(info))
+        else:
+            action = ("Ver release", lambda: webbrowser.open(info.html_url))
+        self.tooltip.show(msg, "info", duration=15000, action=action)
+
+    def start_update(self, info: ReleaseInfo):
+        """Descarga la actualización con barra de progreso y reinicia la app."""
+        if not can_self_update():
+            webbrowser.open(info.html_url)
+            return
+
+        cancel_event = threading.Event()
+        thinking = ThinkingWindow(
+            self.root, f"Descargando Escriba v{info.version}…", on_cancel=cancel_event.set
+        )
+
+        def on_progress(pct: int | None):
+            if pct is not None:
+                thinking.update_status(f"Descargando Escriba v{info.version}… {pct} %")
+
+        def task():
+            try:
+                prepared = download_and_prepare(
+                    info, on_progress=on_progress, cancel_event=cancel_event
+                )
+            except UpdateCancelled:
+                self.schedule(thinking.close)
+                return
+            except Exception as exc:
+                self.schedule(self._on_update_error, thinking, info, str(exc))
+                return
+
+            def finish():
+                thinking.close()
+                try:
+                    apply_update_and_restart(prepared, on_quit=self.quit_app)
+                except Exception as exc:
+                    self._on_update_error(None, info, str(exc))
+
+            self.schedule(finish)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _on_update_error(self, thinking, info: ReleaseInfo, error: str):
+        if thinking:
+            thinking.close()
+        self.tooltip.show(
+            f"❌ No se pudo completar la actualización:\n{error}",
+            "danger",
+            action=("Abrir descarga", lambda: webbrowser.open(info.html_url)),
+        )
 
     def reload_hotkey(self, hotkey: str | None = None):
         """Reinicia el listener del atajo global con la nueva combinación."""

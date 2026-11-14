@@ -12,7 +12,7 @@ IS_MAC = sys.platform == 'darwin'
 IS_LINUX = sys.platform.startswith('linux')
 
 COMMON_IMPORTS = ['constants', 'config', 'actions', 'history', 'plataforma', 'ai_clients',
-                  'ui_windows', 'ui_common', 'ui_config', 'ui_menu', 'ui_result', 'tray']
+                  'updater', 'ui_windows', 'ui_common', 'ui_config', 'ui_menu', 'ui_result', 'tray']
 if IS_MAC:
     PLATFORM_IMPORTS = ['macos', 'pynput.keyboard._darwin', 'pynput.mouse._darwin',
                         'AppKit', 'Quartz', 'pystray._darwin']
