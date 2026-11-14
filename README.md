@@ -69,7 +69,7 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 ## 🎯 Características principales
 
 ### Flujo de escritura y paleta de comandos
-* ⌨️ **Atajo global configurable**: `Win+Alt+E` (Windows) / `⌃⌘E` (macOS) por defecto; personalizable desde *Configuración → General* sin reiniciar la app.
+* ⌨️ **Atajo global configurable**: `Win+Alt+E` (Windows) / `⌃⌘E` (macOS) / `Ctrl+Alt+E` (Linux) por defecto; personalizable desde *Configuración → General* sin reiniciar la app.
 * ✍️ **Modo con selección y modo redacción**: si hay texto seleccionado, ofrece acciones sobre él; si no hay selección, se abre en **modo redacción** para generar contenido desde cero y pegarlo directamente en el cursor.
 * ★ **Acciones frecuentes y scroll completo**: promueve arriba tus acciones más usadas y permite desplazarse por toda la lista con ratón o teclado (`↑`/`↓`).
 * 🔎 **Búsqueda instantánea e instrucción libre**: filtra sin importar acentos ni mayúsculas o escribe cualquier instrucción ad hoc (`Shift+Enter` para multilínea).
@@ -86,7 +86,7 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 * 🤖 **Google Gemini oficial**: descarga dinámica de modelos compatibles (`gemini-3.5-flash-lite`, `2.5-flash`, `2.5-pro`, etc.) con detección real de errores de clave o red.
 * 🔀 **Proveedor alternativo compatible con OpenAI**: soporte para **Ollama** (local, sin clave), **LM Studio**, **OpenAI**, **OpenRouter**, etc., como principal o como **fallback automático**.
 * 🔄 **Reintentos inteligentes**: retroceso exponencial con *jitter* ante saturación o límites de tasa (HTTP `429`, `500`, `502`, `503`, `504`).
-* 🔒 **Almacenamiento seguro de claves**: cifrado con **DPAPI** en Windows y **Llavero** en macOS (vía `security -i` sin exponer secretos en argumentos de proceso), con escritura atómica de `config.json` protegida entre hilos.
+* 🔒 **Almacenamiento seguro de claves**: cifrado con **DPAPI** en Windows, **Llavero** en macOS (vía `security -i` sin exponer secretos en argumentos de proceso) y `config.json` con permisos restringidos `0600` en Linux, con escritura atómica protegida entre hilos.
 * 🧩 **Editor visual de acciones**: pestaña dedicada en *Configuración → Acciones* para crear, reordenar, editar y eliminar acciones (con soporte para variables `{clipboard}` y `{lang}`), además de edición directa de `actions.json`.
 
 ---
@@ -99,7 +99,7 @@ Descarga la última versión desde [GitHub Releases](https://github.com/cgarciag
 
 * **Windows:** `Escriba.exe` (ejecutable autónomo sin consola ni instalación previa de Python).
 * **macOS:** `Escriba-macos.zip` (contiene `Escriba.app` para barra de menús).
-* **Linux (X11):** `Escriba-linux.tar.gz` (ejecutable autónomo `Escriba`; requiere `xclip` y `xdotool` en el sistema).
+* **Linux (X11):** `Escriba-linux.tar.gz` (extrae con `tar -xzf Escriba-linux.tar.gz && ./Escriba`; requiere `xclip` y `xdotool`).
 
 ### Opción 2: Desde código fuente
 
@@ -137,7 +137,7 @@ En el primer arranque, Escriba crea su carpeta de configuración, muestra el ban
 
 4. **Interactúa con el resultado:**
 
-| Acción | Atajo (Win / Mac) | Descripción |
+| Acción | Atajo (Win·Linux / Mac) | Descripción |
 | --- | --- | --- |
 | **⬅️ Sustituir texto** | `Ctrl+Enter` / `⌘↩` | Pega el resultado en la ventana de origen y restaura el portapapeles |
 | **📋 Copiar** | `Ctrl+Shift+C` / `⌘⇧C` | Copia el texto preservando indentación |
@@ -200,7 +200,7 @@ Se almacena en `%APPDATA%\Escriba\config.json` (Windows), `~/Library/Application
 | `openai_api_key_enc` | string | API Key del proveedor alternativo (DPAPI / Llavero) |
 | `hotkey` | string | Atajo global personalizado (p. ej. `"Win+Alt+E"`, `"Ctrl+Alt+K"`) |
 | `streaming` | boolean | Mostrar respuesta mientras se genera (por defecto: `true`) |
-| | `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
+| `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
 | `action_usage` | object | Contadores de uso para promover acciones frecuentes |
 
 ---
@@ -236,7 +236,7 @@ pip install -r requirements-dev.txt
 # Tests de lógica (multiplataforma)
 python -m pytest -q -rf --ignore=tests/test_ui.py
 
-# Tests de interfaz (requiere Tk real)
+# Tests de interfaz (requiere Tk real; en Linux sin display usa xvfb-run -a)
 python -m pytest -q -rf tests/test_ui.py
 ```
 
@@ -252,7 +252,7 @@ pyinstaller Escriba.spec --clean --noconfirm
 
 ### Publicar una nueva versión
 
-Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.5 && git push origin v0.0.5`), el workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) ejecuta todas las pruebas, compila los tres binarios y crea automáticamente la Release en GitHub con `Escriba.exe`, `Escriba-macos.zip` y `Escriba-linux.tar.gz`.
+Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.6 && git push origin v0.0.6`), el workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) ejecuta todas las pruebas, compila los tres binarios y crea automáticamente la Release en GitHub con `Escriba.exe`, `Escriba-macos.zip` y `Escriba-linux.tar.gz`.
 
 ---
 
