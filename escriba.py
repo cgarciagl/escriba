@@ -1,6 +1,6 @@
 """
-Escriba - Asistente de Texto con IA para Windows y macOS v0.0.5
-======================================================
+Escriba - Asistente de Texto con IA para Windows, macOS y Linux v1.0.0
+==================================================================
 Hotkey: Win+Alt+E en Windows (RegisterHotKey, ver hotkey.py) y Ctrl+Cmd+E en
 macOS (ver macos.py). Lo dependiente del sistema se accede vía plataforma.py.
 
