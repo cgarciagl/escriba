@@ -303,6 +303,34 @@ class TestApplyUpdateAndRestart:
         assert "_PYI_APPLICATION_HOME_DIR" not in kwargs["env"]
         assert "_MEIPASS2" not in kwargs["env"]
         bat_content = (tmp_path / "update_escriba.bat").read_text(encoding="utf-8")
+        assert "chcp 65001 >nul" in bat_content
+        assert "ping -n 3 127.0.0.1 >nul" in bat_content
         assert 'set "_PYI_APPLICATION_HOME_DIR="' in bat_content
         assert 'set "_MEIPASS2="' in bat_content
+        on_quit.assert_called_once()
+
+    def test_spawns_macos_replacer_with_clean_env(self, tmp_path, monkeypatch):
+        new_app = tmp_path / "extracted" / "Escriba.app"
+        new_app.mkdir(parents=True)
+        cur_exe = tmp_path / "Applications" / "Escriba.app" / "Contents" / "MacOS" / "Escriba"
+        cur_exe.parent.mkdir(parents=True)
+        cur_exe.write_bytes(b"old")
+        monkeypatch.setenv("_PYI_APPLICATION_HOME_DIR", str(tmp_path / "_MEI999"))
+        monkeypatch.setenv("_MEIPASS2", str(tmp_path / "_MEI999"))
+        on_quit = MagicMock()
+
+        with (
+            patch("updater.sys.platform", "darwin"),
+            patch("updater.sys.executable", str(cur_exe)),
+            patch("updater.subprocess.Popen") as mock_popen,
+        ):
+            apply_update_and_restart(str(new_app), on_quit)
+
+        mock_popen.assert_called_once()
+        cmd = mock_popen.call_args.args[0]
+        kwargs = mock_popen.call_args.kwargs
+        assert cmd[:2] == ["/bin/sh", "-c"]
+        assert "open -n " in cmd[2]
+        assert "_PYI_APPLICATION_HOME_DIR" not in kwargs["env"]
+        assert "_MEIPASS2" not in kwargs["env"]
         on_quit.assert_called_once()

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -272,19 +273,20 @@ def _spawn_windows_replacer(new_exe: str, cur_exe: str, staging_dir: str):
     bat_path = os.path.join(staging_dir, "update_escriba.bat")
     script = (
         "@echo off\n"
+        "chcp 65001 >nul\n"
         "setlocal\n"
         'set "_MEIPASS2="\n'
         'set "_PYI_APPLICATION_HOME_DIR="\n'
         'set "_PYI_PARENT_PROCESS_LEVEL="\n'
         'set "_PYI_ARCHIVE_FILE="\n'
         "set /a tries=0\n"
-        "timeout /t 2 /nobreak >nul\n"
+        "ping -n 3 127.0.0.1 >nul\n"
         ":retry\n"
         f'move /y "{new_exe}" "{cur_exe}" >nul 2>&1\n'
         "if errorlevel 1 (\n"
         "    set /a tries+=1\n"
         "    if %tries% GEQ 15 exit /b 1\n"
-        "    timeout /t 1 /nobreak >nul\n"
+        "    ping -n 2 127.0.0.1 >nul\n"
         "    goto retry\n"
         ")\n"
         f'start "" "{cur_exe}"\n'
@@ -303,13 +305,16 @@ def _spawn_windows_replacer(new_exe: str, cur_exe: str, staging_dir: str):
 
 
 def _spawn_macos_replacer(new_app: str, cur_app: str, staging_dir: str):
+    q_new = shlex.quote(new_app)
+    q_cur = shlex.quote(cur_app)
+    q_stage = shlex.quote(staging_dir)
     script = (
         "sleep 2\n"
-        f'rm -rf "{cur_app}"\n'
-        f'mv "{new_app}" "{cur_app}"\n'
-        f'xattr -dr com.apple.quarantine "{cur_app}" 2>/dev/null || true\n'
-        f'open "{cur_app}"\n'
-        f'rm -rf "{staging_dir}"\n'
+        f"rm -rf {q_cur} && mv {q_new} {q_cur} && (\n"
+        f"  xattr -dr com.apple.quarantine {q_cur} 2>/dev/null || true\n"
+        f"  open -n {q_cur}\n"
+        ")\n"
+        f"rm -rf {q_stage}\n"
     )
     subprocess.Popen(
         ["/bin/sh", "-c", script],
@@ -320,12 +325,13 @@ def _spawn_macos_replacer(new_app: str, cur_app: str, staging_dir: str):
 
 
 def _spawn_linux_replacer(new_bin: str, cur_exe: str, staging_dir: str):
+    q_new = shlex.quote(new_bin)
+    q_cur = shlex.quote(cur_exe)
+    q_stage = shlex.quote(staging_dir)
     script = (
         "sleep 1\n"
-        f'mv -f "{new_bin}" "{cur_exe}"\n'
-        f'chmod +x "{cur_exe}"\n'
-        f'nohup "{cur_exe}" >/dev/null 2>&1 &\n'
-        f'rm -rf "{staging_dir}"\n'
+        f"mv -f {q_new} {q_cur} && chmod +x {q_cur} && nohup {q_cur} >/dev/null 2>&1 &\n"
+        f"rm -rf {q_stage}\n"
     )
     subprocess.Popen(
         ["/bin/sh", "-c", script],
