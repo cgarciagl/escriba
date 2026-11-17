@@ -13,7 +13,7 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 import os
-from constants import APP_NAME, BASE_DIR
+from constants import APP_NAME, APP_VERSION, BASE_DIR, GITHUB_REPO
 from plataforma import HOTKEY_LABEL, IS_LINUX, IS_MAC, clamp_to_area, monitor_workarea
 
 # Fuentes del sistema (Segoe UI no existe en macOS ni en Linux)
@@ -316,6 +316,82 @@ class SplashBanner:
         fade_window(win, 0.95, 0.12)
         win.after(self._HOLD_MS, lambda: fade_window(win, 0.0, -0.07,
                   on_done=lambda: win.destroy() if win.winfo_exists() else None))
+
+
+class AboutWindow:
+    """Ventana "Acerca de": versión, atajo y enlace al repositorio."""
+
+    WIDTH, HEIGHT = 380, 325
+    REPO_URL = f"https://github.com/{GITHUB_REPO}"
+
+    def __init__(self, root):
+        self.root = root
+        self.window = None
+
+    def show(self):
+        if self.window and self.window.winfo_exists():
+            self.window.lift()
+            self.window.focus_force()
+            return
+
+        win = tb.Toplevel(self.root)
+        win.title(f"Acerca de {APP_NAME}")
+        win.resizable(False, False)
+        win.attributes("-topmost", True)
+        apply_dark_style(win)
+        center_window(win, self.WIDTH, self.HEIGHT)
+        self.window = win
+
+        frame = tk.Frame(win, bg=_FM_BG, padx=24, pady=20)
+        frame.pack(fill=BOTH, expand=True)
+
+        hdr = tk.Frame(frame, bg=_FM_BG)
+        hdr.pack(fill=X, pady=(0, 12))
+        badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=12, pady=10)
+        badge.pack(side=LEFT, padx=(0, 14))
+        tk.Label(badge, text="⚡︎", font=(UI_FONT, 18, "bold"),
+                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+        title_col = tk.Frame(hdr, bg=_FM_BG)
+        title_col.pack(side=LEFT)
+        tk.Label(title_col, text=APP_NAME, font=(UI_FONT, 16, "bold"),
+                 bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
+        tk.Label(title_col, text=f"Versión {APP_VERSION}", font=(UI_FONT, 9),
+                 bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
+
+        tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 12))
+
+        tk.Label(frame, text="Asistente de texto con IA: selecciona texto en cualquier "
+                 "aplicación y pulsa el atajo para reescribir, traducir, resumir y más.",
+                 font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_TEXT,
+                 wraplength=scaled(win, 320), justify=LEFT).pack(anchor=W, pady=(0, 10))
+
+        author = tk.Frame(frame, bg=_FM_BG)
+        author.pack(anchor=W, pady=(0, 6))
+        tk.Label(author, text="Autor: ", font=(UI_FONT, 9),
+                 bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+        tk.Label(author, text="Carlos García Trujillo", font=(UI_FONT, 9, "bold"),
+                 bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+
+        row = tk.Frame(frame, bg=_FM_BG)
+        row.pack(anchor=W, pady=(0, 6))
+        tk.Label(row, text="Atajo: ", font=(UI_FONT, 9),
+                 bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+        tk.Label(row, text=HOTKEY_LABEL, font=(MONO_FONT, 9, "bold"),
+                 bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+
+        link = tk.Label(frame, text=self.REPO_URL, font=(UI_FONT, 9, "underline"),
+                        bg=_FM_BG, fg=_FM_ACCENT, cursor="hand2")
+        link.pack(anchor=W)
+        link.bind("<Button-1>", lambda e: self._open_repo())
+
+        tb.Button(frame, text="Cerrar", style="Escriba.TButton",
+                  command=win.destroy).pack(side=BOTTOM, anchor=E)
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.focus_force()
+
+    def _open_repo(self):
+        import webbrowser
+        webbrowser.open(self.REPO_URL)
 
 
 # ─────────────────────────────────────────────────────────────

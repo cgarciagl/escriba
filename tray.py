@@ -77,6 +77,10 @@ class TrayIconManager:
                 lambda icon, item: self.app.schedule(self.app.open_config),
                 default=True,
             ),
+            pystray.MenuItem(
+                "ℹ️  Acerca de",
+                lambda icon, item: self.app.schedule(self.app.open_about),
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "❌  Salir",

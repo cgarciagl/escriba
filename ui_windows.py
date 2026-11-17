@@ -11,6 +11,7 @@ el resto de la app (y código existente) pueda seguir importando desde aquí:
 """
 
 from ui_common import (  # noqa: F401
+    AboutWindow,
     SplashBanner,
     ThinkingWindow,
     TooltipNotification,

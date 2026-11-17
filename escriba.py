@@ -21,7 +21,7 @@ from ai_clients import is_ready
 from history import History
 from ui_common import configure_styles
 from ui_windows import (
-    ConfigWindow, FloatingMenu, ResultWindow, ThinkingWindow, TooltipNotification, SplashBanner,
+    AboutWindow, ConfigWindow, FloatingMenu, ResultWindow, ThinkingWindow, TooltipNotification, SplashBanner,
 )
 from tray import TrayIconManager
 from plataforma import (
@@ -49,6 +49,7 @@ class EscribaApp:
 
         self.history = History()
         self.config_window = ConfigWindow(self)
+        self.about_window = AboutWindow(self.root)
         self.floating_menu = FloatingMenu(self)
         self.tooltip = TooltipNotification(self.root)
         self.tray = TrayIconManager(self)
@@ -153,6 +154,9 @@ class EscribaApp:
 
     def open_config(self):
         self.config_window.show()
+
+    def open_about(self):
+        self.about_window.show()
 
     def open_history_entry(self, entry):
         """Reabre una respuesta del historial (sin ventana de origen: no se puede sustituir)."""
