@@ -19,7 +19,7 @@ else:
 # Constantes de la aplicación
 # ─────────────────────────────────────────────────────────────
 APP_NAME              = "Escriba"
-APP_VERSION           = "1.0.2"
+APP_VERSION           = "1.0.3"
 GITHUB_REPO           = "cgarciagl/escriba"
 UPDATE_CHECK_INTERVAL = 86400  # 24 horas en segundos
 STARTUP_KEY           = r"Software\Microsoft\Windows\CurrentVersion\Run"
