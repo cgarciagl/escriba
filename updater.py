@@ -251,11 +251,32 @@ def apply_update_and_restart(prepared_path: str, on_quit: Callable[[], None]):
     on_quit()
 
 
+def _clean_pyinstaller_env() -> dict[str, str]:
+    """Elimina variables internas de PyInstaller para que el nuevo binario arranque limpio."""
+    env = os.environ.copy()
+    for key in list(env.keys()):
+        if key == "_MEIPASS2" or key.startswith("_PYI_"):
+            env.pop(key, None)
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        norm_mei = os.path.normcase(os.path.abspath(meipass))
+        for var in ("TCL_LIBRARY", "TK_LIBRARY", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
+            val = env.get(var)
+            if val and os.path.normcase(os.path.abspath(val)).startswith(norm_mei):
+                env.pop(var, None)
+    return env
+
+
 def _spawn_windows_replacer(new_exe: str, cur_exe: str, staging_dir: str):
     bat_path = os.path.join(staging_dir, "update_escriba.bat")
     script = (
         "@echo off\n"
         "setlocal\n"
+        'set "_MEIPASS2="\n'
+        'set "_PYI_APPLICATION_HOME_DIR="\n'
+        'set "_PYI_PARENT_PROCESS_LEVEL="\n'
+        'set "_PYI_ARCHIVE_FILE="\n'
         "set /a tries=0\n"
         "timeout /t 2 /nobreak >nul\n"
         ":retry\n"
@@ -276,6 +297,7 @@ def _spawn_windows_replacer(new_exe: str, cur_exe: str, staging_dir: str):
     subprocess.Popen(
         ["cmd.exe", "/c", bat_path],
         creationflags=flags,
+        env=_clean_pyinstaller_env(),
         close_fds=True,
     )
 
@@ -289,7 +311,12 @@ def _spawn_macos_replacer(new_app: str, cur_app: str, staging_dir: str):
         f'open "{cur_app}"\n'
         f'rm -rf "{staging_dir}"\n'
     )
-    subprocess.Popen(["/bin/sh", "-c", script], start_new_session=True, close_fds=True)
+    subprocess.Popen(
+        ["/bin/sh", "-c", script],
+        env=_clean_pyinstaller_env(),
+        start_new_session=True,
+        close_fds=True,
+    )
 
 
 def _spawn_linux_replacer(new_bin: str, cur_exe: str, staging_dir: str):
@@ -300,4 +327,9 @@ def _spawn_linux_replacer(new_bin: str, cur_exe: str, staging_dir: str):
         f'nohup "{cur_exe}" >/dev/null 2>&1 &\n'
         f'rm -rf "{staging_dir}"\n'
     )
-    subprocess.Popen(["/bin/sh", "-c", script], start_new_session=True, close_fds=True)
+    subprocess.Popen(
+        ["/bin/sh", "-c", script],
+        env=_clean_pyinstaller_env(),
+        start_new_session=True,
+        close_fds=True,
+    )

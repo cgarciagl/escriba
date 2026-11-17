@@ -262,3 +262,47 @@ class TestApplyUpdateAndRestart:
 
         mock_popen.assert_called_once()
         on_quit.assert_called_once()
+
+    def test_clean_pyinstaller_env_strips_pyi_and_meipass_vars(self, tmp_path, monkeypatch):
+        meipass = str(tmp_path / "_MEI12345")
+        monkeypatch.setattr(updater.sys, "_MEIPASS", meipass, raising=False)
+        monkeypatch.setenv("_MEIPASS2", meipass)
+        monkeypatch.setenv("_PYI_APPLICATION_HOME_DIR", meipass)
+        monkeypatch.setenv("_PYI_PARENT_PROCESS_LEVEL", "1")
+        monkeypatch.setenv("_PYI_ARCHIVE_FILE", "C:\\app\\Escriba.exe")
+        monkeypatch.setenv("TCL_LIBRARY", os.path.join(meipass, "_tcl_data"))
+        monkeypatch.setenv("TK_LIBRARY", "/usr/share/tk")
+        monkeypatch.setenv("NORMAL_VAR", "keep_me")
+
+        cleaned = updater._clean_pyinstaller_env()
+
+        assert "_MEIPASS2" not in cleaned
+        assert "_PYI_APPLICATION_HOME_DIR" not in cleaned
+        assert "_PYI_PARENT_PROCESS_LEVEL" not in cleaned
+        assert "_PYI_ARCHIVE_FILE" not in cleaned
+        assert "TCL_LIBRARY" not in cleaned
+        assert cleaned["TK_LIBRARY"] == "/usr/share/tk"
+        assert cleaned["NORMAL_VAR"] == "keep_me"
+
+    def test_spawns_windows_replacer_with_clean_env(self, tmp_path, monkeypatch):
+        new_exe = tmp_path / "Escriba.exe"
+        new_exe.write_bytes(b"new")
+        monkeypatch.setenv("_PYI_APPLICATION_HOME_DIR", str(tmp_path / "_MEI999"))
+        monkeypatch.setenv("_MEIPASS2", str(tmp_path / "_MEI999"))
+        on_quit = MagicMock()
+
+        with (
+            patch("updater.sys.platform", "win32"),
+            patch("updater.sys.executable", r"C:\Apps\Escriba.exe"),
+            patch("updater.subprocess.Popen") as mock_popen,
+        ):
+            apply_update_and_restart(str(new_exe), on_quit)
+
+        mock_popen.assert_called_once()
+        kwargs = mock_popen.call_args.kwargs
+        assert "_PYI_APPLICATION_HOME_DIR" not in kwargs["env"]
+        assert "_MEIPASS2" not in kwargs["env"]
+        bat_content = (tmp_path / "update_escriba.bat").read_text(encoding="utf-8")
+        assert 'set "_PYI_APPLICATION_HOME_DIR="' in bat_content
+        assert 'set "_MEIPASS2="' in bat_content
+        on_quit.assert_called_once()
