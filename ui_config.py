@@ -10,13 +10,13 @@ import sys
 import threading
 import tkinter as tk
 import webbrowser
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from actions import load_actions, save_actions, write_defaults
+from actions import export_actions, import_actions, load_actions, save_actions, write_defaults
 from ai_clients import GeminiClient, OpenAICompatibleClient
 from config import ConfigManager
 from constants import (
@@ -29,7 +29,7 @@ from constants import (
     OPENAI_DEFAULT_BASE_URL,
     OPENAI_DEFAULT_MODEL,
 )
-from plataforma import HOTKEY_LABEL, IS_MAC, StartupManager
+from plataforma import IS_MAC, StartupManager
 from updater import check_for_update
 from ui_common import (
     _FM_ACCENT, _FM_BG, _FM_BORDER, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
@@ -40,6 +40,12 @@ if TYPE_CHECKING:
     from escriba import EscribaApp
 
 _WARN = "#f59e0b"
+_MODE_LABELS = {
+    "selection": "Solo selección",
+    "compose": "Solo redacción",
+    "both": "Ambos",
+}
+_LABEL_TO_MODE = {v: k for k, v in _MODE_LABELS.items()}
 
 
 def open_in_editor(path: str):
@@ -55,11 +61,12 @@ def open_in_editor(path: str):
 class ConfigWindow:
     """Formulario de proveedores de IA, acciones, streaming y arranque."""
 
-    WIDTH, HEIGHT = 540, 600
+    WIDTH, HEIGHT = 560, 650
 
     def __init__(self, app: EscribaApp):
         self.app = app
         self.window = None
+        self._actions_dirty = False
 
     # ── Helpers de maquetación ──────────────────────────────
     @staticmethod
@@ -245,6 +252,7 @@ class ConfigWindow:
     def _build_actions_tab(self, tab):
         self._edited_actions, _ = load_actions()
         self._selected_action_idx = 0 if self._edited_actions else -1
+        self._actions_dirty = False
 
         cols = tk.Frame(tab, bg=_FM_BG)
         cols.pack(fill=BOTH, expand=True)
@@ -274,7 +282,11 @@ class ConfigWindow:
         self._act_label_var = tk.StringVar()
         self._act_section_var = tk.StringVar()
         self._act_shortcut_var = tk.StringVar()
+        self._act_mode_var = tk.StringVar(value=_MODE_LABELS["selection"])
+        self._act_temp_var = tk.StringVar()
+        self._act_model_var = tk.StringVar()
         self._act_auto_var = tk.BooleanVar()
+        self._act_strip_md_var = tk.BooleanVar()
 
         self._title(right, "Etiqueta (ej. ✎  Reescribir)", pady=(0, 2))
         tb.Entry(right, textvariable=self._act_label_var, font=(UI_FONT, 9),
@@ -293,19 +305,47 @@ class ConfigWindow:
         tb.Entry(c2, textvariable=self._act_shortcut_var, font=(MONO_FONT, 9),
                  style="Escriba.TEntry").pack(fill=X)
 
-        tb.Checkbutton(right, text="  Sustituir texto automáticamente sin abrir ventana",
-                       variable=self._act_auto_var, bootstyle="warning").pack(anchor=W, pady=(0, 6))
+        adv = tk.Frame(right, bg=_FM_BG)
+        adv.pack(fill=X, pady=(0, 6))
+        a1 = tk.Frame(adv, bg=_FM_BG)
+        a1.pack(side=LEFT, fill=X, expand=True, padx=(0, 6))
+        self._title(a1, "Modo", pady=(0, 2))
+        tb.Combobox(
+            a1, textvariable=self._act_mode_var, values=list(_MODE_LABELS.values()),
+            state="readonly", style="Escriba.TCombobox", font=(UI_FONT, 8), width=14,
+        ).pack(fill=X)
+        a2 = tk.Frame(adv, bg=_FM_BG)
+        a2.pack(side=LEFT, padx=(0, 6))
+        self._title(a2, "Temp.", pady=(0, 2))
+        tb.Entry(a2, textvariable=self._act_temp_var, font=(MONO_FONT, 8),
+                 style="Escriba.TEntry", width=6).pack(fill=X)
+        a3 = tk.Frame(adv, bg=_FM_BG)
+        a3.pack(side=LEFT, fill=X, expand=True)
+        self._title(a3, "Modelo (opc.)", pady=(0, 2))
+        tb.Entry(a3, textvariable=self._act_model_var, font=(MONO_FONT, 8),
+                 style="Escriba.TEntry").pack(fill=X)
 
-        self._title(right, "Prompt (soporta {clipboard} y {lang})", pady=(0, 2))
+        tb.Checkbutton(right, text="  Sustituir automáticamente sin abrir ventana",
+                       variable=self._act_auto_var, bootstyle="warning").pack(anchor=W, pady=(0, 3))
+        tb.Checkbutton(right, text="  Limpiar bloques Markdown (```)",
+                       variable=self._act_strip_md_var, bootstyle="warning").pack(anchor=W, pady=(0, 6))
+
+        self._title(right, "Prompt ({clipboard}, {lang}, {date}, {input:Campo})", pady=(0, 2))
         self._act_prompt_txt = tk.Text(
-            right, height=5, wrap=tk.WORD, font=(UI_FONT, 9),
+            right, height=4, wrap=tk.WORD, font=(UI_FONT, 9),
             bg=_FM_CARD, fg=_FM_TEXT, insertbackground=_FM_ACCENT,
             relief="flat", highlightthickness=1, highlightbackground=_FM_BORDER, padx=6, pady=6,
         )
         self._act_prompt_txt.pack(fill=BOTH, expand=True, pady=(0, 8))
 
-        tb.Button(right, text="💾  Guardar acciones", style="Escriba.TButton",
-                  command=self._save_visual_actions).pack(anchor=E)
+        act_btns = tk.Frame(right, bg=_FM_BG)
+        act_btns.pack(fill=X)
+        tb.Button(act_btns, text="📥 Importar", style="Escriba.TButton",
+                  command=self._import_actions).pack(side=LEFT, padx=(0, 4))
+        tb.Button(act_btns, text="📤 Exportar", style="Escriba.TButton",
+                  command=self._export_actions).pack(side=LEFT)
+        tb.Button(act_btns, text="💾  Guardar acciones", style="Escriba.TButton",
+                  command=self._save_visual_actions).pack(side=RIGHT)
 
         self._refresh_actions_listbox()
 
@@ -324,20 +364,61 @@ class ConfigWindow:
         self._act_label_var.set(a.get("label", ""))
         self._act_section_var.set(a.get("section", ""))
         self._act_shortcut_var.set(a.get("shortcut", ""))
+        mode_key = a.get("mode", "selection") or "selection"
+        self._act_mode_var.set(_MODE_LABELS.get(mode_key, _MODE_LABELS["selection"]))
+        temp = a.get("temperature")
+        self._act_temp_var.set("" if temp is None else str(temp))
+        self._act_model_var.set(a.get("model", ""))
         self._act_auto_var.set(bool(a.get("auto_replace", False)))
+        self._act_strip_md_var.set(bool(a.get("strip_markdown", False)))
         self._act_prompt_txt.delete("1.0", tk.END)
         self._act_prompt_txt.insert("1.0", a.get("prompt", ""))
 
-    def _commit_current_action(self):
+    def _commit_current_action(self) -> bool:
         idx = self._selected_action_idx
         if not (0 <= idx < len(self._edited_actions)):
-            return
+            return False
         cur = self._edited_actions[idx]
+        before = dict(cur)
+
         cur["label"] = self._act_label_var.get().strip() or cur["label"]
         cur["section"] = self._act_section_var.get().strip() or "Texto y Contenido"
         cur["shortcut"] = self._act_shortcut_var.get().strip()
-        cur["auto_replace"] = bool(self._act_auto_var.get())
+        if self._act_auto_var.get():
+            cur["auto_replace"] = True
+        else:
+            cur.pop("auto_replace", None)
+        if self._act_strip_md_var.get():
+            cur["strip_markdown"] = True
+        else:
+            cur.pop("strip_markdown", None)
         cur["prompt"] = self._act_prompt_txt.get("1.0", "end-1c").strip() or cur["prompt"]
+
+        mode = _LABEL_TO_MODE.get(self._act_mode_var.get(), "selection")
+        if mode == "selection":
+            cur.pop("mode", None)
+        else:
+            cur["mode"] = mode
+
+        raw_temp = self._act_temp_var.get().strip()
+        if raw_temp:
+            try:
+                cur["temperature"] = round(float(raw_temp), 2)
+            except ValueError:
+                cur["temperature"] = raw_temp
+        else:
+            cur.pop("temperature", None)
+
+        model = self._act_model_var.get().strip()
+        if model:
+            cur["model"] = model
+        else:
+            cur.pop("model", None)
+
+        changed = cur != before
+        if changed:
+            self._actions_dirty = True
+        return changed
 
     def _on_action_select(self, event):
         sel = self._act_listbox.curselection()
@@ -357,6 +438,7 @@ class ConfigWindow:
             "shortcut": "",
             "auto_replace": False,
         })
+        self._actions_dirty = True
         self._selected_action_idx = len(self._edited_actions) - 1
         self._refresh_actions_listbox()
 
@@ -369,6 +451,7 @@ class ConfigWindow:
         self._edited_actions[idx], self._edited_actions[new_idx] = (
             self._edited_actions[new_idx], self._edited_actions[idx]
         )
+        self._actions_dirty = True
         self._selected_action_idx = new_idx
         self._refresh_actions_listbox()
 
@@ -379,14 +462,53 @@ class ConfigWindow:
         idx = self._selected_action_idx
         if 0 <= idx < len(self._edited_actions):
             self._edited_actions.pop(idx)
+            self._actions_dirty = True
             self._selected_action_idx = min(idx, len(self._edited_actions) - 1)
             self._refresh_actions_listbox()
+
+    def _import_actions(self):
+        path = filedialog.askopenfilename(
+            parent=self.window,
+            title="Importar acciones (JSON)",
+            filetypes=[("JSON", "*.json"), ("Todos", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            imported, warnings = import_actions(path)
+            self._edited_actions = imported
+            self._selected_action_idx = 0
+            self._actions_dirty = True
+            self._refresh_actions_listbox()
+            msg = f"📥 {len(imported)} acciones importadas (pulsa Guardar para aplicar)."
+            self._status(msg if not warnings else f"⚠️ {msg} ({warnings[0]})",
+                         _WARN if warnings else _FM_ACCENT)
+        except Exception as e:
+            self._status(f"❌ No se pudo importar: {e}", "#ef4444")
+
+    def _export_actions(self):
+        self._commit_current_action()
+        path = filedialog.asksaveasfilename(
+            parent=self.window,
+            title="Exportar acciones (JSON)",
+            defaultextension=".json",
+            initialfile="escriba-acciones.json",
+            filetypes=[("JSON", "*.json")],
+        )
+        if not path:
+            return
+        try:
+            export_actions(path, self._edited_actions)
+            self._status(f"📤 Acciones exportadas a {os.path.basename(path)}.", _FM_ACCENT)
+        except Exception as e:
+            self._status(f"❌ No se pudo exportar: {e}", "#ef4444")
 
     def _save_visual_actions(self):
         self._commit_current_action()
         try:
             warnings = save_actions(self._edited_actions)
             self._edited_actions, _ = load_actions()
+            self._actions_dirty = False
             self._refresh_actions_listbox()
             if warnings:
                 self._status(f"⚠️ Acciones guardadas con avisos: {warnings[0]}", _WARN)
@@ -535,6 +657,7 @@ class ConfigWindow:
         try:
             write_defaults(overwrite=True)
             self._edited_actions, _ = load_actions()
+            self._actions_dirty = False
             self._selected_action_idx = 0 if self._edited_actions else -1
             self._refresh_actions_listbox()
             self._status("✅ Acciones restauradas a las predeterminadas.", _FM_ACCENT)
@@ -578,6 +701,19 @@ class ConfigWindow:
         note = ""
         if provider == "gemini" and not gemini_key and not self.fallback_var.get():
             note = "\n⚠️ Sin API Key de Gemini no se podrán procesar solicitudes."
+
+        if self._commit_current_action() or self._actions_dirty:
+            try:
+                warnings = save_actions(self._edited_actions)
+                self._edited_actions, _ = load_actions()
+                self._actions_dirty = False
+                if self._alive():
+                    self._refresh_actions_listbox()
+                if warnings:
+                    note += f"\n⚠️ Avisos en acciones: {warnings[0]}"
+            except Exception as e:
+                self._status(f"❌ Error al guardar acciones: {e}", "#ef4444")
+                return
 
         prev_hotkey = ConfigManager.get("hotkey") or DEFAULT_HOTKEY
         new_hotkey = self.hotkey_var.get().strip() or DEFAULT_HOTKEY

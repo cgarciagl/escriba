@@ -78,16 +78,16 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 
 ### Ventana de resultados e iteración
 * 📡 **Streaming en tiempo real** con botón **Detener** (conservando lo generado hasta ese momento) y cancelación limpia al cerrar la ventana.
-* 🔍 **Tres vistas**: **Resultado** (editable, con resaltado ligero de Markdown para títulos, **negritas** y código), **Original** y **Cambios** (*diff* línea a línea en rojo/verde).
-* ✨ **Ajuste iterativo**: barra inferior **"Ajustar"** para pedir modificaciones sobre la respuesta actual (*"más corto"*, *"tono más formal"*, etc.).
+* 🔍 **Tres vistas y métricas**: **Resultado** (editable, con resaltado ligero de Markdown), **Original** y **Cambios** (*diff* línea a línea), más contador de palabras y diferencia respecto al texto original.
+* ✨ **Ajuste iterativo multi-turno**: barra inferior **"Ajustar"** que mantiene el historial de refinamientos (y el *Original* intacto) y botones `◀`/`▶` para comparar iteraciones anteriores.
 * 🕘 **Historial en memoria**: últimas 10 respuestas de la sesión accesibles desde la bandeja, recordando el proveedor y modelo exactos que las generaron.
 
 ### Motores de IA y seguridad
 * 🤖 **Google Gemini oficial**: descarga dinámica de modelos compatibles (`gemini-3.5-flash-lite`, `2.5-flash`, `2.5-pro`, etc.) con detección real de errores de clave o red.
 * 🔀 **Proveedor alternativo compatible con OpenAI**: soporte para **Ollama** (local, sin clave), **LM Studio**, **OpenAI**, **OpenRouter**, etc., como principal o como **fallback automático**.
 * 🔄 **Reintentos inteligentes**: retroceso exponencial con *jitter* ante saturación o límites de tasa (HTTP `429`, `500`, `502`, `503`, `504`).
-* 🔒 **Almacenamiento seguro de claves**: cifrado con **DPAPI** en Windows, **Llavero** en macOS (vía `security -i` sin exponer secretos en argumentos de proceso) y `config.json` con permisos restringidos `0600` en Linux, con escritura atómica protegida entre hilos.
-* 🧩 **Editor visual de acciones**: pestaña dedicada en *Configuración → Acciones* para crear, reordenar, editar y eliminar acciones (con soporte para variables `{clipboard}` y `{lang}`), además de edición directa de `actions.json`.
+* 🔒 **Almacenamiento seguro de claves**: cifrado con **DPAPI** en Windows, **Llavero** en macOS (vía `security -i`) y `config.json` con permisos restringidos `0600` en Linux, más protección de **instancia única** y preservación de imágenes en el portapapeles.
+* 🧩 **Editor visual de acciones**: pestaña dedicada en *Configuración → Acciones* para crear, reordenar, editar, **importar/exportar** acciones JSON y configurar modo (`selection`/`compose`/`both`), temperatura, modelo y limpieza de bloques Markdown (```` ``` ````).
 
 ---
 
@@ -184,7 +184,10 @@ Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando 
 ]
 ```
 
-* **Variables en prompts:** `{clipboard}` inserta el contenido actual del portapapeles y `{lang}` el código de idioma del sistema.
+* **Variables en prompts:** `{clipboard}`, `{lang}`, `{date}`, `{time}`, `{datetime}` y campos interactivos `{input:Etiqueta}`.
+* **`mode`:** `"selection"` (por defecto), `"compose"` (visible sin selección) o `"both"` (ambos).
+* **`temperature` / `model`:** sobrescribe temperatura (`0.0–2.0`) o modelo para esa acción.
+* **`strip_markdown`:** si es `true`, elimina envoltorios ```` ```lang ... ``` ```` de la respuesta.
 * **`auto_replace`:** si es `true`, sustituye el texto en la aplicación de origen automáticamente al terminar la generación.
 
 ### Configuración persistente (`config.json`)

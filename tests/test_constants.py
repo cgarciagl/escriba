@@ -60,7 +60,7 @@ class TestAIActions:
 
     def test_every_action_has_non_empty_label(self):
         for action in AI_ACTIONS:
-            assert action["label"].strip(), f"Action has empty label"
+            assert action["label"].strip(), "Action has empty label"
 
     def test_all_sections_are_known(self):
         for action in AI_ACTIONS:

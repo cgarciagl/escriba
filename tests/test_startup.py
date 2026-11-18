@@ -1,8 +1,6 @@
 import winreg
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from constants import APP_NAME
 from startup import StartupManager
 

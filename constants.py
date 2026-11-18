@@ -133,6 +133,7 @@ AI_ACTIONS = [
         "bootstyle":    "warning-outline",
         "section":      "Idiomas",
         "shortcut":     "Ctrl+1",
+        "temperature":  0.2,
     },
     {
         "label":        "◑  Traducir al inglés",
@@ -142,6 +143,7 @@ AI_ACTIONS = [
         "bootstyle":    "warning-outline",
         "section":      "Idiomas",
         "shortcut":     "Ctrl+2",
+        "temperature":  0.2,
     },
     {
         "label":        "▤  Fix SQL",
@@ -149,6 +151,8 @@ AI_ACTIONS = [
         "bootstyle":    "danger-outline",
         "section":      "Para desarrolladores",
         "shortcut":     "Ctrl+D",
+        "temperature":  0.2,
+        "strip_markdown": True,
     },
     {
         "label":        "✦  Refactorizar Código",
@@ -156,6 +160,8 @@ AI_ACTIONS = [
         "bootstyle":    "secondary-outline",
         "section":      "Para desarrolladores",
         "shortcut":     "Ctrl+K",
+        "temperature":  0.2,
+        "strip_markdown": True,
     },
     {
         "label":        "⊙  Explicar Código",

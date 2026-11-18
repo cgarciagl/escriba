@@ -1,4 +1,5 @@
 import json
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -6,10 +7,13 @@ import requests
 
 from constants import GEMINI_DEFAULT_MODEL, GEMINI_FALLBACK_MODELS
 from ai_clients import (
+    CancelledByUser,
     GeminiClient,
     OpenAICompatibleClient,
     generate_text,
+    is_ready,
     is_retryable_error,
+    needs_configuration,
     provider_order,
 )
 
@@ -514,9 +518,6 @@ class TestProviderSelection:
 # ─────────────────────────────────────────────────────────────
 # Cancelación y disponibilidad
 # ─────────────────────────────────────────────────────────────
-import threading
-
-from ai_clients import CancelledByUser, is_ready
 
 
 class TestCancellation:
@@ -607,9 +608,6 @@ class TestIsReady:
             assert not is_ready()
 
 
-from ai_clients import needs_configuration
-
-
 class TestNeedsConfiguration:
     @pytest.mark.parametrize("exc", [
         ValueError("API Key de Google Gemini no configurada."),
@@ -646,3 +644,45 @@ def test_iter_sse_data_preserves_utf8_accents():
     assert len(lines) == 1
     data = json.loads(lines[0])
     assert data["text"] == "Número promedio en el Índice"
+
+
+class TestPayloadsAndActionOverrides:
+    def test_gemini_payload_supports_temperature_and_history(self):
+        payload = GeminiClient.build_payload(
+            "sys", "segundo ajuste", temperature=0.2, history=[("hola", "respuesta 1")]
+        )
+        assert payload["generationConfig"]["temperature"] == 0.2
+        assert [c["role"] for c in payload["contents"]] == ["user", "model", "user"]
+        assert payload["contents"][0]["parts"][0]["text"] == "hola"
+        assert payload["contents"][1]["parts"][0]["text"] == "respuesta 1"
+        assert payload["contents"][2]["parts"][0]["text"] == "segundo ajuste"
+
+    def test_openai_payload_supports_temperature_and_history(self):
+        payload = OpenAICompatibleClient.build_payload(
+            "gpt-4o", "sys", "más corto", False, temperature=0.3, history=[("texto", "v1")]
+        )
+        assert payload["temperature"] == 0.3
+        assert [(m["role"], m["content"]) for m in payload["messages"]] == [
+            ("system", "sys"),
+            ("user", "texto"),
+            ("assistant", "v1"),
+            ("user", "más corto"),
+        ]
+
+    def test_generate_text_sends_model_only_to_primary_on_fallback(self):
+        with (
+            patch("ai_clients.provider_order", return_value=["gemini", "openai"]),
+            patch("ai_clients.GeminiClient.generate", side_effect=RuntimeError("fallo")) as mock_gem,
+            patch("ai_clients.OpenAICompatibleClient.generate", return_value="ok") as mock_oai,
+        ):
+            res, prov = generate_text(
+                "p", "t", model="gemini-2.5-pro", temperature=0.2, history=[("u", "a")]
+            )
+
+        assert res == "ok" and prov == "openai"
+        assert mock_gem.call_args.kwargs["model"] == "gemini-2.5-pro"
+        assert mock_gem.call_args.kwargs["temperature"] == 0.2
+        assert mock_gem.call_args.kwargs["history"] == [("u", "a")]
+        assert "model" not in mock_oai.call_args.kwargs
+        assert mock_oai.call_args.kwargs["temperature"] == 0.2
+        assert mock_oai.call_args.kwargs["history"] == [("u", "a")]

@@ -2,11 +2,11 @@
 
 ## Visión general
 
-**Escriba** es una aplicación de escritorio para Windows (y, de forma experimental, macOS) que actúa como asistente de texto con IA. El usuario selecciona texto en cualquier aplicación, pulsa **Win+Alt+E**, y aparece un menú flotante con acciones de IA (reescribir, traducir, resumir, formatear SQL, etc.). El resultado puede sustituir directamente el texto seleccionado.
+**Escriba** es una aplicación de escritorio multiplataforma (Windows, macOS y Linux X11) que actúa como asistente de texto con IA. El usuario selecciona texto en cualquier aplicación (o sitúa el cursor para redactar desde cero), pulsa **Win+Alt+E**, y aparece un menú flotante con acciones de IA (reescribir, traducir, resumir, formatear SQL, etc.). El resultado puede sustituir directamente el texto seleccionado.
 
-- **Versión:** 1.3.0
-- **Plataformas:** Windows (`ctypes.windll`, `winreg`, `RegisterHotKey`) y macOS experimental (`pynput`, PyObjC). Todo lo dependiente del sistema pasa por `plataforma.py`.
-- **Hotkey global:** `Win+Alt+E` en Windows (`RegisterHotKey`); `Ctrl+Cmd+E` en macOS (`pynput`).
+- **Versión:** `APP_VERSION` en `constants.py` (actualmente `1.0.3`)
+- **Plataformas:** Windows (`ctypes.windll`, `winreg`, `RegisterHotKey`), macOS (`pynput`, PyObjC) y Linux X11 (`pynput`, `xdotool`, `xclip`). Todo lo dependiente del sistema pasa por `plataforma.py`.
+- **Hotkey global:** Configurable desde Configuración (`Win+Alt+E` en Windows, `Ctrl+Cmd+E` en macOS, `Ctrl+Alt+E` en Linux).
 
 ---
 
@@ -56,38 +56,40 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 
 | Archivo | Responsabilidad |
 |---|---|
-| `escriba.py` | Punto de entrada. Clase `EscribaApp` que orquesta hotkey, tray y ventanas. |
-| `constants.py` | Constantes globales (`APP_NAME`, rutas, API URLs, `AI_ACTIONS` predeterminadas). |
-| `actions.py` | Carga y valida `%APPDATA%\\Escriba\\actions.json` (acciones personalizadas); `shortcut_to_tk`. |
+| `escriba.py` | Punto de entrada (`main()` con guardia de instancia única). Clase `EscribaApp` que orquesta hotkey, tray y ventanas. |
+| `constants.py` | Constantes globales (`APP_NAME`, `APP_VERSION`, rutas, API URLs, `AI_ACTIONS` predeterminadas). |
+| `actions.py` | Carga/valida `actions.json` (soporta `mode`, `temperature`, `model`, `strip_markdown`, `auto_replace`), variables `{clipboard}`/`{lang}`/`{date}`/`{time}`/`{datetime}`/`{input:...}`, `strip_code_fences`, `export_actions`/`import_actions`. |
 | `history.py` | `History` — últimas respuestas en memoria (submenú de la bandeja). |
-| `config.py` | `ConfigManager` — lectura/escritura de `%APPDATA%\\Escriba\\config.json` con cache en memoria; secretos cifrados con DPAPI (`get_secret`/`set_secret`, `get_api_key`, `get_openai_api_key`). |
-| `ai_clients.py` | `GeminiClient`, `OpenAICompatibleClient` (streaming, system instruction, reintentos) y `generate_text()`, punto de entrada único para la UI (aplica el fallback). |
-| `plataforma.py` | Capa de plataforma: `HotkeyManager`, `send_copy`/`send_paste`, `get_foreground_window`/`activate_window`, `StartupManager`, `HOTKEY_LABEL`, `tk_shortcut`. Elige Windows o macOS. |
-| `hotkey.py` | (Windows) `HotkeyManager` — registra `Win+Alt+E` via `RegisterHotKey`. Helpers `send_ctrl_c`, `send_ctrl_v`. |
-| `macos.py` | (macOS) atajo con `pynput`, `⌘C/⌘V` con Quartz, app activa con `NSWorkspace`, `StartupManager` (LaunchAgent) y Llavero (`security`). |
+| `config.py` | `ConfigManager` — lectura/escritura atómica de `config.json` con cache en memoria; secretos cifrados con DPAPI (Windows) o Llavero (macOS). |
+| `ai_clients.py` | `GeminiClient`, `OpenAICompatibleClient` (streaming, system instruction, temperatura, modelo por acción, historial multi-turno, reintentos) y `generate_text()`. |
+| `plataforma.py` | Capa de plataforma: `HotkeyManager`, `send_copy`/`send_paste`, `get_foreground_window`/`activate_window`, `StartupManager`, `clipboard_has_non_text`, `acquire_single_instance`/`release_single_instance`, `active_hotkey_label`, `tk_shortcut`. |
+| `hotkey.py` | (Windows) `HotkeyManager` configurable via `RegisterHotKey`. Helpers `send_ctrl_c`, `send_ctrl_v`. |
+| `macos.py` | (macOS) atajo con `pynput`, `⌘C/⌘V` con Quartz, app activa con `NSWorkspace`, `StartupManager` (LaunchAgent) y Llavero (`security -i`). |
+| `linux_platform.py` | (Linux X11) atajo con `pynput`, `xdotool`, `xclip`, portapapeles y arranque `.desktop`. |
+| `updater.py` | Auto-actualización contra GitHub Releases (`ReleaseInfo` con `release_notes`, descarga segura y extracción verificada). |
 | `ui_windows.py` | Fachada que reexporta la UI. |
-| `ui_common.py` | Paleta `_FM_*`, estilos ttk `Escriba.*` (`configure_styles`), escalado DPI (`scaled`, `center_window`), `place_near_pointer`, `TooltipNotification` (errores persistentes con botón de acción), `ThinkingWindow` (con Cancelar), `SplashBanner`. |
-| `ui_menu.py` | `FloatingMenu`: paleta de comandos (buscador, ↑↓/Enter, instrucción libre integrada, atajos). La búsqueda pura está en `actions.filter_actions`. |
-| `ui_result.py` | `run_ai_action`/`start_ai_action` (streaming, historial) y `ResultWindow`. |
-| `ui_config.py` | `ConfigWindow` con pestañas Gemini / Proveedor alternativo / General. |
-| `tray.py` | `TrayIconManager` — ícono en la bandeja del sistema via `pystray`. |
+| `ui_common.py` | Paleta `_FM_*`, estilos ttk `Escriba.*`, DPI awareness, `TooltipNotification`, `ThinkingWindow`, `SplashBanner`, `AboutWindow`, `UpdateDialog`. |
+| `ui_menu.py` | `FloatingMenu`: paleta de comandos con scroll, modos `selection`/`compose`/`both`, diálogo de variables `{input:...}` e instrucción libre. |
+| `ui_result.py` | `run_ai_action`/`start_ai_action` y `ResultWindow` (streaming, diff, Markdown, historial de sesión `◀`/`▶`, contador de palabras, ajuste multi-turno). |
+| `ui_config.py` | `ConfigWindow` con pestañas Gemini / Proveedor alternativo / Acciones (editor visual + importar/exportar) / General. |
+| `tray.py` | `TrayIconManager` — ícono y tooltip dinámico en la bandeja del sistema via `pystray`. |
 | `startup.py` | (Windows) `StartupManager` — registro/desregistro en `HKCU\...\Run` para auto-inicio. |
-| `Escriba.spec` | Configuración PyInstaller. Windows: `dist\Escriba.exe` (single-file, sin consola). macOS: `dist/Escriba.app` (onedir + BUNDLE, `LSUIElement`). |
+| `Escriba.spec` | Configuración PyInstaller. Windows: `dist\Escriba.exe`, macOS: `dist/Escriba.app`, Linux: `dist/Escriba`. |
 
 ### Flujo principal
 
-1. `EscribaApp.__init__` crea el root `ttkbootstrap.Window` (tema "vapor") y todas las ventanas.
-2. `run()` carga config, inicia el tray icon, muestra `SplashBanner`, y arranca el hotkey manager.
-3. Al pulsar Win+Alt+E → `_on_hotkey` → `_capture_selected_text` (simula Ctrl+C, lee portapapeles, restaura el original) → muestra `FloatingMenu`.
-4. El usuario filtra/elige una acción o escribe una instrucción → `start_ai_action` crea un `_ResultSession` (con `cancel_event`) → `ThinkingWindow` → `generate_text` en hilo secundario → con el primer fragmento se abre `ResultWindow` en modo streaming (con Detener) → `finish()` habilita los botones y la respuesta pasa al historial. Los errores se muestran con `needs_configuration()` → "Abrir configuración" o "Reintentar".
-5. Desde `ResultWindow` el usuario puede copiar, editar, regenerar, o **sustituir** el texto en la aplicación original (simula Ctrl+V).
+1. `main()` adquiere el bloqueo de instancia única (`acquire_single_instance()`) y lanza `EscribaApp`.
+2. `run()` carga config, inicia el tray icon, muestra `SplashBanner`, arranca el hotkey manager y programa la comprobación de actualizaciones.
+3. Al pulsar el atajo global → `_on_hotkey` → `_capture_selected_text` (preserva datos no textuales del portapapeles si no hay texto) → muestra `FloatingMenu`.
+4. El usuario filtra/elige una acción o escribe una instrucción → si la acción tiene `{input:...}`, solicita los valores → `start_ai_action` crea un `_ResultSession` → `ThinkingWindow` → `generate_text` en hilo secundario → `ResultWindow` en modo streaming → `finish()` habilita los botones y guarda en historial.
+5. Desde `ResultWindow` el usuario puede copiar, editar, regenerar, navegar entre refinamientos (`◀`/`▶`), ver diff o **sustituir/insertar** el texto en la aplicación original.
 
 ### Clientes de IA
 
 - **Gemini** (`generativelanguage.googleapis.com/v1beta`) y **OpenAI-compatible** (Ollama, OpenAI, OpenRouter…), seleccionables con `provider` en la configuración.
-- El prompt de la acción va como *system instruction*; el texto seleccionado, como mensaje del usuario.
+- El prompt de la acción va como *system instruction*; el texto seleccionado (y el historial multi-turno al ajustar), como mensajes de conversación.
 - `run_with_retries()` reintenta errores transitorios (429/5xx, red, "modelo ocupado") con backoff exponencial y jitter; con streaming no reintenta tras emitir texto.
-- `generate_text()` aplica el fallback al otro proveedor (`fallback_enabled`) solo si el primero no emitió texto.
+- `generate_text()` aplica el fallback al otro proveedor (`fallback_enabled`) solo si el primero no emitió texto (sin propagar el `model` específico del primer proveedor).
 
 ---
 
@@ -97,9 +99,9 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 - La compilación siempre usa `Escriba.spec` (no `pyinstaller escriba.py` directo).
 - El EXE compilado queda en `dist\Escriba.exe`.
 - No modificar `config.json` — es generado en tiempo de ejecución (en `%APPDATA%\\Escriba`).
-- Los tests de UI (`tests/test_ui.py`) necesitan Tk real: se omiten sin Tk y corren en la CI de Windows y macOS (en un proceso aparte).
-- La CI (`.github/workflows/tests.yml`) además compila `Escriba.exe` y `Escriba.app`, comprueba que arrancan y los publica como artefactos.
-- Los tests deben poder correr fuera de Windows (`tests/conftest.py` simula `winreg`, `ctypes.windll`, etc.): `python -m pytest -q`.
+- Los tests de UI (`tests/test_ui.py`) necesitan Tk real: se omiten sin Tk y corren en la CI de Windows, macOS y Linux (`xvfb-run`).
+- La CI (`.github/workflows/tests.yml`) ejecuta `ruff check .`, `pytest`, compila `Escriba.exe`, `Escriba.app` y el binario Linux, comprueba que arrancan y los publica como artefactos.
+- Los tests deben poder correr fuera de Windows (`tests/conftest.py` simula `winreg`, `ctypes.windll`, etc.): `python -m pytest -q` y `ruff check .`.
 - Stack: `ttkbootstrap`, `pystray`, `Pillow`, `pyperclip`, `ctypes`, `requests`, `keyboard` (solo Windows), `pynput` y `pyobjc-framework-Cocoa/Quartz` (solo macOS, con marcadores en `requirements.txt`). No agregar dependencias sin confirmar con el usuario.
 - No usar `ctypes.windll`, `winreg` ni APIs de PyObjC fuera de `hotkey.py`, `startup.py`, `config.py` (DPAPI), `plataforma.py` y `macos.py`: el resto del código debe pasar por `plataforma.py`.
 - En macOS, `NSApplication` debe crearse **después** del root de Tk (`init_app()` va tras `tb.Window`) y `pystray` usa `run_detached()` en el hilo principal.

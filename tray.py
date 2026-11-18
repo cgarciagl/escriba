@@ -12,7 +12,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from constants import APP_NAME, APP_VERSION, BASE_DIR
-from plataforma import HOTKEY_LABEL, IS_MAC
+from plataforma import IS_MAC, active_hotkey_label
 
 if TYPE_CHECKING:
     from escriba import EscribaApp
@@ -89,7 +89,7 @@ class TrayIconManager:
         )
         self.icon = pystray.Icon(
             APP_NAME, image,
-            f"{APP_NAME} - {HOTKEY_LABEL} para activar",
+            f"{APP_NAME} - {active_hotkey_label()} para activar",
             menu,
         )
         if IS_MAC:
@@ -98,6 +98,14 @@ class TrayIconManager:
             self.icon.run_detached()
         else:
             threading.Thread(target=self.icon.run, daemon=True).start()
+
+    def update_hotkey(self):
+        """Actualiza el tooltip del ícono cuando cambia el atajo global."""
+        if self.icon:
+            try:
+                self.icon.title = f"{APP_NAME} - {active_hotkey_label()} para activar"
+            except Exception:
+                pass
 
     def refresh(self):
         """Reconstruye el menú (necesario en Windows para el submenú dinámico)."""
@@ -113,3 +121,4 @@ class TrayIconManager:
                 self.icon.stop()
             except Exception:
                 pass
+

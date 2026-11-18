@@ -15,6 +15,7 @@ from ui_common import (  # noqa: F401
     SplashBanner,
     ThinkingWindow,
     TooltipNotification,
+    UpdateDialog,
     apply_dark_style,
     center_window,
     fade_window,

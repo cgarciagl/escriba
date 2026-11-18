@@ -1,7 +1,6 @@
 import importlib
 import sys
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 import plataforma
 
@@ -18,6 +17,65 @@ class TestHelpers:
     def test_tk_shortcut_uses_primary_modifier(self, monkeypatch):
         monkeypatch.setattr(plataforma, "PRIMARY_MODIFIER_TK", "Command")
         assert plataforma.tk_shortcut("Return") == "<Command-Return>"
+
+    def test_format_hotkey_label_windows_and_linux(self, monkeypatch):
+        monkeypatch.setattr(plataforma, "IS_MAC", False)
+        monkeypatch.setattr(plataforma, "IS_LINUX", False)
+        assert plataforma.format_hotkey_label("win+alt+k") == "Win + Alt + K"
+        assert plataforma.format_hotkey_label("") == plataforma.HOTKEY_LABEL
+
+    def test_format_hotkey_label_mac(self, monkeypatch):
+        monkeypatch.setattr(plataforma, "IS_MAC", True)
+        assert plataforma.format_hotkey_label("ctrl+cmd+e") == "⌃ + ⌘ + E"
+
+    def test_active_hotkey_label_uses_config(self, monkeypatch):
+        monkeypatch.setattr(plataforma, "IS_MAC", False)
+        monkeypatch.setattr(plataforma, "IS_LINUX", False)
+        with patch("config.ConfigManager.get", return_value="ctrl+shift+e"):
+            assert plataforma.active_hotkey_label() == "Ctrl + Shift + E"
+
+
+class TestSingleInstanceAndClipboard:
+    def test_posix_single_instance_lock_blocks_second_acquire(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(plataforma, "IS_WINDOWS", False)
+        monkeypatch.setattr(plataforma, "_INSTANCE_LOCK", None)
+        with patch("tempfile.gettempdir", return_value=str(tmp_path)):
+            assert plataforma.acquire_single_instance("EscribaTest") is True
+            # Simula un segundo proceso mientras el primero mantiene el flock
+            fh2 = open(tmp_path / "escribatest.lock", "a+", encoding="utf-8")
+            try:
+                import fcntl
+                try:
+                    fcntl.flock(fh2.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    blocked = False
+                except OSError:
+                    blocked = True
+                assert blocked is True
+            finally:
+                fh2.close()
+                plataforma.release_single_instance()
+            assert plataforma._INSTANCE_LOCK is None
+            assert plataforma.acquire_single_instance("EscribaTest") is True
+            plataforma.release_single_instance()
+
+    def test_clipboard_has_non_text_non_windows(self, monkeypatch):
+        if not plataforma.IS_WINDOWS:
+            assert plataforma.clipboard_has_non_text() is False
+
+    def test_clipboard_has_non_text_windows_logic(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        try:
+            mod = importlib.reload(plataforma)
+            user32 = MagicMock()
+            user32.CountClipboardFormats.return_value = 2
+            user32.IsClipboardFormatAvailable.return_value = False
+            with patch.object(mod.ctypes, "windll", MagicMock(user32=user32)):
+                assert mod.clipboard_has_non_text() is True
+                user32.IsClipboardFormatAvailable.side_effect = lambda fmt: fmt == 13
+                assert mod.clipboard_has_non_text() is False
+        finally:
+            monkeypatch.undo()
+            importlib.reload(plataforma)
 
 
 class TestDispatch:

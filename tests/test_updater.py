@@ -3,7 +3,6 @@ import io
 import os
 import tarfile
 import threading
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,6 +77,7 @@ class TestCheckForUpdate:
         payload = {
             "tag_name": "v9.9.9",
             "html_url": "https://github.com/cgarciagl/escriba/releases/tag/v9.9.9",
+            "body": "## Novedades\n- Mejora importante",
             "draft": False,
             "prerelease": False,
             "assets": [
@@ -104,6 +104,7 @@ class TestCheckForUpdate:
         assert info.version == "9.9.9"
         assert info.asset_url == "https://example.com/asset"
         assert info.asset_sha256 == "abcdef"
+        assert "Mejora importante" in info.release_notes
         mock_set.assert_called_once()
 
     def test_returns_none_when_up_to_date(self):

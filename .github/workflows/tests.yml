@@ -23,6 +23,9 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-tk xclip xdotool xvfb
       - run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        if: runner.os == 'Linux'
+        run: ruff check .
       - name: Tests de lógica
         run: python -m pytest -q -rf --ignore=tests/test_ui.py
       - name: Tests de interfaz (Tk real, proceso aparte)

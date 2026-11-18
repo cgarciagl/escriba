@@ -49,6 +49,7 @@ class ReleaseInfo:
     asset_url: str
     asset_size: int = 0
     asset_sha256: str = ""
+    release_notes: str = ""
 
 
 def parse_version(tag: str) -> tuple[int, ...]:
@@ -155,6 +156,7 @@ def check_for_update() -> tuple[ReleaseInfo | None, str | None]:
         asset_url=matched["browser_download_url"],
         asset_size=int(matched.get("size") or 0),
         asset_sha256=sha256_hex,
+        release_notes=(data.get("body") or "").strip(),
     ), None
 
 
@@ -228,7 +230,10 @@ def _extract_prepared_target(download_path: str, staging_dir: str) -> str:
     extract_dir = os.path.join(staging_dir, "extracted")
     os.makedirs(extract_dir, exist_ok=True)
     with tarfile.open(download_path, "r:gz") as tf:
-        tf.extractall(extract_dir)
+        try:
+            tf.extractall(extract_dir, filter="data")
+        except TypeError:
+            tf.extractall(extract_dir)
     bin_path = os.path.join(extract_dir, "Escriba")
     if not os.path.isfile(bin_path):
         raise RuntimeError("No se encontró el binario Escriba dentro del archivo descargado.")

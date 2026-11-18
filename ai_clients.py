@@ -265,11 +265,24 @@ class GeminiClient:
         return models
 
     @staticmethod
-    def build_payload(prompt: str, text: str) -> dict:
+    def build_payload(
+        prompt: str,
+        text: str,
+        temperature: float | None = 0.7,
+        history: list[tuple[str, str]] | None = None,
+    ) -> dict:
+        contents = []
+        for user_msg, model_msg in history or ():
+            if user_msg:
+                contents.append({"role": "user", "parts": [{"text": user_msg}]})
+            if model_msg:
+                contents.append({"role": "model", "parts": [{"text": model_msg}]})
+        contents.append({"role": "user", "parts": [{"text": text}]})
+        temp = 0.7 if temperature is None else temperature
         return {
             "systemInstruction": {"parts": [{"text": prompt}]},
-            "contents": [{"role": "user", "parts": [{"text": text}]}],
-            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096},
+            "contents": contents,
+            "generationConfig": {"temperature": temp, "maxOutputTokens": 4096},
         }
 
     @classmethod
@@ -282,20 +295,23 @@ class GeminiClient:
         on_retry: RetryCallback | None = None,
         on_chunk: ChunkCallback | None = None,
         cancel_event: threading.Event | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        history: list[tuple[str, str]] | None = None,
     ) -> str:
         """Genera texto con Google Gemini, aplicando reintentos si el modelo está ocupado."""
         api_key = ConfigManager.get_api_key()
         if not api_key:
             raise ValueError("API Key de Google Gemini no configurada.")
 
-        model = ConfigManager.get("model") or GEMINI_DEFAULT_MODEL
-        payload = cls.build_payload(prompt, text)
+        selected_model = (model or "").strip() or ConfigManager.get("model") or GEMINI_DEFAULT_MODEL
+        payload = cls.build_payload(prompt, text, temperature=temperature, history=history)
         headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
 
         def attempt(chunk_cb: ChunkCallback | None) -> str:
             if chunk_cb:
-                return cls._stream_once(model, payload, headers, chunk_cb)
-            return cls._request_once(model, payload, headers)
+                return cls._stream_once(selected_model, payload, headers, chunk_cb)
+            return cls._request_once(selected_model, payload, headers)
 
         return run_with_retries(
             attempt,
@@ -404,14 +420,26 @@ class OpenAICompatibleClient:
             return []
 
     @staticmethod
-    def build_payload(model: str, prompt: str, text: str, stream: bool) -> dict:
+    def build_payload(
+        model: str,
+        prompt: str,
+        text: str,
+        stream: bool,
+        temperature: float | None = 0.7,
+        history: list[tuple[str, str]] | None = None,
+    ) -> dict:
+        messages = [{"role": "system", "content": prompt}]
+        for user_msg, assistant_msg in history or ():
+            if user_msg:
+                messages.append({"role": "user", "content": user_msg})
+            if assistant_msg:
+                messages.append({"role": "assistant", "content": assistant_msg})
+        messages.append({"role": "user", "content": text})
+        temp = 0.7 if temperature is None else temperature
         return {
             "model": model,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": text},
-            ],
-            "temperature": 0.7,
+            "messages": messages,
+            "temperature": temp,
             "stream": stream,
         }
 
@@ -425,9 +453,13 @@ class OpenAICompatibleClient:
         on_retry: RetryCallback | None = None,
         on_chunk: ChunkCallback | None = None,
         cancel_event: threading.Event | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        history: list[tuple[str, str]] | None = None,
     ) -> str:
-        base, model, api_key = cls.settings()
-        if not base or not model:
+        base, default_model, api_key = cls.settings()
+        selected_model = (model or "").strip() or default_model
+        if not base or not selected_model:
             raise ValueError("Proveedor alternativo no configurado (falta la URL o el modelo).")
 
         url = f"{base}/chat/completions"
@@ -435,7 +467,10 @@ class OpenAICompatibleClient:
         name = f"{cls.NAME} ({base})"
 
         def attempt(chunk_cb: ChunkCallback | None) -> str:
-            payload = cls.build_payload(model, prompt, text, stream=bool(chunk_cb))
+            payload = cls.build_payload(
+                selected_model, prompt, text, stream=bool(chunk_cb),
+                temperature=temperature, history=history,
+            )
             if chunk_cb:
                 return cls._stream_once(url, payload, headers, chunk_cb)
             return cls._request_once(url, payload, headers)
@@ -529,6 +564,9 @@ def generate_text(
     on_chunk: ChunkCallback | None = None,
     on_status: Callable[[str], None] | None = None,
     cancel_event: threading.Event | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> tuple[str, str]:
     """Genera la respuesta con el proveedor configurado (y el alternativo si falla).
 
@@ -551,6 +589,12 @@ def generate_text(
             kwargs = {"on_retry": on_retry, "on_chunk": chunk_proxy if on_chunk else None}
             if cancel_event is not None:
                 kwargs["cancel_event"] = cancel_event
+            if model and i == 0:
+                kwargs["model"] = model
+            if temperature is not None:
+                kwargs["temperature"] = temperature
+            if history:
+                kwargs["history"] = history
             result = PROVIDERS[name].generate(prompt, text, **kwargs)
             return result, name
         except CancelledByUser:

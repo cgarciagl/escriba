@@ -112,6 +112,18 @@ elif IS_WINDOWS:
         if attach:
             user32.AttachThreadInput(cur_tid, fore_tid, False)
         time.sleep(0.25)
+    def clipboard_has_non_text() -> bool:
+        """Indica si el portapapeles tiene contenido no textual (ej. imagen o archivo)."""
+        try:
+            user32 = ctypes.windll.user32
+            if user32.CountClipboardFormats() <= 0:
+                return False
+            return not (
+                user32.IsClipboardFormatAvailable(13)  # CF_UNICODETEXT
+                or user32.IsClipboardFormatAvailable(1)  # CF_TEXT
+            )
+        except Exception:
+            return False
 else:
     from linux_platform import (  # noqa: F401
         HOTKEY_LABEL,
@@ -133,6 +145,12 @@ else:
 
     def monitor_workarea(x: int, y: int):
         return None  # se usa el tamaño de pantalla que reporta Tk
+
+
+if not IS_WINDOWS:
+    def clipboard_has_non_text() -> bool:
+        """Indica si el portapapeles contiene datos no textuales."""
+        return False
 
 
 def clamp_to_area(x: int, y: int, width: int, height: int, area) -> tuple[int, int]:
@@ -159,3 +177,104 @@ def shortcut_label(text: str) -> str:
     symbols = {"ctrl": "⌘", "cmd": "⌘", "command": "⌘", "alt": "⌥", "shift": "⇧",
                "enter": "↩", "espacio": "Espacio"}
     return "".join(symbols.get(p.strip().lower(), p.strip().upper()) for p in text.split("+"))
+
+
+def format_hotkey_label(hotkey: str | None) -> str:
+    """Formatea un atajo global como 'Win+Alt+E' para mostrarlo en la UI."""
+    raw = (hotkey or "").strip()
+    if not raw:
+        return HOTKEY_LABEL
+    parts = [p.strip() for p in raw.split("+") if p.strip()]
+    if not parts:
+        return HOTKEY_LABEL
+    if IS_MAC:
+        mac_map = {
+            "ctrl": "⌃", "control": "⌃",
+            "cmd": "⌘", "command": "⌘",
+            "alt": "⌥", "option": "⌥",
+            "shift": "⇧",
+            "space": "Espacio", "espacio": "Espacio",
+        }
+        return " + ".join(mac_map.get(p.lower(), p.upper()) for p in parts)
+    win_map = {
+        "ctrl": "Ctrl", "control": "Ctrl",
+        "alt": "Alt", "option": "Alt",
+        "shift": "Shift",
+        "win": "Win", "super": "Super" if IS_LINUX else "Win",
+        "space": "Espacio", "espacio": "Espacio",
+    }
+    return " + ".join(win_map.get(p.lower(), p.upper() if len(p) == 1 else p.capitalize()) for p in parts)
+
+
+def active_hotkey_label() -> str:
+    """Devuelve el atajo global configurado formateado para la plataforma actual."""
+    try:
+        from config import ConfigManager
+
+        return format_hotkey_label(ConfigManager.get("hotkey"))
+    except Exception:
+        return HOTKEY_LABEL
+
+
+_INSTANCE_LOCK = None
+
+
+def acquire_single_instance(name: str = "Escriba") -> bool:
+    """Asegura una única instancia en ejecución. Devuelve False si ya hay otra activa."""
+    global _INSTANCE_LOCK
+    if _INSTANCE_LOCK is not None:
+        return True
+
+    if IS_WINDOWS:
+        try:
+            import ctypes as _ctypes
+
+            kernel32 = _ctypes.windll.kernel32
+            handle = kernel32.CreateMutexW(None, False, f"Local\\{name}_SingleInstance")
+            last_err = kernel32.GetLastError()
+            if last_err == 183:  # ERROR_ALREADY_EXISTS
+                if handle:
+                    kernel32.CloseHandle(handle)
+                return False
+            _INSTANCE_LOCK = handle
+            return True
+        except Exception:
+            return True
+
+    try:
+        import fcntl
+        import tempfile
+
+        lock_path = f"{tempfile.gettempdir()}/{name.lower()}.lock"
+        fh = open(lock_path, "a+", encoding="utf-8")
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            fh.close()
+            return False
+        _INSTANCE_LOCK = fh
+        return True
+    except Exception:
+        return True
+
+
+def release_single_instance():
+    """Libera el bloqueo de instancia única al cerrar la app."""
+    global _INSTANCE_LOCK
+    if _INSTANCE_LOCK is None:
+        return
+    try:
+        if IS_WINDOWS:
+            import ctypes as _ctypes
+
+            _ctypes.windll.kernel32.CloseHandle(_INSTANCE_LOCK)
+        else:
+            import fcntl
+
+            fcntl.flock(_INSTANCE_LOCK.fileno(), fcntl.LOCK_UN)
+            _INSTANCE_LOCK.close()
+    except Exception:
+        pass
+    finally:
+        _INSTANCE_LOCK = None
+

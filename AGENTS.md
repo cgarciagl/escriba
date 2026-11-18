@@ -37,8 +37,9 @@ Start-Process "C:\Sistemas\Repos\escriba\dist\Escriba.exe"
 
 ## Reglas generales del proyecto
 
-- El archivo principal es `escriba.py`. No crear archivos Python adicionales salvo que el usuario lo pida.
+- El punto de entrada principal es `escriba.py` (orquestando los módulos existentes en el repositorio). No crear archivos Python adicionales salvo que el usuario lo pida.
 - La compilación siempre usa `Escriba.spec` (no `pyinstaller escriba.py` directo).
 - El EXE compilado queda en `dist\Escriba.exe`.
 - No modificar `config.json` — es generado en tiempo de ejecución.
+- Verificar antes de cerrar con `ruff check .` y `python -m pytest -q`.
 - Stack: `ttkbootstrap`, `pystray`, `Pillow`, `pyperclip`, `ctypes`, `requests`. No agregar dependencias sin confirmar con el usuario.

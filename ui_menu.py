@@ -17,14 +17,17 @@ from typing import TYPE_CHECKING
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from actions import action_icon, action_name, display_shortcut, expand_prompt_vars, filter_actions, load_actions
+from actions import (
+    action_icon, action_name, display_shortcut, expand_prompt_vars,
+    extract_prompt_inputs, filter_actions, load_actions,
+)
 from ai_clients import is_ready
 from config import ConfigManager
 from constants import APP_NAME
 from plataforma import bring_app_to_front, get_foreground_window
 from ui_common import (
     _FM_ACCENT, _FM_BADGE, _FM_BG, _FM_BORDER, _FM_CARD, _FM_HOVER, _FM_MUTED, _FM_SEP, _FM_TEXT,
-    MONO_FONT, UI_FONT, fade_window, place_near_pointer, scaled,
+    MONO_FONT, UI_FONT, apply_dark_style, center_window, fade_window, place_near_pointer, scaled,
 )
 from ui_result import CUSTOM_PROMPT_LABEL, start_ai_action
 
@@ -52,13 +55,17 @@ def button_text(action: dict) -> str:
     return f"{action['label']}   ·  {shortcut}" if shortcut else action["label"]
 
 
+def _mode_matches(action: dict, has_selection: bool) -> bool:
+    mode = action.get("mode", "selection") or "selection"
+    if has_selection:
+        return mode in ("selection", "both")
+    return mode in ("compose", "both")
+
+
 def build_items(actions: list[dict], query: str, has_selection: bool = True) -> list[dict]:
     """Filas a mostrar: acciones filtradas y, si hay texto, la instrucción libre al final."""
-    items = (
-        [{"kind": "action", "action": a} for a in filter_actions(actions, query)]
-        if has_selection
-        else []
-    )
+    eligible = [a for a in actions if _mode_matches(a, has_selection)]
+    items = [{"kind": "action", "action": a} for a in filter_actions(eligible, query)]
     if query.strip():
         items.append({"kind": "custom", "prompt": query.strip()})
     return items
@@ -200,8 +207,9 @@ class FloatingMenu:
             "<Configure>",
             lambda e: self._canvas.itemconfigure(self._canvas_win, width=e.width),
         )
-        self._canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self._inner_list.bind("<MouseWheel>", self._on_mousewheel)
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self._canvas.bind(seq, self._on_mousewheel)
+            self._inner_list.bind(seq, self._on_mousewheel)
 
         # ── Pie con ayudas de teclado ───────────────────────
         tk.Frame(inner, bg=_FM_SEP, height=1).pack(fill=X, pady=(8, 6))
@@ -225,7 +233,12 @@ class FloatingMenu:
 
     def _on_mousewheel(self, event):
         if self._canvas and self._vscroll.winfo_ismapped():
-            delta = -1 if event.delta > 0 else 1
+            if getattr(event, "num", None) == 4:
+                delta = -1
+            elif getattr(event, "num", None) == 5:
+                delta = 1
+            else:
+                delta = -1 if event.delta > 0 else 1
             self._canvas.yview_scroll(delta, "units")
 
     def _sync_scroll_region(self):
@@ -259,9 +272,9 @@ class FloatingMenu:
         self.input.bind("<KeyRelease>", lambda e: self._on_query_change())
         win.bind("<Escape>", lambda e: self.hide())
 
-        if not self._has_selection:
-            return
         for action in self._actions:
+            if not _mode_matches(action, self._has_selection):
+                continue
             key = action.get("shortcut_key")
             if key:
                 handler = stop(lambda a=action: self._on_action(a))
@@ -344,7 +357,8 @@ class FloatingMenu:
         for w in widgets:
             w.bind("<Button-1>", lambda e, i=index: self._run_index(i))
             w.bind("<Enter>", lambda e, i=index: self._set_selection(i))
-            w.bind("<MouseWheel>", self._on_mousewheel)
+            for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                w.bind(seq, self._on_mousewheel)
         return widgets
 
     def _highlight(self):
@@ -420,16 +434,81 @@ class FloatingMenu:
         except Exception:
             pass
 
+    def _ask_prompt_inputs(self, title: str, fields: list[str]) -> dict[str, str] | None:
+        """Diálogo modal compacto para rellenar variables `{input:Etiqueta}`."""
+        result: dict[str, str] | None = None
+        dlg = tb.Toplevel(self.app.root)
+        dlg.title(f"{APP_NAME} — {title}")
+        dlg.resizable(False, False)
+        dlg.attributes("-topmost", True)
+        apply_dark_style(dlg)
+        center_window(dlg, 380, 120 + len(fields) * 56)
+
+        frame = tk.Frame(dlg, bg=_FM_BG, padx=18, pady=14)
+        frame.pack(fill=BOTH, expand=True)
+
+        vars_map: dict[str, tk.StringVar] = {}
+        first_entry = None
+        for name in fields:
+            tk.Label(frame, text=name, font=(UI_FONT, 9, "bold"),
+                     bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W, pady=(0, 3))
+            var = tk.StringVar()
+            entry = tb.Entry(frame, textvariable=var, font=(UI_FONT, 10), style="Escriba.TEntry")
+            entry.pack(fill=X, ipady=3, pady=(0, 8))
+            vars_map[name] = var
+            if first_entry is None:
+                first_entry = entry
+
+        btns = tk.Frame(frame, bg=_FM_BG)
+        btns.pack(fill=X, pady=(4, 0))
+
+        def _submit(event=None):
+            nonlocal result
+            result = {k: v.get().strip() for k, v in vars_map.items()}
+            dlg.destroy()
+
+        tb.Button(btns, text="Cancelar", style="Escriba.TButton",
+                  command=dlg.destroy).pack(side=LEFT)
+        tb.Button(btns, text="Ejecutar", bootstyle="warning",
+                  command=_submit).pack(side=RIGHT)
+        dlg.bind("<Return>", _submit)
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
+        dlg.grab_set()
+        if first_entry:
+            first_entry.focus_set()
+        dlg.wait_window()
+        return result
+
     def _on_action(self, action: dict):
         self.hide()
+        inputs = extract_prompt_inputs(action["prompt"])
+        extra = None
+        if inputs:
+            extra = self._ask_prompt_inputs(action_name(action), inputs)
+            if extra is None:
+                return
         self._record_usage(action["label"])
-        prompt = expand_prompt_vars(action["prompt"])
+        prompt = expand_prompt_vars(action["prompt"], extra_vars=extra)
+        kwargs = {}
+        if action.get("model"):
+            kwargs["model"] = action["model"]
+        if action.get("temperature") is not None:
+            kwargs["temperature"] = action["temperature"]
+        if action.get("strip_markdown"):
+            kwargs["strip_markdown"] = True
         start_ai_action(
             self.app, prompt, self._text, self._prev_hwnd, action["label"],
             auto_replace=bool(action.get("auto_replace")),
+            **kwargs,
         )
 
     def _on_custom_prompt(self, prompt: str):
         self.hide()
-        expanded = expand_prompt_vars(prompt)
+        inputs = extract_prompt_inputs(prompt)
+        extra = None
+        if inputs:
+            extra = self._ask_prompt_inputs("Instrucción libre", inputs)
+            if extra is None:
+                return
+        expanded = expand_prompt_vars(prompt, extra_vars=extra)
         start_ai_action(self.app, expanded, self._text, self._prev_hwnd, CUSTOM_PROMPT_LABEL)

@@ -14,7 +14,7 @@ from ttkbootstrap.constants import *
 
 import os
 from constants import APP_NAME, APP_VERSION, BASE_DIR, GITHUB_REPO
-from plataforma import HOTKEY_LABEL, IS_LINUX, IS_MAC, clamp_to_area, monitor_workarea
+from plataforma import IS_LINUX, IS_MAC, active_hotkey_label, clamp_to_area, monitor_workarea
 
 # Fuentes del sistema (Segoe UI no existe en macOS ni en Linux)
 if IS_MAC:
@@ -309,7 +309,7 @@ class SplashBanner:
         hint_row.pack(fill=X)
         tk.Label(hint_row, text="Atajo: ", font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
-        tk.Label(hint_row, text=HOTKEY_LABEL,
+        tk.Label(hint_row, text=active_hotkey_label(),
                  font=(MONO_FONT, 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
 
         position_bottom_right(win)
@@ -376,7 +376,7 @@ class AboutWindow:
         row.pack(anchor=W, pady=(0, 6))
         tk.Label(row, text="Atajo: ", font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
-        tk.Label(row, text=HOTKEY_LABEL, font=(MONO_FONT, 9, "bold"),
+        tk.Label(row, text=active_hotkey_label(), font=(MONO_FONT, 9, "bold"),
                  bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
 
         link = tk.Label(frame, text=self.REPO_URL, font=(UI_FONT, 9, "underline"),
@@ -392,6 +392,81 @@ class AboutWindow:
     def _open_repo(self):
         import webbrowser
         webbrowser.open(self.REPO_URL)
+
+
+class UpdateDialog:
+    """Diálogo con notas de la versión nueva antes de descargar o abrir GitHub."""
+
+    WIDTH, HEIGHT = 460, 360
+
+    def __init__(self, root, info, on_confirm=None, can_install: bool = True):
+        self.root = root
+        self.info = info
+        self.on_confirm = on_confirm
+        self.can_install = can_install
+        self.window = None
+
+    def show(self):
+        import webbrowser
+
+        win = tb.Toplevel(self.root)
+        win.title(f"{APP_NAME} — Nueva versión v{self.info.version}")
+        win.resizable(False, False)
+        win.attributes("-topmost", True)
+        apply_dark_style(win)
+        center_window(win, self.WIDTH, self.HEIGHT)
+        self.window = win
+
+        frame = tk.Frame(win, bg=_FM_BG, padx=20, pady=16)
+        frame.pack(fill=BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text=f"🚀 Escriba v{self.info.version} disponible",
+            font=(UI_FONT, 13, "bold"), bg=_FM_BG, fg=_FM_TEXT,
+        ).pack(anchor=W)
+        tk.Label(
+            frame,
+            text=f"Versión instalada: v{APP_VERSION}",
+            font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED,
+        ).pack(anchor=W, pady=(2, 10))
+
+        notes_box = tk.Frame(frame, bg=_FM_CARD, highlightthickness=1, highlightbackground=_FM_BORDER)
+        notes_box.pack(fill=BOTH, expand=True, pady=(0, 12))
+        txt = tk.Text(
+            notes_box, wrap=tk.WORD, font=(UI_FONT, 9), relief="flat",
+            bg=_FM_CARD, fg=_FM_TEXT, padx=10, pady=8,
+        )
+        txt.insert("1.0", self.info.release_notes or "Sin notas de publicación.")
+        txt.configure(state="disabled")
+        scroll = tb.Scrollbar(notes_box, orient="vertical", command=txt.yview,
+                              style="Escriba.Vertical.TScrollbar")
+        txt.configure(yscrollcommand=scroll.set)
+        scroll.pack(side=RIGHT, fill=Y)
+        txt.pack(side=LEFT, fill=BOTH, expand=True)
+
+        btns = tk.Frame(frame, bg=_FM_BG)
+        btns.pack(fill=X)
+
+        def _install():
+            win.destroy()
+            if self.on_confirm:
+                self.on_confirm()
+
+        def _open_web():
+            win.destroy()
+            webbrowser.open(self.info.html_url)
+
+        tb.Button(btns, text="Más tarde", style="Escriba.TButton",
+                  command=win.destroy).pack(side=LEFT)
+        tb.Button(btns, text="🌐 Ver en GitHub", style="Escriba.TButton",
+                  command=_open_web).pack(side=LEFT, padx=(6, 0))
+        if self.can_install and self.on_confirm:
+            tb.Button(btns, text="⬇  Instalar y reiniciar", bootstyle="warning",
+                      command=_install).pack(side=RIGHT, ipady=2)
+
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.focus_force()
 
 
 # ─────────────────────────────────────────────────────────────

@@ -3,7 +3,6 @@ Pruebas de la interfaz. Requieren Tk real: se omiten donde no está disponible
 (p. ej. contenedores Linux sin tkinter) y corren en el runner de Windows de la CI.
 """
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -69,6 +68,13 @@ class TestPureHelpers:
         assert button_text({"label": "X", "shortcut": "Ctrl+J", "shortcut_key": "<Control-j>"}).endswith(expected)
         assert button_text({"label": "X", "shortcut": "malo", "shortcut_key": None}) == "X"
 
+    def test_word_count_text(self):
+        from ui_result import _word_count_text
+
+        assert _word_count_text("uno dos tres", "cuatro cinco") == "3 → 2 palabras"
+        assert _word_count_text("", "una") == "1 palabra"
+        assert _word_count_text("", "uno dos") == "2 palabras"
+
 
 class TestBuildItems:
     def test_custom_row_only_with_query(self):
@@ -81,12 +87,21 @@ class TestBuildItems:
         assert [i["kind"] for i in items] == ["custom"]
         assert items[0]["prompt"] == "hazlo poético"
 
-    def test_compose_mode_without_selection_hides_actions(self):
+    def test_compose_mode_without_selection_filters_by_action_mode(self):
         from ui_menu import build_items
 
-        actions = [{"label": "✎  Reescribir", "section": "T"}]
-        assert build_items(actions, "", has_selection=False) == []
-        items = build_items(actions, "redacta un correo", has_selection=False)
+        actions = [
+            {"label": "✎  Reescribir", "section": "T"},
+            {"label": "✉  Redactar", "section": "T", "mode": "compose"},
+            {"label": "✨  Asistente", "section": "T", "mode": "both"},
+        ]
+        without_sel = build_items(actions, "", has_selection=False)
+        assert [i["action"]["label"] for i in without_sel] == ["✉  Redactar", "✨  Asistente"]
+
+        with_sel = build_items(actions, "", has_selection=True)
+        assert [i["action"]["label"] for i in with_sel] == ["✎  Reescribir", "✨  Asistente"]
+
+        items = build_items(actions[:1], "redacta un correo", has_selection=False)
         assert items == [{"kind": "custom", "prompt": "redacta un correo"}]
 
 
@@ -161,12 +176,38 @@ class TestResultWindow:
         win.append_chunk("x")
         win.finish("x", "gemini")
 
+    def test_compose_uses_insert_verb_and_refine_keeps_original(self, app):
+        win_compose = _make_result(app, result="nuevo", selected_text="")
+        assert "Insertar texto" in win_compose._replace_btn["text"]
+        win_compose.window.destroy()
+
+        win = _make_result(app, result="v1", selected_text="original del usuario", prompt="mejora")
+        assert "Sustituir texto" in win._replace_btn["text"]
+        win._refine_var.set("más breve")
+        with patch("ui_result.start_ai_action") as mock_start:
+            win._refine()
+        kwargs = mock_start.call_args.kwargs
+        args = mock_start.call_args.args
+        assert args[2] == "original del usuario"
+        assert kwargs["history_turns"] == [("original del usuario", "v1")]
+        assert kwargs["user_input"] == "más breve"
+
+    def test_history_navigation_steps_between_entries(self, app):
+        app.history.add("Primera", "p1", "orig1", "res1", "gemini")
+        app.history.add("Segunda", "p2", "orig2", "res2", "gemini")
+        win = _make_result(app, result="res2", selected_text="orig2")
+        win._step_history(1)
+        assert win.text_widget.get("1.0", "end").strip() == "res1"
+        win._step_history(-1)
+        assert win.text_widget.get("1.0", "end").strip() == "res2"
+        win.window.destroy()
+
 
 class TestRunAiAction:
-    def _session(self, app, prompt="p", text="t", prev=99, label="≡  Resumir"):
+    def _session(self, app, prompt="p", text="t", prev=99, label="≡  Resumir", **kwargs):
         from ui_result import _ResultSession
 
-        session = _ResultSession(app, prompt, text, prev, label)
+        session = _ResultSession(app, prompt, text, prev, label, **kwargs)
         session.thinking = MagicMock()
         return session
 
@@ -192,6 +233,18 @@ class TestRunAiAction:
         mock_window.return_value.append_chunk.assert_any_call("Ho")
         mock_window.return_value.finish.assert_called_once_with("Hola", "gemini")
         assert app.history.entries()[0].label == "≡  Resumir"
+
+    def test_strip_markdown_removes_outer_code_fences(self, app):
+        import ui_result
+
+        session = self._session(app, strip_markdown=True)
+        with (
+            patch("ui_result.generate_text", return_value=("```sql\nSELECT 1;\n```", "gemini")),
+            patch("ui_result.ConfigManager.get", return_value=False),
+            patch("ui_result.ResultWindow") as mock_window,
+        ):
+            ui_result.run_ai_action(app, session)
+        assert mock_window.call_args.args[1] == "SELECT 1;"
 
     def test_config_error_offers_settings(self, app):
         import ui_result
@@ -257,6 +310,23 @@ class TestWindowsBuild:
         _pump(app.root)
         assert cw.window.winfo_exists()
         assert "bienvenida" in cw.status_var.get()
+        cw._close()
+
+    def test_config_save_persists_dirty_actions(self, app, monkeypatch):
+        from ui_config import ConfigWindow
+
+        monkeypatch.setattr("ui_config.StartupManager.is_enabled", lambda: False)
+        monkeypatch.setattr("ui_config.StartupManager.disable", lambda: None)
+        monkeypatch.setattr("ui_config.ConfigManager.set", lambda *a, **kw: None)
+        monkeypatch.setattr("ui_config.ConfigManager.set_api_key", lambda *a, **kw: None)
+        monkeypatch.setattr("ui_config.ConfigManager.set_openai_api_key", lambda *a, **kw: None)
+        cw = ConfigWindow(app)
+        cw.show()
+        _pump(app.root)
+        cw._act_label_var.set("✎  Editada")
+        with patch("ui_config.save_actions", return_value=[]) as mock_save_actions:
+            cw._save()
+        mock_save_actions.assert_called_once()
         cw._close()
 
     @pytest.fixture

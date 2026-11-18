@@ -1,8 +1,8 @@
-import threading
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+import escriba
 from escriba import EscribaApp
 
 
@@ -94,6 +94,16 @@ class TestCaptureSelectedText:
         assert result == "selected text"
         assert mock_pyperclip.copy.call_args_list == [call(""), call("")]
 
+    def test_preserves_non_text_clipboard_when_image_present(self, app):
+        eapp, mock_pyperclip, mock_send, _ = app
+        mock_pyperclip.paste.return_value = ""
+        with patch("escriba.clipboard_has_non_text", return_value=True):
+            result = eapp._capture_selected_text()
+
+        assert result == ""
+        assert mock_send.call_count == 1
+        mock_pyperclip.copy.assert_not_called()
+
     def test_restores_clipboard_when_copy_fails(self, app):
         eapp, mock_pyperclip, mock_send, _ = app
         mock_pyperclip.paste.return_value = "original"
@@ -139,18 +149,28 @@ class TestOnHotkey:
         finally:
             eapp._lock.release()
 
+    def test_reload_hotkey_updates_tray(self, app):
+        eapp, _, _, _ = app
+        eapp.reload_hotkey("Ctrl+Alt+K")
+        eapp.hotkey.stop.assert_called_once()
+        eapp.tray.update_hotkey.assert_called_once()
 
-class TestQuitApp:
+
+class TestQuitAppAndMain:
     def test_stops_all_components(self, app):
         eapp, _, _, _ = app
 
-        with patch("escriba.os._exit") as mock_exit:
+        with (
+            patch("escriba.os._exit") as mock_exit,
+            patch("escriba.release_single_instance") as mock_rel,
+        ):
             eapp.quit_app()
 
             eapp.hotkey.stop.assert_called_once()
             eapp.tray.stop.assert_called_once()
             eapp.floating_menu.hide.assert_called_once()
             eapp.tooltip.hide.assert_called_once()
+            mock_rel.assert_called_once()
             eapp.root.quit.assert_called_once()
             eapp.root.destroy.assert_called_once()
             mock_exit.assert_called_once_with(0)
@@ -159,6 +179,25 @@ class TestQuitApp:
         eapp, _, _, _ = app
         eapp.root.destroy.side_effect = Exception("destroy error")
 
-        with patch("escriba.os._exit") as mock_exit:
+        with (
+            patch("escriba.os._exit") as mock_exit,
+            patch("escriba.release_single_instance"),
+        ):
             eapp.quit_app()
             mock_exit.assert_called_once_with(0)
+
+    def test_main_aborts_when_already_running(self):
+        with (
+            patch("escriba.acquire_single_instance", return_value=False),
+            patch("escriba.EscribaApp") as mock_app_cls,
+        ):
+            escriba.main()
+        mock_app_cls.assert_not_called()
+
+    def test_main_starts_app_when_lock_acquired(self):
+        with (
+            patch("escriba.acquire_single_instance", return_value=True),
+            patch("escriba.EscribaApp") as mock_app_cls,
+        ):
+            escriba.main()
+        mock_app_cls.return_value.run.assert_called_once()

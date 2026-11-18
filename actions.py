@@ -20,8 +20,10 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import sys
 import unicodedata
+from datetime import datetime
 
 import constants
 from constants import AI_ACTIONS
@@ -30,6 +32,7 @@ ACTIONS_FILE = os.path.join(constants.CONFIG_DIR, "actions.json")
 
 DEFAULT_SECTION = "Texto y Contenido"
 DEFAULT_BOOTSTYLE = "info-outline"
+VALID_MODES = ("selection", "compose", "both")
 
 IS_MAC = sys.platform == "darwin"
 
@@ -40,6 +43,9 @@ _MODIFIERS_WIN = {"ctrl": "Control", "control": "Control", "cmd": "Control", "co
 _MODIFIERS_MAC = {"ctrl": "Command", "control": "Command", "cmd": "Command", "command": "Command",
                   "alt": "Option", "option": "Option", "shift": "Shift"}
 _MAC_SYMBOLS = {"Command": "⌘", "Option": "⌥", "Shift": "⇧"}
+
+_INPUT_VAR_RE = re.compile(r"\{input:([^{}]+)\}")
+_CODE_FENCE_RE = re.compile(r"^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$")
 
 
 def _split(shortcut: str, mac: bool):
@@ -118,6 +124,30 @@ def _normalize(raw: list) -> tuple[list[dict], list[str]]:
         }
         if item.get("auto_replace"):
             action["auto_replace"] = True
+        if item.get("strip_markdown"):
+            action["strip_markdown"] = True
+
+        mode = str(item.get("mode") or "").strip().lower()
+        if mode and mode != "selection":
+            if mode in VALID_MODES:
+                action["mode"] = mode
+            else:
+                warnings.append(f"'{label}': modo '{mode}' no válido; se usa 'selection'.")
+
+        raw_temp = item.get("temperature")
+        if raw_temp is not None and str(raw_temp).strip() != "":
+            try:
+                temp = float(raw_temp)
+                if 0.0 <= temp <= 2.0:
+                    action["temperature"] = round(temp, 2)
+                else:
+                    warnings.append(f"'{label}': temperatura fuera de rango (0.0–2.0); se ignora.")
+            except (TypeError, ValueError):
+                warnings.append(f"'{label}': temperatura '{raw_temp}' no válida; se ignora.")
+
+        model = str(item.get("model") or "").strip()
+        if model:
+            action["model"] = model
 
         shortcut = str(item.get("shortcut") or "").strip()
         if shortcut:
@@ -161,12 +191,16 @@ def load_actions() -> tuple[list[dict], list[str]]:
 
 
 def _serializable(actions: list[dict]) -> list[dict]:
-    keys = ("label", "prompt", "section", "bootstyle", "shortcut")
+    keys = ("label", "prompt", "section", "bootstyle", "shortcut", "mode", "model")
     out = []
     for a in actions:
         item = {k: a[k] for k in keys if a.get(k)}
         if a.get("auto_replace"):
             item["auto_replace"] = True
+        if a.get("strip_markdown"):
+            item["strip_markdown"] = True
+        if a.get("temperature") is not None:
+            item["temperature"] = a["temperature"]
         out.append(item)
     return out
 
@@ -180,8 +214,43 @@ def save_actions(actions: list[dict]) -> list[str]:
     return warnings
 
 
-def expand_prompt_vars(prompt: str) -> str:
-    """Expande variables opcionales en el prompt: {clipboard} y {lang}."""
+def export_actions(path: str, actions: list[dict] | None = None):
+    """Exporta las acciones dadas (o las activas) a un archivo JSON."""
+    if actions is None:
+        actions, _ = load_actions()
+    normalized, _ = _normalize(actions)
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(_serializable(normalized), f, indent=2, ensure_ascii=False)
+
+
+def import_actions(path: str) -> tuple[list[dict], list[str]]:
+    """Importa y valida un archivo JSON de acciones sin sobrescribir hasta guardar."""
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    return _normalize(raw)
+
+
+def strip_code_fences(text: str) -> str:
+    """Elimina envoltorios ```lang ... ``` cuando el modelo responde con bloques Markdown."""
+    m = _CODE_FENCE_RE.match(text or "")
+    return m.group(1).strip() if m else text
+
+
+def extract_prompt_inputs(prompt: str) -> list[str]:
+    """Devuelve los nombres únicos de variables `{input:Etiqueta}` en orden de aparición."""
+    seen: list[str] = []
+    for name in _INPUT_VAR_RE.findall(prompt or ""):
+        clean = name.strip()
+        if clean and clean not in seen:
+            seen.append(clean)
+    return seen
+
+
+def expand_prompt_vars(prompt: str, extra_vars: dict[str, str] | None = None) -> str:
+    """Expande variables opcionales: {clipboard}, {lang}, {date}, {time}, {datetime}, {input:...}."""
     if "{clipboard}" in prompt:
         try:
             import pyperclip
@@ -193,6 +262,19 @@ def expand_prompt_vars(prompt: str) -> str:
         import locale
         lang = (locale.getlocale()[0] or "es").split("_")[0]
         prompt = prompt.replace("{lang}", lang)
+    if any(tok in prompt for tok in ("{date}", "{time}", "{datetime}")):
+        now = datetime.now()
+        prompt = (
+            prompt.replace("{date}", now.strftime("%Y-%m-%d"))
+            .replace("{time}", now.strftime("%H:%M"))
+            .replace("{datetime}", now.strftime("%Y-%m-%d %H:%M"))
+        )
+    if extra_vars:
+        def _repl(match):
+            key = match.group(1).strip()
+            return extra_vars.get(key, match.group(0))
+
+        prompt = _INPUT_VAR_RE.sub(_repl, prompt)
     return prompt
 
 
@@ -203,6 +285,7 @@ def write_defaults(overwrite: bool = False) -> str:
         with open(ACTIONS_FILE, "w", encoding="utf-8") as f:
             json.dump(_serializable(default_actions()), f, indent=2, ensure_ascii=False)
     return ACTIONS_FILE
+
 
 
 # ─────────────────────────────────────────────────────────────

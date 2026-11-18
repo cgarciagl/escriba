@@ -3,7 +3,21 @@ import json
 import pytest
 
 import actions
-from actions import display_shortcut, load_actions, shortcut_to_tk, write_defaults
+from actions import (
+    action_icon,
+    action_name,
+    display_shortcut,
+    expand_prompt_vars,
+    export_actions,
+    extract_prompt_inputs,
+    filter_actions,
+    import_actions,
+    load_actions,
+    normalize_text,
+    shortcut_to_tk,
+    strip_code_fences,
+    write_defaults,
+)
 from constants import AI_ACTIONS
 
 
@@ -128,9 +142,6 @@ class TestWriteDefaults:
         assert len(json.loads(actions_file.read_text(encoding="utf-8"))) == len(AI_ACTIONS)
 
 
-from actions import action_icon, action_name, filter_actions, normalize_text
-
-
 class TestPaletteSearch:
     ACTIONS = [
         {"label": "✎  Reescribir", "section": "Texto y Contenido"},
@@ -176,21 +187,77 @@ class TestPaletteSearch:
 
 
 class TestSaveAndVars:
-    def test_save_actions_persists_auto_replace(self, tmp_path, monkeypatch):
-        import actions
+    def test_save_actions_persists_new_fields(self, tmp_path, monkeypatch):
         target = str(tmp_path / "actions.json")
         monkeypatch.setattr(actions, "ACTIONS_FILE", target)
 
-        actions.save_actions([
-            {"label": "✎  Test", "prompt": "Haz algo", "auto_replace": True},
+        warnings = actions.save_actions([
+            {
+                "label": "✎  Test",
+                "prompt": "Haz algo",
+                "auto_replace": True,
+                "strip_markdown": True,
+                "mode": "both",
+                "temperature": 0.35,
+                "model": "gemini-2.5-pro",
+            },
         ])
-        loaded, warnings = actions.load_actions()
         assert warnings == []
+        loaded, load_warnings = actions.load_actions()
+        assert load_warnings == []
         assert loaded[0]["auto_replace"] is True
+        assert loaded[0]["strip_markdown"] is True
+        assert loaded[0]["mode"] == "both"
+        assert loaded[0]["temperature"] == 0.35
+        assert loaded[0]["model"] == "gemini-2.5-pro"
 
-    def test_expand_prompt_vars_replaces_clipboard(self, monkeypatch):
+    def test_invalid_mode_and_temperature_emit_warnings(self, actions_file):
+        actions_file.write_text(json.dumps([
+            {"label": "X", "prompt": "Y", "mode": "invalido", "temperature": 9.5},
+        ]), encoding="utf-8")
+        loaded, warnings = load_actions()
+        assert len(loaded) == 1
+        assert "mode" not in loaded[0]
+        assert "temperature" not in loaded[0]
+        assert any("modo" in w for w in warnings)
+        assert any("temperatura" in w for w in warnings)
+
+    def test_export_and_import_roundtrip(self, tmp_path):
+        export_path = tmp_path / "pack.json"
+        sample = [
+            {
+                "label": "✉  Redactar correo",
+                "prompt": "Redacta un correo para {input:Destinatario}",
+                "section": "Redacción",
+                "mode": "compose",
+                "temperature": 0.4,
+            }
+        ]
+        export_actions(str(export_path), sample)
+        imported, warnings = import_actions(str(export_path))
+        assert warnings == []
+        assert imported[0]["mode"] == "compose"
+        assert imported[0]["temperature"] == 0.4
+
+    def test_strip_code_fences(self):
+        fenced = "```sql\nSELECT * FROM t;\n```"
+        assert strip_code_fences(fenced) == "SELECT * FROM t;"
+        assert strip_code_fences("SELECT 1;") == "SELECT 1;"
+
+    def test_extract_prompt_inputs_preserves_order_and_uniqueness(self):
+        prompt = "Traduce a {input:Idioma} con tono {input:Tono} manteniendo {input:Idioma}"
+        assert extract_prompt_inputs(prompt) == ["Idioma", "Tono"]
+
+    def test_expand_prompt_vars_replaces_clipboard_date_and_inputs(self, monkeypatch):
         import pyperclip
-        from actions import expand_prompt_vars
 
         monkeypatch.setattr(pyperclip, "paste", lambda: "texto copiado")
-        assert expand_prompt_vars("Usa: {clipboard}") == "Usa: texto copiado"
+        expanded = expand_prompt_vars(
+            "Clip:{clipboard} Fecha:{date} Hora:{time} FH:{datetime} Extra:{input:Idioma}",
+            extra_vars={"Idioma": "francés"},
+        )
+        assert "Clip:texto copiado" in expanded
+        assert "{date}" not in expanded
+        assert "{time}" not in expanded
+        assert "{datetime}" not in expanded
+        assert expanded.endswith("Extra:francés")

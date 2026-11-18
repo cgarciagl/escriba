@@ -21,11 +21,13 @@ from ai_clients import is_ready
 from history import History
 from ui_common import configure_styles
 from ui_windows import (
-    AboutWindow, ConfigWindow, FloatingMenu, ResultWindow, ThinkingWindow, TooltipNotification, SplashBanner,
+    AboutWindow, ConfigWindow, FloatingMenu, ResultWindow, ThinkingWindow,
+    TooltipNotification, SplashBanner, UpdateDialog,
 )
 from tray import TrayIconManager
 from plataforma import (
-    HOTKEY_LABEL, HotkeyManager, StartupManager, enable_dpi_awareness, init_app, send_copy,
+    HotkeyManager, StartupManager, acquire_single_instance, active_hotkey_label,
+    clipboard_has_non_text, enable_dpi_awareness, init_app, release_single_instance, send_copy,
 )
 from updater import (
     ReleaseInfo, UpdateCancelled, apply_update_and_restart, can_self_update,
@@ -94,7 +96,17 @@ class EscribaApp:
             f"🚀 Nueva versión disponible: Escriba v{info.version}\n"
             f"Estás usando la v{APP_VERSION}."
         )
-        if can_self_update():
+
+        def _open_dialog():
+            UpdateDialog(
+                self.root, info,
+                on_confirm=lambda: self.start_update(info),
+                can_install=can_self_update(),
+            ).show()
+
+        if info.release_notes:
+            action = ("Ver novedades", _open_dialog)
+        elif can_self_update():
             action = ("Actualizar ahora", lambda: self.start_update(info))
         else:
             action = ("Ver release", lambda: webbrowser.open(info.html_url))
@@ -150,6 +162,7 @@ class EscribaApp:
     def reload_hotkey(self, hotkey: str | None = None):
         """Reinicia el listener del atajo global con la nueva combinación."""
         self.hotkey.stop()
+        self.tray.update_hotkey()
         self.root.after(120, lambda: self.hotkey.start(hotkey))
 
     def open_config(self):
@@ -175,6 +188,7 @@ class EscribaApp:
         self.tray.stop()
         self.floating_menu.hide()
         self.tooltip.hide()
+        release_single_instance()
         try:
             self.root.quit()
             self.root.destroy()
@@ -197,7 +211,7 @@ class EscribaApp:
             self._lock.release()
 
     def _notify_hotkey_error(self):
-        hk = ConfigManager.get("hotkey") or HOTKEY_LABEL
+        hk = active_hotkey_label()
         self.tooltip.show(
             f"❌ Error: No se pudo registrar el atajo {hk}.\n"
             "Es posible que otra aplicación lo esté usando.",
@@ -209,10 +223,13 @@ class EscribaApp:
 
         Se vacía el portapapeles antes de enviar Ctrl+C: así, si no hay
         selección, el resultado es "" en lugar del contenido previo del
-        portapapeles (que antes se enviaba a la IA por error).
+        portapapeles (que antes se enviaba a la IA por error). Si el
+        portapapeles contiene datos no textuales (p. ej. una imagen), no se borra.
         """
         original_clip = self._safe_paste()
-        self._safe_copy("")
+        preserve_non_text = not original_clip and clipboard_has_non_text()
+        if not preserve_non_text:
+            self._safe_copy("")
 
         try:
             send_copy()
@@ -220,7 +237,8 @@ class EscribaApp:
         finally:
             # Restaurar también cuando el portapapeles estaba vacío. Omitir
             # esta escritura dejaba la selección copiada después de usar Escriba.
-            self._safe_copy(original_clip)
+            if not preserve_non_text:
+                self._safe_copy(original_clip)
 
     def _wait_for_clipboard(self, timeout: float = 0.35, step: float = 0.05) -> str:
         """Espera (sondeando) a que el portapapeles tenga contenido."""
@@ -247,6 +265,25 @@ class EscribaApp:
 # ─────────────────────────────────────────────────────────────
 # Punto de entrada
 # ─────────────────────────────────────────────────────────────
-if __name__ == "__main__":
+def main():
+    """Punto de entrada único con protección de instancia duplicada."""
+    if not acquire_single_instance():
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+
+            tmp = tk.Tk()
+            tmp.withdraw()
+            messagebox.showinfo(
+                APP_NAME, f"{APP_NAME} ya está ejecutándose en la bandeja del sistema."
+            )
+            tmp.destroy()
+        except Exception:
+            pass
+        return
     app = EscribaApp()
     app.run()
+
+
+if __name__ == "__main__":
+    main()
