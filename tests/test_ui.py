@@ -72,6 +72,7 @@ class TestPureHelpers:
         from ui_result import _word_count_text
 
         assert _word_count_text("uno dos tres", "cuatro cinco") == "3 → 2 palabras"
+        assert _word_count_text("uno dos tres", "cuatro cinco", 1.25) == "3 → 2 palabras · 1.2 s"
         assert _word_count_text("", "una") == "1 palabra"
         assert _word_count_text("", "uno dos") == "2 palabras"
 
@@ -103,6 +104,21 @@ class TestBuildItems:
 
         items = build_items(actions[:1], "redacta un correo", has_selection=False)
         assert items == [{"kind": "custom", "prompt": "redacta un correo"}]
+
+    def test_app_name_filters_and_promotes_and_shows_recent_prompts(self):
+        from ui_menu import build_items
+
+        actions = [
+            {"label": "✎  General", "section": "T"},
+            {"label": "💻  Solo Code", "section": "T", "apps": ["code"]},
+            {"label": "✉  Solo Outlook", "section": "T", "apps": ["outlook"]},
+        ]
+        items = build_items(actions, "", app_name="code", recent_prompts=["hazlo corto", "traduce"])
+        action_labels = [i["action"]["label"] for i in items if i["kind"] == "action"]
+        assert action_labels == ["💻  Solo Code", "✎  General"]
+        assert items[0]["action"]["section"] == "★ Para code"
+        recent = [i["prompt"] for i in items if i["kind"] == "recent"]
+        assert recent == ["hazlo corto", "traduce"]
 
 
 def _make_result(app, **kwargs):
@@ -201,6 +217,33 @@ class TestResultWindow:
         win._step_history(-1)
         assert win.text_widget.get("1.0", "end").strip() == "res2"
         win.window.destroy()
+
+    def test_chain_action_feeds_current_result_to_next_action(self, app):
+        win = _make_result(app, result="texto generado", selected_text="orig", elapsed_s=0.8)
+        assert "0.8 s" in win._words_lbl["text"]
+        with (
+            patch("ui_result.get_foreground_app_name", return_value="word"),
+            patch("ui_result.start_ai_action") as mock_start,
+        ):
+            win._chain_action({"label": "🌐  Traducir", "prompt": "Traduce para {app}"})
+        args = mock_start.call_args.args
+        assert args[1] == "Traduce para word"
+        assert args[2] == "texto generado"
+
+    def test_paste_to_origin_uses_rich_paste_when_enabled(self, app):
+        from ui_result import _paste_to_origin
+
+        with (
+            patch("ui_result.ConfigManager.get", return_value=True),
+            patch("ui_result.copy_rich_text") as mock_rich,
+            patch("ui_result.activate_window"),
+            patch("ui_result.send_paste"),
+            patch("ui_result.time.sleep"),
+            patch("ui_result.pyperclip.paste", return_value="prev"),
+            patch("ui_result.pyperclip.copy"),
+        ):
+            _paste_to_origin(app, 123, "**Negrita**")
+        mock_rich.assert_called_once_with("**Negrita**")
 
 
 class TestRunAiAction:
@@ -390,6 +433,15 @@ class TestWindowsBuild:
         assert not menu._placeholder.winfo_ismapped()
         self._type(menu, "")
         assert menu._placeholder.winfo_ismapped()
+
+    def test_save_custom_prompt_adds_action_and_reloads(self, menu):
+        with (
+            patch("ui_menu.add_custom_action") as mock_add,
+            patch("ui_menu.load_actions", return_value=([{"label": "✨  Mi prompt", "prompt": "Mi prompt", "section": "Personalizadas"}], [])),
+        ):
+            menu._save_custom_prompt("Mi prompt")
+        mock_add.assert_called_once()
+        assert any(a["label"] == "✨  Mi prompt" for a in menu._actions)
 
 
 class TestTrayMenu:

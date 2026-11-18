@@ -253,11 +253,44 @@ class TestSaveAndVars:
 
         monkeypatch.setattr(pyperclip, "paste", lambda: "texto copiado")
         expanded = expand_prompt_vars(
-            "Clip:{clipboard} Fecha:{date} Hora:{time} FH:{datetime} Extra:{input:Idioma}",
-            extra_vars={"Idioma": "francés"},
+            "Clip:{clipboard} Fecha:{date} Hora:{time} FH:{datetime} Extra:{input:Idioma} App:{app}",
+            extra_vars={"Idioma": "francés", "app": "code"},
         )
         assert "Clip:texto copiado" in expanded
         assert "{date}" not in expanded
         assert "{time}" not in expanded
         assert "{datetime}" not in expanded
-        assert expanded.endswith("Extra:francés")
+        assert "Extra:francés" in expanded
+        assert expanded.endswith("App:code")
+
+
+class TestAppsAndCustomSave:
+    def test_apps_normalization_and_matching(self, actions_file):
+        from actions import action_matches_app, save_actions
+
+        warnings = save_actions([
+            {"label": "💻  Código", "prompt": "Revisa en {app}", "apps": "Code, Cursor"},
+            {"label": "🌐  Global", "prompt": "General"},
+        ])
+        assert warnings == []
+        loaded, _ = load_actions()
+        assert loaded[0]["apps"] == ["code", "cursor"]
+        assert "apps" not in loaded[1]
+        assert action_matches_app(loaded[0], "code") is True
+        assert action_matches_app(loaded[0], "notepad") is False
+        assert action_matches_app(loaded[0], "") is True
+        assert action_matches_app(loaded[1], "notepad") is True
+
+    def test_add_custom_action_appends_and_deduplicates_label(self, actions_file):
+        from actions import add_custom_action
+
+        add_custom_action("Mi resumen", "Resume en 2 líneas")
+        add_custom_action("Mi resumen", "Resume en 3 líneas")
+        loaded, _ = load_actions()
+        labels = [a["label"] for a in loaded]
+        assert "✨  Mi resumen" in labels
+        assert "✨  Mi resumen (2)" in labels
+        added = [a for a in loaded if a["label"] == "✨  Mi resumen"][0]
+        assert added["section"] == "Personalizadas"
+        assert added["mode"] == "both"
+

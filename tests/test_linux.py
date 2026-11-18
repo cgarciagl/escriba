@@ -144,3 +144,35 @@ class TestStartupManager:
         assert mgr.is_enabled() is False
         # disable idempotente
         mgr.disable()
+
+
+class TestWaylandAndForegroundApp:
+    def test_is_wayland_checks_session_env(self, monkeypatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        assert linux_platform.is_wayland() is True
+        monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        assert linux_platform.is_wayland() is False
+        monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+        assert linux_platform.is_wayland() is True
+
+    def test_get_foreground_app_name_returns_lowercase_wm_class(self, monkeypatch):
+        res = subprocess.CompletedProcess(
+            ["xdotool", "getwindowclassname", "123"], 0, stdout="Code\n", stderr=""
+        )
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: res)
+        assert linux_platform.get_foreground_app_name("123") == "code"
+
+    def test_wtype_fallback_on_pure_wayland(self, monkeypatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.delenv("DISPLAY", raising=False)
+        monkeypatch.setattr(linux_platform.shutil, "which", lambda cmd: "/usr/bin/wtype" if cmd == "wtype" else None)
+        calls = []
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+        )
+        monkeypatch.setattr(linux_platform.time, "sleep", lambda _s: None)
+        linux_platform.send_paste()
+        assert calls == [["wtype", "-M", "ctrl", "-k", "v", "-m", "ctrl"]]
+

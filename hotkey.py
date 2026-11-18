@@ -93,10 +93,11 @@ class HotkeyManager:
     Más fiable que la librería `keyboard` para combinaciones con la tecla Win.
     """
 
-    def __init__(self, root, callback, hotkey: str | None = None):
+    def __init__(self, root, callback, hotkey: str | None = None, hotkey_id: int = _HOTKEY_ID):
         self.root      = root
         self.callback  = callback
         self.hotkey    = hotkey
+        self._hotkey_id = hotkey_id
         self._thread   = None
         self._tid      = None  # thread id para PostThreadMessage
 
@@ -109,7 +110,7 @@ class HotkeyManager:
     def _loop(self):
         self._tid = ctypes.windll.kernel32.GetCurrentThreadId()
         mods, vk = parse_hotkey(self.hotkey)
-        ok = ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_ID, mods, vk)
+        ok = ctypes.windll.user32.RegisterHotKey(None, self._hotkey_id, mods, vk)
         if not ok:
             # Notificar error de registro (ej. puerto ocupado o combinación en uso)
             if self.callback:
@@ -118,13 +119,13 @@ class HotkeyManager:
 
         msg = ctypes.wintypes.MSG()
         while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-            if msg.message == _WM_HOTKEY and msg.wParam == _HOTKEY_ID:
+            if msg.message == _WM_HOTKEY and msg.wParam == self._hotkey_id:
                 _release_modifiers()
                 threading.Thread(target=self.callback, daemon=True).start()
             ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
             ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
 
-        ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_ID)
+        ctypes.windll.user32.UnregisterHotKey(None, self._hotkey_id)
 
     def stop(self):
         if self._tid:

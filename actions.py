@@ -149,6 +149,16 @@ def _normalize(raw: list) -> tuple[list[dict], list[str]]:
         if model:
             action["model"] = model
 
+        raw_apps = item.get("apps")
+        if isinstance(raw_apps, str):
+            apps_list = [p.strip().lower() for p in raw_apps.split(",") if p.strip()]
+        elif isinstance(raw_apps, list):
+            apps_list = [str(p).strip().lower() for p in raw_apps if str(p).strip()]
+        else:
+            apps_list = []
+        if apps_list:
+            action["apps"] = apps_list
+
         shortcut = str(item.get("shortcut") or "").strip()
         if shortcut:
             tk_key = shortcut_to_tk(shortcut)
@@ -191,7 +201,7 @@ def load_actions() -> tuple[list[dict], list[str]]:
 
 
 def _serializable(actions: list[dict]) -> list[dict]:
-    keys = ("label", "prompt", "section", "bootstyle", "shortcut", "mode", "model")
+    keys = ("label", "prompt", "section", "bootstyle", "shortcut", "mode", "model", "apps")
     out = []
     for a in actions:
         item = {k: a[k] for k in keys if a.get(k)}
@@ -212,6 +222,44 @@ def save_actions(actions: list[dict]) -> list[str]:
     with open(ACTIONS_FILE, "w", encoding="utf-8") as f:
         json.dump(_serializable(normalized), f, indent=2, ensure_ascii=False)
     return warnings
+
+
+def add_custom_action(
+    label: str,
+    prompt: str,
+    mode: str = "both",
+    section: str = "Personalizadas",
+) -> list[str]:
+    """Añade una nueva acción personalizada y la guarda en actions.json."""
+    existing, _ = load_actions()
+    used_labels = {a["label"] for a in existing}
+    candidate = label.strip()
+    if not candidate.startswith(("✨", "✎", "✏", "★")):
+        candidate = f"✨  {candidate}"
+    final_label = candidate
+    n = 2
+    while final_label in used_labels:
+        final_label = f"{candidate} ({n})"
+        n += 1
+    new_action = {
+        "label": final_label,
+        "prompt": prompt.strip(),
+        "section": section,
+        "bootstyle": DEFAULT_BOOTSTYLE,
+        "mode": mode,
+    }
+    return save_actions(existing + [new_action])
+
+
+def action_matches_app(action: dict, app_name: str) -> bool:
+    """Indica si una acción aplica a `app_name` (si no define 'apps', aplica a todas)."""
+    patterns = action.get("apps")
+    if not patterns:
+        return True
+    if not app_name:
+        return True
+    low = app_name.lower()
+    return any(p in low for p in patterns)
 
 
 def export_actions(path: str, actions: list[dict] | None = None):
@@ -250,7 +298,7 @@ def extract_prompt_inputs(prompt: str) -> list[str]:
 
 
 def expand_prompt_vars(prompt: str, extra_vars: dict[str, str] | None = None) -> str:
-    """Expande variables opcionales: {clipboard}, {lang}, {date}, {time}, {datetime}, {input:...}."""
+    """Expande variables opcionales: {clipboard}, {lang}, {app}, {date}, {time}, {datetime}, {input:...}."""
     if "{clipboard}" in prompt:
         try:
             import pyperclip
@@ -262,6 +310,16 @@ def expand_prompt_vars(prompt: str, extra_vars: dict[str, str] | None = None) ->
         import locale
         lang = (locale.getlocale()[0] or "es").split("_")[0]
         prompt = prompt.replace("{lang}", lang)
+    if "{app}" in prompt:
+        app_val = (extra_vars or {}).get("app")
+        if app_val is None:
+            try:
+                from plataforma import get_foreground_app_name
+
+                app_val = get_foreground_app_name()
+            except Exception:
+                app_val = ""
+        prompt = prompt.replace("{app}", app_val or "")
     if any(tok in prompt for tok in ("{date}", "{time}", "{datetime}")):
         now = datetime.now()
         prompt = (

@@ -2,6 +2,8 @@ import importlib
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import plataforma
 
 
@@ -36,6 +38,7 @@ class TestHelpers:
 
 
 class TestSingleInstanceAndClipboard:
+    @pytest.mark.skipif(sys.platform == "win32", reason="fcntl solo existe en POSIX")
     def test_posix_single_instance_lock_blocks_second_acquire(self, tmp_path, monkeypatch):
         monkeypatch.setattr(plataforma, "IS_WINDOWS", False)
         monkeypatch.setattr(plataforma, "_INSTANCE_LOCK", None)
@@ -133,3 +136,33 @@ class TestClampToArea:
 
     def test_window_larger_than_area_sticks_to_top_left(self):
         assert plataforma.clamp_to_area(500, 500, 3000, 3000, self.AREA) == (0, 0)
+
+
+class TestRichTextAndAppDetection:
+    def test_markdown_to_html_converts_headings_lists_and_inline(self):
+        md = "# Título\n\nTexto **negrita** y *cursiva* con `código`.\n\n- Uno\n- Dos\n\n1. Primero"
+        html_out = plataforma.markdown_to_html(md)
+        assert "<h1>Título</h1>" in html_out
+        assert "<strong>negrita</strong>" in html_out
+        assert "<em>cursiva</em>" in html_out
+        assert "<code>código</code>" in html_out
+        assert "<ul>" in html_out and "<li>Uno</li>" in html_out
+        assert "<ol>" in html_out and "<li>Primero</li>" in html_out
+
+    def test_build_win_cf_html_has_valid_byte_offsets(self):
+        packet = plataforma._build_win_cf_html("<p>Hola mundo</p>").decode("utf-8")
+        assert packet.startswith("Version:0.9\r\n")
+        assert "<!--StartFragment--><p>Hola mundo</p><!--EndFragment-->" in packet
+
+    def test_copy_rich_text_falls_back_to_pyperclip_on_linux(self, monkeypatch):
+        monkeypatch.setattr(plataforma, "IS_WINDOWS", False)
+        monkeypatch.setattr(plataforma, "IS_MAC", False)
+        with patch("pyperclip.copy") as mock_copy:
+            res = plataforma.copy_rich_text("**Hola**")
+        assert res is False
+        mock_copy.assert_called_once_with("**Hola**")
+
+    def test_exposes_wayland_and_foreground_app_name(self):
+        assert hasattr(plataforma, "is_wayland")
+        assert hasattr(plataforma, "get_foreground_app_name")
+

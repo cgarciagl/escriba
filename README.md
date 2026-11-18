@@ -69,16 +69,19 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 ## 🎯 Características principales
 
 ### Flujo de escritura y paleta de comandos
-* ⌨️ **Atajo global configurable**: `Win+Alt+E` (Windows) / `⌃⌘E` (macOS) / `Ctrl+Alt+E` (Linux) por defecto; personalizable desde *Configuración → General* sin reiniciar la app.
-* ✍️ **Modo con selección y modo redacción**: si hay texto seleccionado, ofrece acciones sobre él; si no hay selección, se abre en **modo redacción** para generar contenido desde cero y pegarlo directamente en el cursor.
-* ★ **Acciones frecuentes y scroll completo**: promueve arriba tus acciones más usadas y permite desplazarse por toda la lista con ratón o teclado (`↑`/`↓`).
+* ⌨️ **Atajo global configurable + repetición rápida**: `Win+Alt+E` (Windows) / `⌃⌘E` (macOS) / `Ctrl+Alt+E` (Linux) por defecto; además puedes configurar un segundo atajo (**Repetir última**) para reejecutar al instante la última acción sobre nueva selección sin abrir el menú.
+* ✍️ **Modo con selección y modo redacción**: si hay texto seleccionado, ofrece acciones sobre él; si no hay selección, se abre en **modo redacción** (con acciones como **✉ Redactar correo** y **☑ Lista de tareas**) para generar contenido desde cero y pegarlo directamente en el cursor.
+* 🧩 **Conciencia de la app activa (`{app}` y `"apps"`)**: detecta la aplicación en primer plano, promueve arriba acciones específicas para ella y permite usar `{app}` en los prompts.
+* ★ **Acciones frecuentes, historial y guardado en 1 clic**: promueve arriba tus acciones más usadas, recuerda tus últimas instrucciones libres y te permite guardarlas en `actions.json` con **★ Guardar** (`Ctrl+S`/`⌘S`).
 * 🔎 **Búsqueda instantánea e instrucción libre**: filtra sin importar acentos ni mayúsculas o escribe cualquier instrucción ad hoc (`Shift+Enter` para multilínea).
 * ⚡ **Auto-sustitución (`auto_replace`)**: las acciones marcadas como automáticas pegan el resultado directamente en la app de origen al terminar, sin abrir ventana intermedia.
 * 📏 **Aviso de texto largo**: indica en el encabezado cuando el texto supera los 10 000 caracteres.
 
 ### Ventana de resultados e iteración
 * 📡 **Streaming en tiempo real** con botón **Detener** (conservando lo generado hasta ese momento) y cancelación limpia al cerrar la ventana.
-* 🔍 **Tres vistas y métricas**: **Resultado** (editable, con resaltado ligero de Markdown), **Original** y **Cambios** (*diff* línea a línea), más contador de palabras y diferencia respecto al texto original.
+* 🔍 **Tres vistas y métricas**: **Resultado** (editable, con resaltado ligero de Markdown), **Original** y **Cambios** (*diff* línea a línea), más contador de palabras, diferencia respecto al texto original y **tiempo de generación** (p. ej. `142 → 96 palabras · 1.1 s`).
+* 🔗 **Encadenamiento de acciones**: botón **Encadenar** para pasar el resultado actual directamente como entrada a otra acción (por ejemplo, *Resumir → Traducir al inglés*).
+* 📋 **Pegado enriquecido opcional (`rich_paste`)**: convierte respuestas en Markdown a HTML (`CF_HTML` en Windows, `NSPasteboard` en macOS) para conservar negritas, listas y encabezados al pegar en correo o documentos.
 * ✨ **Ajuste iterativo multi-turno**: barra inferior **"Ajustar"** que mantiene el historial de refinamientos (y el *Original* intacto) y botones `◀`/`▶` para comparar iteraciones anteriores.
 * 🕘 **Historial en memoria**: últimas 10 respuestas de la sesión accesibles desde la bandeja, recordando el proveedor y modelo exactos que las generaron.
 
@@ -87,7 +90,7 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 * 🔀 **Proveedor alternativo compatible con OpenAI**: soporte para **Ollama** (local, sin clave), **LM Studio**, **OpenAI**, **OpenRouter**, etc., como principal o como **fallback automático**.
 * 🔄 **Reintentos inteligentes**: retroceso exponencial con *jitter* ante saturación o límites de tasa (HTTP `429`, `500`, `502`, `503`, `504`).
 * 🔒 **Almacenamiento seguro de claves**: cifrado con **DPAPI** en Windows, **Llavero** en macOS (vía `security -i`) y `config.json` con permisos restringidos `0600` en Linux, más protección de **instancia única** y preservación de imágenes en el portapapeles.
-* 🧩 **Editor visual de acciones**: pestaña dedicada en *Configuración → Acciones* para crear, reordenar, editar, **importar/exportar** acciones JSON y configurar modo (`selection`/`compose`/`both`), temperatura, modelo y limpieza de bloques Markdown (```` ``` ````).
+* 🧩 **Editor visual de acciones**: pestaña dedicada en *Configuración → Acciones* para crear, reordenar, editar, **importar/exportar** acciones JSON y configurar modo (`selection`/`compose`/`both`), `apps`, temperatura, modelo y limpieza de bloques Markdown (```` ``` ````).
 
 ---
 
@@ -127,6 +130,8 @@ En el primer arranque, Escriba crea su carpeta de configuración, muestra el ban
 | | ⇲ Extender | `Ctrl+L` | Amplía el texto con coherencia sin inventar datos |
 | | ≡ Resumir | `Ctrl+B` | Resumen ejecutivo con puntos clave |
 | | ✉ Mejorar Correo | `Ctrl+M` | Optimiza tono profesional, cortesía y claridad |
+| **Redacción** *(sin selección)* | ✉ Redactar correo | `Ctrl+W` | Redacta un correo completo desde una idea breve |
+| | ☑ Lista de tareas | `Ctrl+T` | Crea una lista de pasos claros desde un objetivo |
 | **Idiomas** | ◐ Traducir al español | `Ctrl+1` | Traducción fiel al español sin comentarios |
 | | ◑ Traducir al inglés | `Ctrl+2` | Traducción fiel al inglés sin comentarios |
 | **Para Desarrolladores** | ▤ Fix SQL | `Ctrl+D` | Formatea consultas SQL con estructura compacta |
@@ -140,8 +145,9 @@ En el primer arranque, Escriba crea su carpeta de configuración, muestra el ban
 | Acción | Atajo (Win·Linux / Mac) | Descripción |
 | --- | --- | --- |
 | **⬅️ Sustituir texto** | `Ctrl+Enter` / `⌘↩` | Pega el resultado en la ventana de origen y restaura el portapapeles |
-| **📋 Copiar** | `Ctrl+Shift+C` / `⌘⇧C` | Copia el texto preservando indentación |
+| **📋 Copiar** | `Ctrl+Shift+C` / `⌘⇧C` | Copia el texto preservando indentación (o en HTML si `rich_paste` está activo) |
 | **🔄 Regenerar** | `Ctrl+R` / `⌘R` | Vuelve a generar con el mismo prompt |
+| **🔗 Encadenar** | Botón **Encadenar** | Pasa el resultado actual a otra acción |
 | **Alternar vista** | `Ctrl+O` / `⌘O` | Alterna entre *Resultado*, *Original* y *Cambios (diff)* |
 | **✨ Ajustar** | `Enter` en la barra inferior | Envía una instrucción de refinamiento sobre el resultado actual |
 | **Cerrar** | `Esc` | Cierra la ventana (y cancela si estaba en *streaming*) |
@@ -184,8 +190,9 @@ Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando 
 ]
 ```
 
-* **Variables en prompts:** `{clipboard}`, `{lang}`, `{date}`, `{time}`, `{datetime}` y campos interactivos `{input:Etiqueta}`.
+* **Variables en prompts:** `{app}`, `{clipboard}`, `{lang}`, `{date}`, `{time}`, `{datetime}` y campos interactivos `{input:Etiqueta}`.
 * **`mode`:** `"selection"` (por defecto), `"compose"` (visible sin selección) o `"both"` (ambos).
+* **`apps`:** lista opcional de aplicaciones (ej. `["outlook", "code"]`) para mostrar y promover esa acción solo en ellas.
 * **`temperature` / `model`:** sobrescribe temperatura (`0.0–2.0`) o modelo para esa acción.
 * **`strip_markdown`:** si es `true`, elimina envoltorios ```` ```lang ... ``` ```` de la respuesta.
 * **`auto_replace`:** si es `true`, sustituye el texto en la aplicación de origen automáticamente al terminar la generación.
@@ -202,9 +209,12 @@ Se almacena en `%APPDATA%\Escriba\config.json` (Windows), `~/Library/Application
 | `openai_base_url` / `openai_model` | string | URL base y modelo del proveedor alternativo |
 | `openai_api_key_enc` | string | API Key del proveedor alternativo (DPAPI / Llavero) |
 | `hotkey` | string | Atajo global personalizado (p. ej. `"Win+Alt+E"`, `"Ctrl+Alt+K"`) |
+| `repeat_hotkey` | string | Atajo secundario para repetir la última acción sin abrir menú |
 | `streaming` | boolean | Mostrar respuesta mientras se genera (por defecto: `true`) |
+| `rich_paste` | boolean | Copiar y pegar Markdown convertido a HTML (por defecto: `false`) |
 | `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
 | `action_usage` | object | Contadores de uso para promover acciones frecuentes |
+| `recent_prompts` | array | Últimas instrucciones libres ejecutadas en el menú |
 
 ---
 
@@ -215,13 +225,13 @@ Escriba es compatible con **macOS 11+** (Apple Silicon e Intel) y **Linux (X11)*
 | Aspecto | Windows | macOS | Linux (X11) |
 | --- | --- | --- | --- |
 | Atajo global por defecto | `Win+Alt+E` | `⌃⌘E` (`Ctrl+Cmd+E`) | `Ctrl+Alt+E` |
-| Portapapeles / Pegado | WinAPI + `keyboard` | Quartz (`CGEvent`) | `pynput` + `xclip` |
+| Portapapeles / Pegado | WinAPI + `keyboard` | Quartz (`CGEvent`) | `pynput` + `xclip` (`wtype` en Wayland) |
 | Ventana activa | WinAPI (`AttachThreadInput`) | `NSWorkspace` / `NSRunningApplication` | `xdotool` |
 | Secretos | DPAPI (`crypt32.dll`) | Llavero (`security -i`) | `config.json` (`chmod 0600`) |
 | Inicio automático | Registro `HKCU\...\Run` | `~/Library/LaunchAgents/com.cgarciagl.escriba.plist` | `~/.config/autostart/escriba.desktop` |
 
 * **macOS:** la primera vez solicitará permisos en **Ajustes del Sistema → Privacidad y seguridad** (**Accesibilidad** y **Monitorización de entrada**).
-* **Linux:** requiere una sesión **X11** (en Wayland los atajos globales y el foco entre ventanas no están soportados) y tener instalados `xclip` y `xdotool` (en Debian/Ubuntu: `sudo apt install xclip xdotool python3-tk`).
+* **Linux:** requiere una sesión **X11** para atajos globales y foco entre ventanas (si detecta **Wayland**, muestra un aviso al iniciar y usa `wtype` como respaldo cuando no hay `DISPLAY`) y tener instalados `xclip` y `xdotool` (en Debian/Ubuntu: `sudo apt install xclip xdotool python3-tk`).
 
 ---
 

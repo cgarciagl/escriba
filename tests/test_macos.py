@@ -109,6 +109,12 @@ class TestForegroundApp:
         with patch.dict(sys.modules, {"AppKit": None}):
             assert macos.get_foreground_window() is None
 
+    def test_get_foreground_app_name_reads_localized_name(self):
+        front = MagicMock()
+        front.localizedName.return_value = "Visual Studio Code"
+        assert macos.get_foreground_app_name(front) == "visual studio code"
+        assert macos.get_foreground_app_name(None) in ("", "visual studio code")
+
 
 class TestHotkeyManager:
     def test_registers_ctrl_cmd_e(self):

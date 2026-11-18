@@ -15,6 +15,9 @@ resto de la app importa desde aquí y no sabe si corre en Windows o en macOS.
 
 from __future__ import annotations
 
+import html
+import os
+import re
 import sys
 import time
 
@@ -29,6 +32,7 @@ if IS_MAC:
         StartupManager,
         activate_window,
         bring_app_to_front,
+        get_foreground_app_name,
         get_foreground_window,
         init_app,
         send_copy,
@@ -43,6 +47,9 @@ if IS_MAC:
 
     def monitor_workarea(x: int, y: int):
         return None  # se usa el tamaño de pantalla que reporta Tk
+
+    def is_wayland() -> bool:
+        return False
 elif IS_WINDOWS:
     import ctypes
 
@@ -97,6 +104,33 @@ elif IS_WINDOWS:
     def get_foreground_window():
         return ctypes.windll.user32.GetForegroundWindow()
 
+    def get_foreground_app_name(handle=None) -> str:
+        """Devuelve el nombre del ejecutable (sin .exe, minúsculas) de la ventana activa."""
+        try:
+            import ctypes.wintypes as wt
+
+            hwnd = handle or get_foreground_window()
+            if not hwnd:
+                return ""
+            pid = wt.DWORD(0)
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if not pid.value:
+                return ""
+            proc = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not proc:
+                return ""
+            try:
+                size = wt.DWORD(512)
+                buf = ctypes.create_unicode_buffer(512)
+                if ctypes.windll.kernel32.QueryFullProcessImageNameW(proc, 0, buf, ctypes.byref(size)):
+                    base = os.path.basename(buf.value)
+                    return os.path.splitext(base)[0].strip().lower()
+            finally:
+                ctypes.windll.kernel32.CloseHandle(proc)
+        except Exception:
+            pass
+        return ""
+
     def activate_window(handle) -> None:
         """Devuelve el foco a la ventana de origen (AttachThreadInput + SetForegroundWindow)."""
         if not handle:
@@ -112,6 +146,7 @@ elif IS_WINDOWS:
         if attach:
             user32.AttachThreadInput(cur_tid, fore_tid, False)
         time.sleep(0.25)
+
     def clipboard_has_non_text() -> bool:
         """Indica si el portapapeles tiene contenido no textual (ej. imagen o archivo)."""
         try:
@@ -124,6 +159,9 @@ elif IS_WINDOWS:
             )
         except Exception:
             return False
+
+    def is_wayland() -> bool:
+        return False
 else:
     from linux_platform import (  # noqa: F401
         HOTKEY_LABEL,
@@ -131,8 +169,10 @@ else:
         StartupManager,
         activate_window,
         bring_app_to_front,
+        get_foreground_app_name,
         get_foreground_window,
         init_app,
+        is_wayland,
         send_copy,
         send_paste,
     )
@@ -277,4 +317,155 @@ def release_single_instance():
         pass
     finally:
         _INSTANCE_LOCK = None
+
+
+def _inline_md_to_html(line: str) -> str:
+    escaped = html.escape(line)
+    escaped = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", escaped)
+    escaped = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", escaped)
+    return escaped
+
+
+def markdown_to_html(text: str) -> str:
+    """Convierte Markdown básico (encabezados, listas, negritas, código) a HTML limpio."""
+    lines = (text or "").splitlines()
+    out: list[str] = []
+    in_code = False
+    list_tag: str | None = None
+
+    def _close_list():
+        nonlocal list_tag
+        if list_tag:
+            out.append(f"</{list_tag}>")
+            list_tag = None
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            _close_list()
+            if in_code:
+                out.append("</code></pre>")
+                in_code = False
+            else:
+                out.append("<pre><code>")
+                in_code = True
+            continue
+        if in_code:
+            out.append(html.escape(line) + "\n")
+            continue
+
+        heading = re.match(r"^(#{1,3})\s+(.+)$", line)
+        if heading:
+            _close_list()
+            lvl = len(heading.group(1))
+            out.append(f"<h{lvl}>{_inline_md_to_html(heading.group(2).strip())}</h{lvl}>")
+            continue
+
+        ul = re.match(r"^\s*[-*•]\s+(.+)$", line)
+        if ul:
+            if list_tag != "ul":
+                _close_list()
+                list_tag = "ul"
+                out.append("<ul>")
+            out.append(f"<li>{_inline_md_to_html(ul.group(1))}</li>")
+            continue
+
+        ol = re.match(r"^\s*\d+[.)]\s+(.+)$", line)
+        if ol:
+            if list_tag != "ol":
+                _close_list()
+                list_tag = "ol"
+                out.append("<ol>")
+            out.append(f"<li>{_inline_md_to_html(ol.group(1))}</li>")
+            continue
+
+        _close_list()
+        if line.strip():
+            out.append(f"<p>{_inline_md_to_html(line)}</p>")
+
+    _close_list()
+    if in_code:
+        out.append("</code></pre>")
+    return "\n".join(out)
+
+
+def _build_win_cf_html(fragment: str) -> bytes:
+    header_tpl = (
+        "Version:0.9\r\n"
+        "StartHTML:{start_html:08d}\r\n"
+        "EndHTML:{end_html:08d}\r\n"
+        "StartFragment:{start_frag:08d}\r\n"
+        "EndFragment:{end_frag:08d}\r\n"
+    )
+    prefix = "<html>\r\n<body>\r\n<!--StartFragment-->"
+    suffix = "<!--EndFragment-->\r\n</body>\r\n</html>"
+    frag_bytes = fragment.encode("utf-8")
+    dummy = header_tpl.format(start_html=0, end_html=0, start_frag=0, end_frag=0).encode("utf-8")
+    start_html = len(dummy)
+    start_frag = start_html + len(prefix.encode("utf-8"))
+    end_frag = start_frag + len(frag_bytes)
+    end_html = end_frag + len(suffix.encode("utf-8"))
+    header = header_tpl.format(
+        start_html=start_html, end_html=end_html,
+        start_frag=start_frag, end_frag=end_frag,
+    ).encode("utf-8")
+    return header + prefix.encode("utf-8") + frag_bytes + suffix.encode("utf-8") + b"\x00"
+
+
+def copy_rich_text(plain_text: str, html_text: str | None = None) -> bool:
+    """Copia texto plano y HTML simultáneamente al portapapeles; vuelve a texto plano si falla."""
+    fragment = markdown_to_html(plain_text) if html_text is None else html_text
+    if IS_WINDOWS:
+        try:
+            import ctypes as _ctypes
+
+            user32 = _ctypes.windll.user32
+            kernel32 = _ctypes.windll.kernel32
+            html_bytes = _build_win_cf_html(fragment)
+            uni_bytes = (plain_text or "").encode("utf-16-le") + b"\x00\x00"
+            html_fmt = user32.RegisterClipboardFormatW("HTML Format")
+
+            def _alloc(raw: bytes):
+                h = kernel32.GlobalAlloc(0x0002, len(raw))
+                if not h:
+                    return None
+                ptr = kernel32.GlobalLock(h)
+                if not ptr:
+                    kernel32.GlobalFree(h)
+                    return None
+                _ctypes.memmove(ptr, raw, len(raw))
+                kernel32.GlobalUnlock(h)
+                return h
+
+            if user32.OpenClipboard(None):
+                try:
+                    user32.EmptyClipboard()
+                    h_uni = _alloc(uni_bytes)
+                    if h_uni:
+                        user32.SetClipboardData(13, h_uni)
+                    if html_fmt:
+                        h_html = _alloc(html_bytes)
+                        if h_html:
+                            user32.SetClipboardData(html_fmt, h_html)
+                    return True
+                finally:
+                    user32.CloseClipboard()
+        except Exception:
+            pass
+    elif IS_MAC:
+        try:
+            from AppKit import NSPasteboard, NSPasteboardTypeHTML, NSPasteboardTypeString
+
+            pb = NSPasteboard.generalPasteboard()
+            pb.clearContents()
+            pb.declareTypes_owner_([NSPasteboardTypeHTML, NSPasteboardTypeString], None)
+            pb.setString_forType_(fragment, NSPasteboardTypeHTML)
+            pb.setString_forType_(plain_text, NSPasteboardTypeString)
+            return True
+        except Exception:
+            pass
+
+    import pyperclip
+    pyperclip.copy(plain_text)
+    return False
 

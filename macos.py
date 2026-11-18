@@ -101,6 +101,18 @@ def get_foreground_window():
         return None
 
 
+def get_foreground_app_name(handle=None) -> str:
+    """Devuelve el nombre en minúsculas de la app en primer plano o ''."""
+    try:
+        target = handle or get_foreground_window()
+        if target is None:
+            return ""
+        name = target.localizedName() or ""
+        return str(name).strip().lower()
+    except Exception:
+        return ""
+
+
 def activate_window(handle) -> None:
     """Vuelve a poner en primer plano la app donde estaba el texto."""
     if handle is None:
@@ -142,10 +154,11 @@ def _to_pynput(hotkey: str | None) -> str:
 class HotkeyManager:
     """Registra el atajo global con pynput (por defecto Ctrl+Cmd+E)."""
 
-    def __init__(self, root, callback, hotkey: str | None = None):
+    def __init__(self, root, callback, hotkey: str | None = None, hotkey_id: int = 1):
         self.root = root
         self.callback = callback
         self.hotkey = hotkey
+        self._hotkey_id = hotkey_id
         self._listener = None
 
     def _fire(self):

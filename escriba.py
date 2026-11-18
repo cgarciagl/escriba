@@ -15,19 +15,22 @@ import webbrowser
 import ttkbootstrap as tb
 import pyperclip
 
-from constants import APP_NAME, APP_VERSION
+from actions import expand_prompt_vars
+from constants import APP_NAME, APP_VERSION, DEFAULT_REPEAT_HOTKEY
 from config import ConfigManager
 from ai_clients import is_ready
 from history import History
 from ui_common import configure_styles
 from ui_windows import (
     AboutWindow, ConfigWindow, FloatingMenu, ResultWindow, ThinkingWindow,
-    TooltipNotification, SplashBanner, UpdateDialog,
+    TooltipNotification, SplashBanner, UpdateDialog, start_ai_action,
 )
 from tray import TrayIconManager
 from plataforma import (
     HotkeyManager, StartupManager, acquire_single_instance, active_hotkey_label,
-    clipboard_has_non_text, enable_dpi_awareness, init_app, release_single_instance, send_copy,
+    clipboard_has_non_text, enable_dpi_awareness, format_hotkey_label,
+    get_foreground_app_name, get_foreground_window, init_app, is_wayland,
+    release_single_instance, send_copy,
 )
 from updater import (
     ReleaseInfo, UpdateCancelled, apply_update_and_restart, can_self_update,
@@ -58,25 +61,42 @@ class EscribaApp:
         # El refresco del menú se hace en el hilo principal (obligatorio en macOS).
         self.history.on_change = lambda: self.schedule(self.tray.refresh)
         self.hotkey = HotkeyManager(self.root, self._on_hotkey)
+        self.repeat_hotkey = HotkeyManager(self.root, self._on_repeat_hotkey, hotkey_id=2)
+        self._last_action: dict | None = None
         self._lock = threading.Lock()
 
     def run(self):
         """Inicia la app: carga config, tray, hotkey y entra al mainloop."""
         config = ConfigManager.load()
-        
+
         # Orquestar arranque automático si está activado en config
         if config.get("autostart"):
             StartupManager.enable()
-            
+
         self.tray.start()
         SplashBanner(self.root)
-        self.root.after(500, lambda: self.hotkey.start(config.get("hotkey")))
+        self.root.after(500, lambda: self._start_hotkeys(config))
+        if is_wayland():
+            self.root.after(2200, self._notify_wayland)
         # Primer arranque: sin proveedor configurado, guiar al usuario a Configuración.
         if not is_ready():
             self.root.after(1800, lambda: self.config_window.show(welcome=True))
         self.root.after(3500, self._maybe_check_updates)
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.root.mainloop()
+
+    def _start_hotkeys(self, config: dict):
+        self.hotkey.start(config.get("hotkey"))
+        rep = (config.get("repeat_hotkey") or DEFAULT_REPEAT_HOTKEY or "").strip()
+        if rep:
+            self.repeat_hotkey.start(rep)
+
+    def _notify_wayland(self):
+        self.tooltip.show(
+            "⚠️ Sesión Wayland detectada.\n"
+            "Los atajos globales y el pegado automático requieren X11/XWayland o wtype.",
+            "warning", 8000,
+        )
 
     def _maybe_check_updates(self):
         """Comprueba si hay una nueva versión en GitHub (como máximo cada 24 h)."""
@@ -159,11 +179,42 @@ class EscribaApp:
             action=("Abrir descarga", lambda: webbrowser.open(info.html_url)),
         )
 
-    def reload_hotkey(self, hotkey: str | None = None):
-        """Reinicia el listener del atajo global con la nueva combinación."""
+    def reload_hotkey(self, hotkey: str | None = None, repeat_hotkey: str | None = None):
+        """Reinicia los listeners de atajos globales con las nuevas combinaciones."""
         self.hotkey.stop()
+        self.repeat_hotkey.stop()
         self.tray.update_hotkey()
-        self.root.after(120, lambda: self.hotkey.start(hotkey))
+
+        def _restart():
+            self.hotkey.start(hotkey)
+            rep = (
+                ConfigManager.get("repeat_hotkey", DEFAULT_REPEAT_HOTKEY)
+                if repeat_hotkey is None
+                else repeat_hotkey
+            ) or ""
+            if rep.strip():
+                self.repeat_hotkey.start(rep.strip())
+
+        self.root.after(120, _restart)
+
+    def remember_last_action(
+        self,
+        prompt: str,
+        label: str,
+        auto_replace: bool = False,
+        model: str = "",
+        temperature: float | None = None,
+        strip_markdown: bool = False,
+    ):
+        """Guarda la última acción ejecutada para el atajo de repetición rápida."""
+        self._last_action = {
+            "prompt": prompt,
+            "label": label,
+            "auto_replace": auto_replace,
+            "model": model,
+            "temperature": temperature,
+            "strip_markdown": strip_markdown,
+        }
 
     def open_config(self):
         self.config_window.show()
@@ -185,6 +236,7 @@ class EscribaApp:
 
     def quit_app(self):
         self.hotkey.stop()
+        self.repeat_hotkey.stop()
         self.tray.stop()
         self.floating_menu.hide()
         self.tooltip.hide()
@@ -207,6 +259,47 @@ class EscribaApp:
         try:
             selected = self._capture_selected_text()
             self.schedule(self.floating_menu.show, selected)
+        finally:
+            self._lock.release()
+
+    def _launch_repeat(self, prompt: str, selected: str, hwnd, last: dict):
+        kwargs = {}
+        if last.get("model"):
+            kwargs["model"] = last["model"]
+        if last.get("temperature") is not None:
+            kwargs["temperature"] = last["temperature"]
+        if last.get("strip_markdown"):
+            kwargs["strip_markdown"] = True
+        start_ai_action(
+            self, prompt, selected, hwnd, last["label"],
+            auto_replace=bool(last.get("auto_replace")),
+            **kwargs,
+        )
+
+    def _on_repeat_hotkey(self, error=False):
+        """Reejecuta la última acción sobre la selección actual sin abrir el menú."""
+        if error:
+            rep = ConfigManager.get("repeat_hotkey", DEFAULT_REPEAT_HOTKEY) or ""
+            lbl = format_hotkey_label(rep) if rep else "repetir"
+            self.tooltip.show(
+                f"❌ Error: No se pudo registrar el atajo {lbl}.\n"
+                "Es posible que otra aplicación lo esté usando.",
+                "danger", 6000,
+            )
+            return
+
+        if not self._lock.acquire(blocking=False):
+            return
+        try:
+            hwnd = get_foreground_window()
+            selected = self._capture_selected_text()
+            last = self._last_action
+            if not last:
+                self.schedule(self.floating_menu.show, selected)
+                return
+            app_name = get_foreground_app_name(hwnd)
+            expanded = expand_prompt_vars(last["prompt"], extra_vars={"app": app_name})
+            self.schedule(self._launch_repeat, expanded, selected, hwnd, last)
         finally:
             self._lock.release()
 

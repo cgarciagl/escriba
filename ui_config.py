@@ -23,11 +23,13 @@ from constants import (
     APP_NAME,
     APP_VERSION,
     DEFAULT_HOTKEY,
+    DEFAULT_REPEAT_HOTKEY,
     GEMINI_DEFAULT_MODEL,
     GEMINI_FALLBACK_MODELS,
     HOTKEY_PRESETS,
     OPENAI_DEFAULT_BASE_URL,
     OPENAI_DEFAULT_MODEL,
+    REPEAT_HOTKEY_PRESETS,
 )
 from plataforma import IS_MAC, StartupManager
 from updater import check_for_update
@@ -61,7 +63,7 @@ def open_in_editor(path: str):
 class ConfigWindow:
     """Formulario de proveedores de IA, acciones, streaming y arranque."""
 
-    WIDTH, HEIGHT = 560, 650
+    WIDTH, HEIGHT = 560, 690
 
     def __init__(self, app: EscribaApp):
         self.app = app
@@ -285,6 +287,7 @@ class ConfigWindow:
         self._act_mode_var = tk.StringVar(value=_MODE_LABELS["selection"])
         self._act_temp_var = tk.StringVar()
         self._act_model_var = tk.StringVar()
+        self._act_apps_var = tk.StringVar()
         self._act_auto_var = tk.BooleanVar()
         self._act_strip_md_var = tk.BooleanVar()
 
@@ -325,14 +328,18 @@ class ConfigWindow:
         tb.Entry(a3, textvariable=self._act_model_var, font=(MONO_FONT, 8),
                  style="Escriba.TEntry").pack(fill=X)
 
+        self._title(right, "Apps (opc., ej. outlook, code)", pady=(0, 2))
+        tb.Entry(right, textvariable=self._act_apps_var, font=(MONO_FONT, 8),
+                 style="Escriba.TEntry").pack(fill=X, pady=(0, 6))
+
         tb.Checkbutton(right, text="  Sustituir automáticamente sin abrir ventana",
                        variable=self._act_auto_var, bootstyle="warning").pack(anchor=W, pady=(0, 3))
         tb.Checkbutton(right, text="  Limpiar bloques Markdown (```)",
                        variable=self._act_strip_md_var, bootstyle="warning").pack(anchor=W, pady=(0, 6))
 
-        self._title(right, "Prompt ({clipboard}, {lang}, {date}, {input:Campo})", pady=(0, 2))
+        self._title(right, "Prompt ({app}, {clipboard}, {lang}, {date}, {input:Campo})", pady=(0, 2))
         self._act_prompt_txt = tk.Text(
-            right, height=4, wrap=tk.WORD, font=(UI_FONT, 9),
+            right, height=3, wrap=tk.WORD, font=(UI_FONT, 9),
             bg=_FM_CARD, fg=_FM_TEXT, insertbackground=_FM_ACCENT,
             relief="flat", highlightthickness=1, highlightbackground=_FM_BORDER, padx=6, pady=6,
         )
@@ -369,6 +376,7 @@ class ConfigWindow:
         temp = a.get("temperature")
         self._act_temp_var.set("" if temp is None else str(temp))
         self._act_model_var.set(a.get("model", ""))
+        self._act_apps_var.set(", ".join(a.get("apps", [])))
         self._act_auto_var.set(bool(a.get("auto_replace", False)))
         self._act_strip_md_var.set(bool(a.get("strip_markdown", False)))
         self._act_prompt_txt.delete("1.0", tk.END)
@@ -414,6 +422,12 @@ class ConfigWindow:
             cur["model"] = model
         else:
             cur.pop("model", None)
+
+        apps = [p.strip().lower() for p in self._act_apps_var.get().split(",") if p.strip()]
+        if apps:
+            cur["apps"] = apps
+        else:
+            cur.pop("apps", None)
 
         changed = cur != before
         if changed:
@@ -519,8 +533,8 @@ class ConfigWindow:
 
     def _build_general_tab(self, tab):
         hotkey_row = tk.Frame(tab, bg=_FM_BG)
-        hotkey_row.pack(fill=X, pady=(0, 14))
-        tk.Label(hotkey_row, text="Atajo global:  ",
+        hotkey_row.pack(fill=X, pady=(0, 8))
+        tk.Label(hotkey_row, text="Atajo global:  ", width=16, anchor=W,
                  font=(UI_FONT, 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
         current_hk = ConfigManager.get("hotkey") or DEFAULT_HOTKEY
         self.hotkey_var = tk.StringVar(value=current_hk)
@@ -530,9 +544,26 @@ class ConfigWindow:
         tb.Combobox(hotkey_row, textvariable=self.hotkey_var, values=presets,
                     style="Escriba.TCombobox", font=(MONO_FONT, 9), width=18).pack(side=LEFT)
 
+        repeat_row = tk.Frame(tab, bg=_FM_BG)
+        repeat_row.pack(fill=X, pady=(0, 12))
+        tk.Label(repeat_row, text="Repetir última:  ", width=16, anchor=W,
+                 font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
+        current_rep = ConfigManager.get("repeat_hotkey", DEFAULT_REPEAT_HOTKEY) or ""
+        self.repeat_hotkey_var = tk.StringVar(value=current_rep)
+        rep_presets = list(REPEAT_HOTKEY_PRESETS)
+        if current_rep not in rep_presets:
+            rep_presets.insert(0, current_rep)
+        tb.Combobox(repeat_row, textvariable=self.repeat_hotkey_var, values=rep_presets,
+                    style="Escriba.TCombobox", font=(MONO_FONT, 9), width=18).pack(side=LEFT)
+
         self.streaming_var = tk.BooleanVar(value=bool(ConfigManager.get("streaming", True)))
         tb.Checkbutton(tab, text="  Mostrar la respuesta mientras se genera (streaming)",
                        variable=self.streaming_var,
+                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+
+        self.rich_paste_var = tk.BooleanVar(value=bool(ConfigManager.get("rich_paste", False)))
+        tb.Checkbutton(tab, text="  Pegar con formato enriquecido (Markdown → HTML)",
+                       variable=self.rich_paste_var,
                        bootstyle="warning").pack(anchor=W, pady=(0, 10))
 
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
@@ -717,6 +748,11 @@ class ConfigWindow:
 
         prev_hotkey = ConfigManager.get("hotkey") or DEFAULT_HOTKEY
         new_hotkey = self.hotkey_var.get().strip() or DEFAULT_HOTKEY
+        prev_repeat = ConfigManager.get("repeat_hotkey", DEFAULT_REPEAT_HOTKEY) or ""
+        new_repeat = self.repeat_hotkey_var.get().strip()
+        if new_repeat and new_repeat.lower() == new_hotkey.lower():
+            new_repeat = ""
+            note += "\n⚠️ El atajo para repetir la última acción no puede coincidir con el atajo principal."
 
         ConfigManager.set_api_key(gemini_key)
         ConfigManager.set("model", self.model_var.get().strip() or GEMINI_DEFAULT_MODEL)
@@ -726,10 +762,12 @@ class ConfigWindow:
         ConfigManager.set_openai_api_key(self.alt_key_var.get().strip())
         ConfigManager.set("fallback_enabled", bool(self.fallback_var.get()))
         ConfigManager.set("streaming", bool(self.streaming_var.get()))
+        ConfigManager.set("rich_paste", bool(self.rich_paste_var.get()))
         ConfigManager.set("auto_update_check", bool(self.auto_update_var.get()))
         ConfigManager.set("hotkey", new_hotkey)
-        if new_hotkey != prev_hotkey and hasattr(self.app, "reload_hotkey"):
-            self.app.reload_hotkey(new_hotkey)
+        ConfigManager.set("repeat_hotkey", new_repeat)
+        if (new_hotkey != prev_hotkey or new_repeat != prev_repeat) and hasattr(self.app, "reload_hotkey"):
+            self.app.reload_hotkey(new_hotkey, new_repeat)
 
         try:
             if self.autostart_var.get():

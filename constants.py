@@ -26,12 +26,18 @@ STARTUP_KEY           = r"Software\Microsoft\Windows\CurrentVersion\Run"
 if sys.platform == "darwin":
     DEFAULT_HOTKEY = "Ctrl+Cmd+E"
     HOTKEY_PRESETS = ["Ctrl+Cmd+E", "Ctrl+Cmd+Space", "Ctrl+Shift+E", "Ctrl+Alt+E"]
+    DEFAULT_REPEAT_HOTKEY = ""
+    REPEAT_HOTKEY_PRESETS = ["", "Ctrl+Cmd+R", "Ctrl+Shift+R", "Ctrl+Alt+R"]
 elif sys.platform == "win32":
     DEFAULT_HOTKEY = "Win+Alt+E"
     HOTKEY_PRESETS = ["Win+Alt+E", "Ctrl+Alt+E", "Ctrl+Shift+E", "Win+Shift+E"]
+    DEFAULT_REPEAT_HOTKEY = ""
+    REPEAT_HOTKEY_PRESETS = ["", "Ctrl+Alt+R", "Ctrl+Shift+R", "Win+Shift+R"]
 else:
     DEFAULT_HOTKEY = "Ctrl+Alt+E"
     HOTKEY_PRESETS = ["Ctrl+Alt+E", "Ctrl+Shift+E", "Super+Alt+E", "Ctrl+Alt+Space"]
+    DEFAULT_REPEAT_HOTKEY = ""
+    REPEAT_HOTKEY_PRESETS = ["", "Ctrl+Alt+R", "Ctrl+Shift+R", "Super+Alt+R"]
 
 # Carpeta de configuración (escribible aunque la app esté en Program Files,
 # /Applications o /usr/local/bin):
@@ -169,5 +175,23 @@ AI_ACTIONS = [
         "bootstyle":    "secondary-outline",
         "section":      "Para desarrolladores",
         "shortcut":     "Ctrl+P",
+    },
+    {
+        "label":        "✉  Redactar correo",
+        "prompt":       "Redacta un correo electrónico claro, cordial y profesional sobre: {input:Asunto o idea principal}. "
+                        "Devuelve ÚNICAMENTE el texto del correo.",
+        "bootstyle":    "info-outline",
+        "section":      "Redacción",
+        "shortcut":     "Ctrl+3",
+        "mode":         "compose",
+    },
+    {
+        "label":        "☑  Lista de tareas",
+        "prompt":       "Genera una lista de tareas clara y accionable en formato viñetas sobre: {input:Objetivo o tema}. "
+                        "Devuelve ÚNICAMENTE la lista.",
+        "bootstyle":    "info-outline",
+        "section":      "Redacción",
+        "shortcut":     "Ctrl+4",
+        "mode":         "compose",
     },
 ]

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -25,6 +26,19 @@ from constants import APP_NAME
 
 HOTKEY_PYNPUT = "<ctrl>+<alt>+e"
 HOTKEY_LABEL = "Ctrl + Alt + E"
+
+
+def is_wayland() -> bool:
+    """Indica si la sesión actual de Linux corre bajo Wayland."""
+    session = (os.environ.get("XDG_SESSION_TYPE") or "").strip().lower()
+    if session == "wayland":
+        return True
+    return bool(os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY"))
+
+
+def has_wayland_tools() -> tuple[bool, bool]:
+    """Devuelve (wl_copy_disponible, wtype_disponible) para entornos Wayland."""
+    return bool(shutil.which("wl-copy")), bool(shutil.which("wtype"))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -60,6 +74,12 @@ def _release_modifiers(controller, keyboard_mod) -> None:
 
 
 def _send_ctrl_combo(char: str) -> None:
+    if is_wayland() and not os.environ.get("DISPLAY") and shutil.which("wtype"):
+        subprocess.run(
+            ["wtype", "-M", "ctrl", "-k", char, "-m", "ctrl"],
+            capture_output=True, timeout=2,
+        )
+        return
     from pynput import keyboard
 
     ctrl = keyboard.Controller()
@@ -94,6 +114,22 @@ def get_foreground_window():
         return win_id if result.returncode == 0 and win_id else None
     except Exception:
         return None
+
+
+def get_foreground_app_name(handle=None) -> str:
+    """Devuelve la clase/nombre de la ventana X11 activa en minúsculas o ''."""
+    target = handle or get_foreground_window()
+    if not target:
+        return ""
+    try:
+        result = subprocess.run(
+            ["xdotool", "getwindowclassname", str(target)],
+            capture_output=True, text=True, timeout=2,
+        )
+        name = (result.stdout or "").strip().lower()
+        return name if result.returncode == 0 else ""
+    except Exception:
+        return ""
 
 
 def activate_window(handle) -> None:
@@ -152,10 +188,11 @@ def _to_pynput(hotkey: str | None) -> str:
 class HotkeyManager:
     """Registra el atajo global en X11 con pynput (por defecto Ctrl+Alt+E)."""
 
-    def __init__(self, root, callback, hotkey: str | None = None):
+    def __init__(self, root, callback, hotkey: str | None = None, hotkey_id: int = 1):
         self.root = root
         self.callback = callback
         self.hotkey = hotkey
+        self._hotkey_id = hotkey_id
         self._listener = None
 
     def _fire(self):

@@ -9,7 +9,7 @@ from constants import (
     STARTUP_KEY,
 )
 
-_VALID_SECTIONS = {"Texto y Contenido", "Idiomas", "Para desarrolladores"}
+_VALID_SECTIONS = {"Texto y Contenido", "Idiomas", "Para desarrolladores", "Redacción"}
 _VALID_BOOTSTYLES = {
     "info-outline",
     "warning-outline",
@@ -43,7 +43,7 @@ class TestAppConstants:
 
 class TestAIActions:
     def test_total_count(self):
-        assert len(AI_ACTIONS) == 10
+        assert len(AI_ACTIONS) == 12
 
     def test_every_action_has_required_keys(self):
         for i, action in enumerate(AI_ACTIONS):
@@ -79,6 +79,11 @@ class TestAIActions:
     def test_desarrolladores_section_count(self):
         dev_actions = [a for a in AI_ACTIONS if a["section"] == "Para desarrolladores"]
         assert len(dev_actions) == 3
+
+    def test_redaccion_section_count(self):
+        compose_actions = [a for a in AI_ACTIONS if a["section"] == "Redacción"]
+        assert len(compose_actions) == 2
+        assert all(a.get("mode") == "compose" for a in compose_actions)
 
     def test_no_duplicate_labels(self):
         labels = [a["label"] for a in AI_ACTIONS]

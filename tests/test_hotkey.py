@@ -78,6 +78,20 @@ class TestHotkeyManager:
             None, 1, 0x0008 | 0x0001, 0x45
         )
 
+    def test_start_registers_custom_hotkey_id(self, mock_hotkey):
+        root = MagicMock()
+        callback = MagicMock()
+        mock_hotkey["windll"].user32.RegisterHotKey.return_value = True
+        mock_hotkey["windll"].user32.GetMessageW.return_value = 0
+
+        hm = HotkeyManager(root, callback, hotkey="Ctrl+Alt+R", hotkey_id=2)
+        hm.start()
+        hm._thread.join(timeout=3)
+
+        mock_hotkey["windll"].user32.RegisterHotKey.assert_called_once_with(
+            None, 2, 0x0002 | 0x0001, ord("R")
+        )
+
     def test_start_triggers_callback_on_hotkey(self, mock_hotkey):
         root = MagicMock()
         callback = MagicMock()

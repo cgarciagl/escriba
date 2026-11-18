@@ -27,13 +27,25 @@ import pyperclip
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-from actions import strip_code_fences
+from actions import (
+    expand_prompt_vars,
+    extract_prompt_inputs,
+    load_actions,
+    strip_code_fences,
+)
 from ai_clients import PROVIDER_LABELS, CancelledByUser, generate_text, needs_configuration
 from config import ConfigManager
 from constants import APP_NAME, OPENAI_DEFAULT_MODEL
-from plataforma import PRIMARY_MODIFIER_TK, activate_window, send_paste, shortcut_label
+from plataforma import (
+    PRIMARY_MODIFIER_TK,
+    activate_window,
+    copy_rich_text,
+    get_foreground_app_name,
+    send_paste,
+    shortcut_label,
+)
 from ui_common import (
-    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
+    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_HOVER, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
     ThinkingWindow, apply_dark_style, center_window,
 )
 
@@ -64,12 +76,16 @@ def _used_model(provider: str, custom_model: str = "") -> str:
     return ConfigManager.get("model") or ConfigManager.get_model()
 
 
-def _word_count_text(original: str, result: str) -> str:
+def _word_count_text(original: str, result: str, elapsed_s: float | None = None) -> str:
     res_words = len((result or "").split())
     if (original or "").strip():
         orig_words = len(original.split())
-        return f"{orig_words} → {res_words} palabras"
-    return f"{res_words} palabra{'s' if res_words != 1 else ''}"
+        base = f"{orig_words} → {res_words} palabras"
+    else:
+        base = f"{res_words} palabra{'s' if res_words != 1 else ''}"
+    if elapsed_s is not None:
+        return f"{base} · {elapsed_s:.1f} s"
+    return base
 
 
 def _paste_to_origin(app: EscribaApp, prev_hwnd, text: str):
@@ -80,7 +96,10 @@ def _paste_to_origin(app: EscribaApp, prev_hwnd, text: str):
     except Exception:
         pass
     try:
-        pyperclip.copy(text)
+        if ConfigManager.get("rich_paste", False):
+            copy_rich_text(text)
+        else:
+            pyperclip.copy(text)
         activate_window(prev_hwnd)
         send_paste()
         time.sleep(0.30)
@@ -126,6 +145,7 @@ class _ResultSession:
         self.temperature = temperature
         self.strip_markdown = strip_markdown
         self.history_turns = list(history_turns) if history_turns else []
+        self.elapsed_s: float | None = None
         self.cancel_event = threading.Event()
         self.thinking: ThinkingWindow | None = None
         self.window: ResultWindow | None = None
@@ -174,6 +194,8 @@ class _ResultSession:
         if self.window:
             if self.model:
                 self.window.model = self.model
+            if self.elapsed_s is not None:
+                self.window.elapsed_s = self.elapsed_s
             self.window._turns = next_turns
             self.window.finish(result, provider)
         else:
@@ -183,6 +205,7 @@ class _ResultSession:
                 label=self.label, provider=provider, model=self.model,
                 temperature=self.temperature, strip_markdown=self.strip_markdown,
                 history_turns=next_turns, custom_model=self.custom_model,
+                elapsed_s=self.elapsed_s,
             )
 
     def fail(self, exc: Exception):
@@ -232,6 +255,7 @@ def run_ai_action(app: EscribaApp, session: _ResultSession):
         if session.history_turns:
             extra_kwargs["history"] = session.history_turns
 
+        t0 = time.monotonic()
         result, provider = generate_text(
             session.prompt, session.user_input,
             on_retry=on_retry,
@@ -242,6 +266,7 @@ def run_ai_action(app: EscribaApp, session: _ResultSession):
         )
         if session.strip_markdown:
             result = strip_code_fences(result)
+        session.elapsed_s = round(time.monotonic() - t0, 2)
         session.model = _used_model(provider, session.custom_model)
         app.history.add(session.label, session.prompt, session.text, result, provider, model=session.model)
         app.schedule(session.finish, result, provider)
@@ -300,6 +325,7 @@ class ResultWindow:
         strip_markdown: bool = False,
         history_turns: list[tuple[str, str]] | None = None,
         custom_model: str = "",
+        elapsed_s: float | None = None,
     ):
         self.app = app
         self.result = result
@@ -314,6 +340,7 @@ class ResultWindow:
         self.label = label
         self.streaming = streaming
         self._on_stop = on_stop
+        self.elapsed_s = elapsed_s
         self.can_replace = bool(prev_hwnd)
         self._turns: list[tuple[str, str]] = (
             list(history_turns)
@@ -328,7 +355,7 @@ class ResultWindow:
         win.resizable(True, True)
         apply_dark_style(win)
         self.window = win
-        center_window(win, 600, 440)
+        center_window(win, 660, 460)
 
         frame = tk.Frame(win, bg=_FM_BG, padx=16, pady=12)
         frame.pack(fill=BOTH, expand=True)
@@ -380,7 +407,7 @@ class ResultWindow:
             command=lambda: self._step_history(1),
         )
         self._words_lbl = tk.Label(
-            bar, text="" if streaming else _word_count_text(selected_text, result),
+            bar, text="" if streaming else _word_count_text(selected_text, result, self.elapsed_s),
             font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED,
         )
         if not streaming:
@@ -417,6 +444,10 @@ class ResultWindow:
             btns, text=f"🔄  Regenerar   {shortcut_label('Ctrl+R')}",
             style="Escriba.TButton", command=self._regenerate,
         )
+        self._chain_btn = tb.Button(
+            btns, text="🔗  Encadenar",
+            style="Escriba.TButton", command=self._open_chain_menu,
+        )
 
         if primary_is_replace:
             self._replace_btn.pack(side=RIGHT, ipady=4)
@@ -424,8 +455,9 @@ class ResultWindow:
         else:
             self._copy_btn.pack(side=RIGHT, ipady=4)
         self._regen_btn.pack(side=LEFT, ipady=2, padx=(6, 0))
+        self._chain_btn.pack(side=LEFT, ipady=2, padx=(6, 0))
         tk.Label(btns, text="Esc cierra", font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED
-                 ).pack(side=LEFT, padx=(10, 0))
+                 ).pack(side=LEFT, padx=(8, 0))
 
         # ── Área de texto: resultado, original y diff ────────
         self.txt_frame = tk.Frame(frame, bg=_FM_BG)
@@ -487,6 +519,7 @@ class ResultWindow:
         self.provider = entry.provider
         self.model = entry.model
         self.label = entry.label
+        self.elapsed_s = None
         self._turns = [(entry.selected_text or entry.prompt, entry.result)]
 
         short_lbl = entry.label.split("  ", 1)[-1].strip()
@@ -620,6 +653,7 @@ class ResultWindow:
         self._copy_btn.configure(state=state)
         self._refine_btn.configure(state=state)
         self._refine_entry.configure(state=state)
+        self._chain_btn.configure(state=state)
         self._regen_btn.configure(state="normal" if enabled and self.prompt else "disabled")
         self._replace_btn.configure(state="normal" if enabled and self.can_replace else "disabled")
 
@@ -653,7 +687,7 @@ class ResultWindow:
         self.text_widget.edit_reset()
         self._apply_markdown_tags()
         self._badge.configure(text=provider_badge(provider, self.model))
-        self._words_lbl.configure(text=_word_count_text(self.selected_text, result))
+        self._words_lbl.configure(text=_word_count_text(self.selected_text, result, self.elapsed_s))
         self.text_widget.focus_set()
 
     def mark_failed(self):
@@ -669,7 +703,7 @@ class ResultWindow:
             return
         self._end_streaming()
         current = self.text_widget.get("1.0", "end-1c")
-        self._words_lbl.configure(text=_word_count_text(self.selected_text, current))
+        self._words_lbl.configure(text=_word_count_text(self.selected_text, current, self.elapsed_s))
         self._badge.configure(text="⏹ Detenido")
 
     def _stop(self):
@@ -698,7 +732,10 @@ class ResultWindow:
 
     def _copy(self):
         text = self.text_widget.get("1.0", "end-1c")
-        pyperclip.copy(text)
+        if ConfigManager.get("rich_paste", False):
+            copy_rich_text(text)
+        else:
+            pyperclip.copy(text)
         self.app.tooltip.show("Copiado al portapapeles.", "success", 2000)
 
     def _replace(self):
@@ -708,6 +745,66 @@ class ResultWindow:
 
     def _do_replace(self, text: str):
         _paste_to_origin(self.app, self.prev_hwnd, text)
+
+    def _open_chain_menu(self):
+        if not self._actions_enabled:
+            return
+        actions, _ = load_actions()
+        chainable = [
+            a for a in actions
+            if (a.get("mode", "selection") or "selection") in ("selection", "both")
+            and not extract_prompt_inputs(a["prompt"])
+        ]
+        if not chainable:
+            return
+        menu = tk.Menu(
+            self.window, tearoff=0,
+            bg=_FM_CARD, fg=_FM_TEXT,
+            activebackground=_FM_HOVER, activeforeground=_FM_TEXT,
+            bd=1,
+        )
+        for action in chainable:
+            menu.add_command(
+                label=action["label"],
+                command=lambda a=action: self._chain_action(a),
+            )
+        try:
+            x = self._chain_btn.winfo_rootx()
+            y = self._chain_btn.winfo_rooty() + self._chain_btn.winfo_height()
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def _chain_action(self, action: dict):
+        current = self.text_widget.get("1.0", "end-1c")
+        if not current.strip():
+            return
+        app_name = get_foreground_app_name(self.prev_hwnd) if self.prev_hwnd else ""
+        expanded = expand_prompt_vars(action["prompt"], extra_vars={"app": app_name})
+        kwargs = {}
+        if action.get("model"):
+            kwargs["model"] = action["model"]
+        if action.get("temperature") is not None:
+            kwargs["temperature"] = action["temperature"]
+        if action.get("strip_markdown"):
+            kwargs["strip_markdown"] = True
+        if hasattr(self.app, "remember_last_action"):
+            self.app.remember_last_action(
+                prompt=action["prompt"],
+                label=action["label"],
+                auto_replace=bool(action.get("auto_replace")),
+                **kwargs,
+            )
+        if self._alive():
+            self.window.destroy()
+        start_ai_action(
+            self.app,
+            expanded,
+            current,
+            self.prev_hwnd,
+            action["label"],
+            **kwargs,
+        )
 
     def _refine(self):
         if not self._actions_enabled:

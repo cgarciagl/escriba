@@ -18,13 +18,13 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 from actions import (
-    action_icon, action_name, display_shortcut, expand_prompt_vars,
-    extract_prompt_inputs, filter_actions, load_actions,
+    action_icon, action_matches_app, action_name, add_custom_action, display_shortcut,
+    expand_prompt_vars, extract_prompt_inputs, filter_actions, load_actions,
 )
 from ai_clients import is_ready
 from config import ConfigManager
 from constants import APP_NAME
-from plataforma import bring_app_to_front, get_foreground_window
+from plataforma import bring_app_to_front, get_foreground_app_name, get_foreground_window, tk_shortcut
 from ui_common import (
     _FM_ACCENT, _FM_BADGE, _FM_BG, _FM_BORDER, _FM_CARD, _FM_HOVER, _FM_MUTED, _FM_SEP, _FM_TEXT,
     MONO_FONT, UI_FONT, apply_dark_style, center_window, fade_window, place_near_pointer, scaled,
@@ -39,6 +39,7 @@ PLACEHOLDER_COMPOSE = "Escribe qué quieres generar o redactar…"
 MAX_LIST_HEIGHT = 340
 MAX_INPUT_LINES = 4
 LONG_TEXT_CHARS = 10000
+MAX_RECENT_PROMPTS = 8
 
 
 def group_by_section(actions: list[dict]) -> list[tuple[str, list[dict]]]:
@@ -62,10 +63,30 @@ def _mode_matches(action: dict, has_selection: bool) -> bool:
     return mode in ("compose", "both")
 
 
-def build_items(actions: list[dict], query: str, has_selection: bool = True) -> list[dict]:
-    """Filas a mostrar: acciones filtradas y, si hay texto, la instrucción libre al final."""
-    eligible = [a for a in actions if _mode_matches(a, has_selection)]
+def build_items(
+    actions: list[dict],
+    query: str,
+    has_selection: bool = True,
+    app_name: str = "",
+    recent_prompts: list[str] | None = None,
+) -> list[dict]:
+    """Filas a mostrar: acciones filtradas, recientes opcionales e instrucción libre."""
+    eligible = [
+        a for a in actions
+        if _mode_matches(a, has_selection) and action_matches_app(a, app_name)
+    ]
+    if app_name and not query.strip():
+        app_specific = [a for a in eligible if a.get("apps")]
+        if app_specific:
+            promoted = [{**a, "section": f"★ Para {app_name}"} for a in app_specific]
+            app_labels = {a["label"] for a in app_specific}
+            eligible = promoted + [a for a in eligible if a["label"] not in app_labels]
+
     items = [{"kind": "action", "action": a} for a in filter_actions(eligible, query)]
+    if not query.strip() and recent_prompts:
+        for p in recent_prompts[:3]:
+            if p and p.strip():
+                items.append({"kind": "recent", "prompt": p.strip()})
     if query.strip():
         items.append({"kind": "custom", "prompt": query.strip()})
     return items
@@ -104,6 +125,7 @@ class FloatingMenu:
         self.app = app
         self.window = None
         self._prev_hwnd = None
+        self._app_name = ""
         self._text = ""
         self._has_selection = True
         self._actions: list[dict] = []
@@ -115,6 +137,25 @@ class FloatingMenu:
         self._inner_list = None
         self._canvas_win = None
         self._vscroll = None
+
+    @staticmethod
+    def _recent_prompts() -> list[str]:
+        try:
+            raw = ConfigManager.get("recent_prompts", []) or []
+            return [str(p).strip() for p in raw if isinstance(p, str) and p.strip()][:MAX_RECENT_PROMPTS]
+        except Exception:
+            return []
+
+    @classmethod
+    def _record_recent_prompt(cls, prompt: str):
+        clean = (prompt or "").strip()
+        if not clean:
+            return
+        try:
+            cur = [p for p in cls._recent_prompts() if p != clean]
+            ConfigManager.set("recent_prompts", ([clean] + cur)[:MAX_RECENT_PROMPTS])
+        except Exception:
+            pass
 
     # ── Apertura ────────────────────────────────────────────
     def show(self, selected_text: str):
@@ -135,6 +176,7 @@ class FloatingMenu:
         self._query = ""
         self._sel = 0
         self._prev_hwnd = get_foreground_window()
+        self._app_name = get_foreground_app_name(self._prev_hwnd)
 
         win = tk.Toplevel(self.app.root)
         win.overrideredirect(True)
@@ -162,6 +204,9 @@ class FloatingMenu:
         else:
             tk.Label(hdr, text="  ·  Modo redacción (sin selección)",
                      font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+        if self._app_name:
+            tk.Label(hdr, text=f"  ·  {self._app_name}",
+                     font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         close = tk.Label(hdr, text="✕", font=(UI_FONT, 10), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
         close.pack(side=RIGHT)
         close.bind("<Button-1>", lambda e: self.hide())
@@ -217,7 +262,10 @@ class FloatingMenu:
                  font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         self._bind_keys(win)
-        self._items = build_items(self._actions, "", has_selection=self._has_selection)
+        self._items = build_items(
+            self._actions, "", has_selection=self._has_selection,
+            app_name=self._app_name, recent_prompts=self._recent_prompts(),
+        )
         self._render()
 
         place_near_pointer(win)
@@ -269,11 +317,12 @@ class FloatingMenu:
         self.input.bind("<KP_Enter>", stop(self._run_selected))
         self.input.bind("<Shift-Return>", stop(self._newline))
         self.input.bind("<Escape>", stop(self.hide))
+        self.input.bind(tk_shortcut("s"), stop(lambda: self._save_custom_prompt(self.input.get("1.0", "end-1c"))))
         self.input.bind("<KeyRelease>", lambda e: self._on_query_change())
         win.bind("<Escape>", lambda e: self.hide())
 
         for action in self._actions:
-            if not _mode_matches(action, self._has_selection):
+            if not (_mode_matches(action, self._has_selection) and action_matches_app(action, self._app_name)):
                 continue
             key = action.get("shortcut_key")
             if key:
@@ -305,7 +354,10 @@ class FloatingMenu:
             self._placeholder.place(x=scaled(self.window, 10), rely=0.5, anchor=W)
         if query != self._query:
             self._query = query
-            self._items = build_items(self._actions, query, has_selection=self._has_selection)
+            self._items = build_items(
+                self._actions, query, has_selection=self._has_selection,
+                app_name=self._app_name, recent_prompts=self._recent_prompts(),
+            )
             self._sel = 0
             self._render()
 
@@ -319,9 +371,14 @@ class FloatingMenu:
         grouped = not self._query.strip()
         last_section = None
         for index, item in enumerate(self._items):
-            if grouped and item["kind"] == "action":
-                section = item["action"].get("section", "")
-                if section != last_section:
+            if grouped:
+                if item["kind"] == "action":
+                    section = item["action"].get("section", "")
+                elif item["kind"] == "recent":
+                    section = "🕘 Instrucciones recientes"
+                else:
+                    section = None
+                if section and section != last_section:
                     tk.Label(container, text=section, font=(UI_FONT, 8, "bold"),
                              bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W, padx=6, pady=(5, 1))
                     last_section = section
@@ -335,13 +392,16 @@ class FloatingMenu:
     def _make_row(self, index: int, item: dict) -> list[tk.Widget]:
         row = tk.Frame(self._inner_list, bg=_FM_BG, cursor="hand2", padx=6, pady=3)
         row.pack(fill=X)
-        if item["kind"] == "action":
+        kind = item["kind"]
+        if kind == "action":
             action = item["action"]
             icon, text = action_icon(action), action_name(action)
             key = display_shortcut(action["shortcut"]) if action.get("shortcut_key") else ""
+        elif kind == "recent":
+            icon, text, key = "🕘", _truncate(item["prompt"], 42), "Enter"
         else:
             verb = "Usar como instrucción" if self._has_selection else "Generar"
-            icon, text, key = "✏", f"{verb}: “{_truncate(item['prompt'], 38)}”", "Enter"
+            icon, text, key = "✏", f"{verb}: “{_truncate(item['prompt'], 34)}”", "Enter"
 
         icon_lbl = tk.Label(row, text=icon, width=2, font=(UI_FONT, 11), bg=_FM_BG, fg=_FM_ACCENT)
         icon_lbl.pack(side=LEFT)
@@ -353,6 +413,13 @@ class FloatingMenu:
                              padx=6, pady=1, highlightthickness=1, highlightbackground=_FM_BORDER)
             badge.pack(side=RIGHT)
             widgets.append(badge)
+        if kind in ("custom", "recent"):
+            save_lbl = tk.Label(
+                row, text="★ Guardar", font=(UI_FONT, 8), bg=_FM_BADGE, fg=_FM_ACCENT,
+                padx=6, pady=1, cursor="hand2",
+            )
+            save_lbl.pack(side=RIGHT, padx=(0, 4))
+            save_lbl.bind("<Button-1>", lambda e, p=item["prompt"]: self._save_custom_prompt(p))
 
         for w in widgets:
             w.bind("<Button-1>", lambda e, i=index: self._run_index(i))
@@ -360,6 +427,25 @@ class FloatingMenu:
             for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
                 w.bind(seq, self._on_mousewheel)
         return widgets
+
+    def _save_custom_prompt(self, prompt: str):
+        clean = (prompt or "").strip()
+        if not clean:
+            return
+        try:
+            label = _truncate(clean, 26)
+            add_custom_action(label, clean, mode="both")
+            actions, _ = load_actions()
+            self._actions = _with_frequent_first(actions)
+            self._items = build_items(
+                self._actions, self._query, has_selection=self._has_selection,
+                app_name=self._app_name, recent_prompts=self._recent_prompts(),
+            )
+            if self.window and self.window.winfo_exists():
+                self._render()
+            self.app.tooltip.show(f"Acción «{label}» guardada en actions.json.", "success", 2500)
+        except Exception as exc:
+            self.app.tooltip.show(f"No se pudo guardar la acción: {exc}", "danger", 4000)
 
     def _highlight(self):
         for i, widgets in enumerate(self._rows):
@@ -488,7 +574,8 @@ class FloatingMenu:
             if extra is None:
                 return
         self._record_usage(action["label"])
-        prompt = expand_prompt_vars(action["prompt"], extra_vars=extra)
+        all_vars = {"app": self._app_name, **(extra or {})}
+        prompt = expand_prompt_vars(action["prompt"], extra_vars=all_vars)
         kwargs = {}
         if action.get("model"):
             kwargs["model"] = action["model"]
@@ -496,6 +583,13 @@ class FloatingMenu:
             kwargs["temperature"] = action["temperature"]
         if action.get("strip_markdown"):
             kwargs["strip_markdown"] = True
+        if hasattr(self.app, "remember_last_action"):
+            self.app.remember_last_action(
+                prompt=action["prompt"],
+                label=action["label"],
+                auto_replace=bool(action.get("auto_replace")),
+                **kwargs,
+            )
         start_ai_action(
             self.app, prompt, self._text, self._prev_hwnd, action["label"],
             auto_replace=bool(action.get("auto_replace")),
@@ -504,11 +598,15 @@ class FloatingMenu:
 
     def _on_custom_prompt(self, prompt: str):
         self.hide()
+        self._record_recent_prompt(prompt)
         inputs = extract_prompt_inputs(prompt)
         extra = None
         if inputs:
             extra = self._ask_prompt_inputs("Instrucción libre", inputs)
             if extra is None:
                 return
-        expanded = expand_prompt_vars(prompt, extra_vars=extra)
+        all_vars = {"app": self._app_name, **(extra or {})}
+        expanded = expand_prompt_vars(prompt, extra_vars=all_vars)
+        if hasattr(self.app, "remember_last_action"):
+            self.app.remember_last_action(prompt=prompt, label=CUSTOM_PROMPT_LABEL)
         start_ai_action(self.app, expanded, self._text, self._prev_hwnd, CUSTOM_PROMPT_LABEL)
