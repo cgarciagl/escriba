@@ -113,7 +113,10 @@ class TestForegroundApp:
         front = MagicMock()
         front.localizedName.return_value = "Visual Studio Code"
         assert macos.get_foreground_app_name(front) == "visual studio code"
-        assert macos.get_foreground_app_name(None) in ("", "visual studio code")
+        with patch("macos.get_foreground_window", return_value=front):
+            assert macos.get_foreground_app_name(None) == "visual studio code"
+        with patch("macos.get_foreground_window", return_value=None):
+            assert macos.get_foreground_app_name(None) == ""
 
 
 class TestHotkeyManager:
