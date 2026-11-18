@@ -355,7 +355,7 @@ class ResultWindow:
         win.resizable(True, True)
         apply_dark_style(win)
         self.window = win
-        center_window(win, 660, 460)
+        center_window(win, 720, 460)
 
         frame = tk.Frame(win, bg=_FM_BG, padx=16, pady=12)
         frame.pack(fill=BOTH, expand=True)

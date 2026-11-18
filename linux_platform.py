@@ -14,6 +14,7 @@ diferida para que este módulo pueda importarse y probarse sin servidor X.
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
@@ -39,6 +40,36 @@ def is_wayland() -> bool:
 def has_wayland_tools() -> tuple[bool, bool]:
     """Devuelve (wl_copy_disponible, wtype_disponible) para entornos Wayland."""
     return bool(shutil.which("wl-copy")), bool(shutil.which("wtype"))
+
+
+def wl_copy(text: str, html_text: str | None = None) -> bool:
+    """Copia al portapapeles usando wl-copy en Wayland; devuelve True si tuvo éxito."""
+    if not is_wayland() or not shutil.which("wl-copy"):
+        return False
+    try:
+        cmd = ["wl-copy"]
+        payload = text or ""
+        if html_text is not None:
+            cmd.extend(["--type", "text/html"])
+            payload = html_text
+        subprocess.run(cmd, input=payload, text=True, capture_output=True, timeout=2, check=True)
+        return True
+    except Exception:
+        return False
+
+
+def wl_paste() -> str | None:
+    """Lee el portapapeles usando wl-paste en Wayland; devuelve None si no aplica."""
+    if not is_wayland() or not shutil.which("wl-paste"):
+        return None
+    try:
+        res = subprocess.run(
+            ["wl-paste", "--no-newline"],
+            capture_output=True, text=True, timeout=2,
+        )
+        return res.stdout if res.returncode == 0 else ""
+    except Exception:
+        return None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -74,7 +105,7 @@ def _release_modifiers(controller, keyboard_mod) -> None:
 
 
 def _send_ctrl_combo(char: str) -> None:
-    if is_wayland() and not os.environ.get("DISPLAY") and shutil.which("wtype"):
+    if is_wayland() and shutil.which("wtype"):
         subprocess.run(
             ["wtype", "-M", "ctrl", "-k", char, "-m", "ctrl"],
             capture_output=True, timeout=2,
@@ -101,10 +132,60 @@ def send_paste():
 
 
 # ─────────────────────────────────────────────────────────────
-# Ventana en primer plano (X11 vía xdotool)
+# Ventana en primer plano (X11 vía xdotool; Wayland en Hyprland/Sway)
 # ─────────────────────────────────────────────────────────────
+def _sway_find_focused(node: dict) -> dict | None:
+    if node.get("focused"):
+        return node
+    for key in ("nodes", "floating_nodes"):
+        for child in node.get(key) or ():
+            found = _sway_find_focused(child)
+            if found is not None:
+                return found
+    return None
+
+
+def _wayland_active_window() -> tuple[str, str, str] | None:
+    """Devuelve (compositor, id_ventana, app_name) en Hyprland o Sway, o None."""
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        try:
+            res = subprocess.run(
+                ["hyprctl", "activewindow", "-j"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                addr = str(data.get("address") or "").strip()
+                cls = str(data.get("class") or data.get("initialClass") or "").strip().lower()
+                if addr or cls:
+                    return ("hyprland", addr, cls)
+        except Exception:
+            pass
+    if os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
+        try:
+            res = subprocess.run(
+                ["swaymsg", "-t", "get_tree"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                focused = _sway_find_focused(json.loads(res.stdout))
+                if focused:
+                    con_id = str(focused.get("id") or "").strip()
+                    props = focused.get("window_properties") or {}
+                    app_id = str(focused.get("app_id") or props.get("class") or "").strip().lower()
+                    if con_id or app_id:
+                        return ("sway", con_id, app_id)
+        except Exception:
+            pass
+    return None
+
+
 def get_foreground_window():
-    """Devuelve el ID de ventana X11 activa (str) o None si no está disponible."""
+    """Devuelve el identificador de la ventana activa (X11 o Wayland) o None."""
+    if is_wayland():
+        wl = _wayland_active_window()
+        if wl and wl[1]:
+            return f"{wl[0]}:{wl[1]}"
     try:
         result = subprocess.run(
             ["xdotool", "getactivewindow"],
@@ -117,9 +198,13 @@ def get_foreground_window():
 
 
 def get_foreground_app_name(handle=None) -> str:
-    """Devuelve la clase/nombre de la ventana X11 activa en minúsculas o ''."""
+    """Devuelve la clase/nombre de la ventana activa en minúsculas o ''."""
+    if is_wayland():
+        wl = _wayland_active_window()
+        if wl and wl[2]:
+            return wl[2]
     target = handle or get_foreground_window()
-    if not target:
+    if not target or str(target).startswith(("hyprland:", "sway:")):
         return ""
     try:
         result = subprocess.run(
@@ -136,11 +221,25 @@ def activate_window(handle) -> None:
     """Devuelve el foco a la ventana de origen antes de pegar."""
     if not handle:
         return
+    raw = str(handle)
     try:
-        subprocess.run(
-            ["xdotool", "windowactivate", "--sync", str(handle)],
-            capture_output=True, text=True, timeout=2,
-        )
+        if raw.startswith("hyprland:") and shutil.which("hyprctl"):
+            addr = raw.split(":", 1)[1]
+            subprocess.run(
+                ["hyprctl", "dispatch", "focuswindow", f"address:{addr}"],
+                capture_output=True, text=True, timeout=2,
+            )
+        elif raw.startswith("sway:") and shutil.which("swaymsg"):
+            con_id = raw.split(":", 1)[1]
+            subprocess.run(
+                ["swaymsg", f"[con_id={con_id}]", "focus"],
+                capture_output=True, text=True, timeout=2,
+            )
+        else:
+            subprocess.run(
+                ["xdotool", "windowactivate", "--sync", raw],
+                capture_output=True, text=True, timeout=2,
+            )
     except Exception:
         pass
     time.sleep(0.20)

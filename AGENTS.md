@@ -59,19 +59,19 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 | `escriba.py` | Punto de entrada (`main()` con guardia de instancia única). Clase `EscribaApp` que orquesta hotkey principal, hotkey de repetición (`repeat_hotkey`), aviso Wayland, tray y ventanas. |
 | `constants.py` | Constantes globales (`APP_NAME`, `APP_VERSION`, `DEFAULT_REPEAT_HOTKEY`, rutas, API URLs, `AI_ACTIONS` predeterminadas incluyendo `Redacción`). |
 | `actions.py` | Carga/valida `actions.json` (soporta `mode`, `apps`, `temperature`, `model`, `strip_markdown`, `auto_replace`), variables `{app}`/`{clipboard}`/`{lang}`/`{date}`/`{time}`/`{datetime}`/`{input:...}`, `add_custom_action`, `action_matches_app`, `strip_code_fences`, `export_actions`/`import_actions`. |
-| `history.py` | `History` — últimas respuestas en memoria (submenú de la bandeja). |
+| `history.py` | `History` — últimas respuestas en memoria con persistencia opcional en `history.json` (`0600`, submenú de la bandeja). |
 | `config.py` | `ConfigManager` — lectura/escritura atómica de `config.json` con cache en memoria; secretos cifrados con DPAPI (Windows) o Llavero (macOS). |
 | `ai_clients.py` | `GeminiClient`, `OpenAICompatibleClient` (streaming, system instruction, temperatura, modelo por acción, historial multi-turno, reintentos) y `generate_text()`. |
-| `plataforma.py` | Capa de plataforma: `HotkeyManager` (con `hotkey_id`), `send_copy`/`send_paste`, `get_foreground_window`/`get_foreground_app_name`/`activate_window`, `StartupManager`, `clipboard_has_non_text`, `markdown_to_html`/`copy_rich_text`, `is_wayland`, `acquire_single_instance`/`release_single_instance`, `active_hotkey_label`, `tk_shortcut`. |
+| `plataforma.py` | Capa de plataforma: `HotkeyManager` (con `hotkey_id`), `send_copy`/`send_paste`, `clipboard_copy`/`clipboard_paste`, `get_foreground_window`/`get_foreground_app_name`/`activate_window`, `StartupManager`, `clipboard_has_non_text`, `markdown_to_html`/`copy_rich_text`, `is_wayland`, `acquire_single_instance`/`release_single_instance`, `active_hotkey_label`, `tk_shortcut`. |
 | `hotkey.py` | (Windows) `HotkeyManager` configurable via `RegisterHotKey` con `hotkey_id`. Helpers `send_ctrl_c`, `send_ctrl_v`. |
 | `macos.py` | (macOS) atajo con `pynput`, `⌘C/⌘V` con Quartz, app activa y `get_foreground_app_name` con `NSWorkspace`, `StartupManager` (LaunchAgent) y Llavero (`security -i`). |
-| `linux_platform.py` | (Linux X11/Wayland) atajo con `pynput`, `xdotool`, `xclip`, detección Wayland (`is_wayland`/`has_wayland_tools`) y respaldo `wtype`, portapapeles y arranque `.desktop`. |
+| `linux_platform.py` | (Linux X11/Wayland) atajo con `pynput`, `xdotool`, `xclip`, detección Wayland (`is_wayland`/`has_wayland_tools`), portapapeles `wl-copy`/`wl-paste`, foco/app en Hyprland/Sway y respaldo `wtype`, más arranque `.desktop`. |
 | `updater.py` | Auto-actualización contra GitHub Releases (`ReleaseInfo` con `release_notes`, descarga segura y extracción verificada). |
 | `ui_windows.py` | Fachada que reexporta la UI. |
 | `ui_common.py` | Paleta `_FM_*`, estilos ttk `Escriba.*`, DPI awareness, `TooltipNotification`, `ThinkingWindow`, `SplashBanner`, `AboutWindow`, `UpdateDialog`. |
 | `ui_menu.py` | `FloatingMenu`: paleta de comandos con scroll, filtrado por `mode` y `apps`, prompts recientes (`recent_prompts`), guardado rápido (`★ Guardar`/`Ctrl+S`), diálogo de variables `{input:...}` e instrucción libre. |
 | `ui_result.py` | `run_ai_action`/`start_ai_action` y `ResultWindow` (streaming, diff, Markdown, historial de sesión `◀`/`▶`, contador de palabras y latencia, ajuste multi-turno, encadenamiento `🔗 Encadenar`, pegado HTML con `rich_paste`). |
-| `ui_config.py` | `ConfigWindow` con pestañas Gemini / Proveedor alternativo / Acciones (editor visual con `apps` + importar/exportar) / General (`repeat_hotkey`, `rich_paste`). |
+| `ui_config.py` | `ConfigWindow` con pestañas Gemini / Proveedor alternativo / Acciones (editor visual con `apps` + importar/exportar) / General (`repeat_hotkey`, `rich_paste`, `persist_history`). |
 | `tray.py` | `TrayIconManager` — ícono y tooltip dinámico en la bandeja del sistema via `pystray`. |
 | `startup.py` | (Windows) `StartupManager` — registro/desregistro en `HKCU\...\Run` para auto-inicio. |
 | `Escriba.spec` | Configuración PyInstaller. Windows: `dist\Escriba.exe`, macOS: `dist/Escriba.app`, Linux: `dist/Escriba`. |

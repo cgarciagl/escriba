@@ -26,6 +26,7 @@ from constants import (
     DEFAULT_REPEAT_HOTKEY,
     GEMINI_DEFAULT_MODEL,
     GEMINI_FALLBACK_MODELS,
+    HISTORY_FILE,
     HOTKEY_PRESETS,
     OPENAI_DEFAULT_BASE_URL,
     OPENAI_DEFAULT_MODEL,
@@ -566,6 +567,11 @@ class ConfigWindow:
                        variable=self.rich_paste_var,
                        bootstyle="warning").pack(anchor=W, pady=(0, 10))
 
+        self.persist_history_var = tk.BooleanVar(value=bool(ConfigManager.get("persist_history", True)))
+        tb.Checkbutton(tab, text="  Guardar historial de respuestas entre sesiones",
+                       variable=self.persist_history_var,
+                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
         tb.Checkbutton(tab, text="  Iniciar automáticamente al iniciar sesión",
                        variable=self.autostart_var,
@@ -763,6 +769,10 @@ class ConfigWindow:
         ConfigManager.set("fallback_enabled", bool(self.fallback_var.get()))
         ConfigManager.set("streaming", bool(self.streaming_var.get()))
         ConfigManager.set("rich_paste", bool(self.rich_paste_var.get()))
+        persist_hist = bool(self.persist_history_var.get())
+        ConfigManager.set("persist_history", persist_hist)
+        if hasattr(self.app, "history") and hasattr(self.app.history, "set_storage_path"):
+            self.app.history.set_storage_path(HISTORY_FILE if persist_hist else None, clear_disk=not persist_hist)
         ConfigManager.set("auto_update_check", bool(self.auto_update_var.get()))
         ConfigManager.set("hotkey", new_hotkey)
         ConfigManager.set("repeat_hotkey", new_repeat)

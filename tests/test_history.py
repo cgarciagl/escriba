@@ -50,3 +50,31 @@ class TestOnChange:
         h = History(on_change=boom)
         h.add("A", "p", "t", "r", "gemini")
         assert len(h) == 1
+
+
+class TestHistoryPersistence:
+    def test_persists_and_reloads_from_disk(self, tmp_path):
+        path = tmp_path / "history.json"
+        h1 = History(max_items=5, storage_path=str(path))
+        h1.add("≡  Resumir", "p1", "orig", "res1", "gemini", model="gemini-2.5-flash")
+        h1.add("✎  Reescribir", "p2", "orig2", "res2", "openai", model="llama3")
+
+        h2 = History(max_items=5, storage_path=str(path))
+        entries = h2.entries()
+        assert [e.result for e in entries] == ["res2", "res1"]
+        assert entries[0].model == "llama3"
+        assert entries[1].label == "≡  Resumir"
+
+    def test_clear_and_disable_remove_file(self, tmp_path):
+        path = tmp_path / "history.json"
+        h = History(storage_path=str(path))
+        h.add("A", "p", "t", "r", "gemini")
+        assert path.exists()
+
+        h.clear()
+        assert not path.exists()
+
+        h.add("A", "p", "t", "r2", "gemini")
+        assert path.exists()
+        h.set_storage_path(None, clear_disk=True)
+        assert not path.exists()

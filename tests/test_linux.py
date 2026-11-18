@@ -176,3 +176,69 @@ class TestWaylandAndForegroundApp:
         linux_platform.send_paste()
         assert calls == [["wtype", "-M", "ctrl", "-k", "v", "-m", "ctrl"]]
 
+    def test_wl_copy_and_wl_paste(self, monkeypatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.setattr(
+            linux_platform.shutil, "which",
+            lambda cmd: f"/usr/bin/{cmd}" if cmd in ("wl-copy", "wl-paste") else None,
+        )
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append((cmd, kw.get("input")))
+            if cmd[0] == "wl-paste":
+                return subprocess.CompletedProcess(cmd, 0, stdout="pegado", stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        assert linux_platform.wl_copy("hola") is True
+        assert linux_platform.wl_copy("hola", html_text="<p>hola</p>") is True
+        assert linux_platform.wl_paste() == "pegado"
+        assert calls[0] == (["wl-copy"], "hola")
+        assert calls[1] == (["wl-copy", "--type", "text/html"], "<p>hola</p>")
+
+    def test_hyprland_active_window_and_activate(self, monkeypatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.setenv("HYPRLAND_INSTANCE_SIGNATURE", "abc123")
+        monkeypatch.delenv("SWAYSOCK", raising=False)
+        monkeypatch.setattr(linux_platform.shutil, "which", lambda cmd: "/usr/bin/hyprctl" if cmd == "hyprctl" else None)
+        monkeypatch.setattr(linux_platform.time, "sleep", lambda _s: None)
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            if cmd[:2] == ["hyprctl", "activewindow"]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout='{"address": "0xdeadbeef", "class": "Code"}', stderr=""
+                )
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        handle = linux_platform.get_foreground_window()
+        assert handle == "hyprland:0xdeadbeef"
+        assert linux_platform.get_foreground_app_name(handle) == "code"
+        linux_platform.activate_window(handle)
+        assert ["hyprctl", "dispatch", "focuswindow", "address:0xdeadbeef"] in calls
+
+    def test_sway_active_window_and_activate(self, monkeypatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.delenv("HYPRLAND_INSTANCE_SIGNATURE", raising=False)
+        monkeypatch.setenv("SWAYSOCK", "/tmp/sway.sock")
+        monkeypatch.setattr(linux_platform.shutil, "which", lambda cmd: "/usr/bin/swaymsg" if cmd == "swaymsg" else None)
+        monkeypatch.setattr(linux_platform.time, "sleep", lambda _s: None)
+        tree = '{"nodes": [{"focused": false, "nodes": [{"id": 77, "focused": true, "app_id": "Firefox"}]}]}'
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            if "-t" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=tree, stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        handle = linux_platform.get_foreground_window()
+        assert handle == "sway:77"
+        assert linux_platform.get_foreground_app_name(handle) == "firefox"
+        linux_platform.activate_window(handle)
+        assert ["swaymsg", "[con_id=77]", "focus"] in calls
+

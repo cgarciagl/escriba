@@ -58,6 +58,7 @@ def _config_dir() -> str:
 CONFIG_DIR         = _config_dir()
 CONFIG_FILE        = os.path.join(CONFIG_DIR, "config.json")
 LEGACY_CONFIG_FILE = os.path.join(BASE_DIR, "config.json")  # ubicación usada hasta v1.0.0
+HISTORY_FILE       = os.path.join(CONFIG_DIR, "history.json")
 
 
 # ─────────────────────────────────────────────────────────────

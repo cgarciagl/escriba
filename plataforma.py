@@ -171,10 +171,13 @@ else:
         bring_app_to_front,
         get_foreground_app_name,
         get_foreground_window,
+        has_wayland_tools,
         init_app,
         is_wayland,
         send_copy,
         send_paste,
+        wl_copy as _wl_copy,
+        wl_paste as _wl_paste,
     )
 
     PRIMARY_MODIFIER_TK = "Control"
@@ -185,6 +188,25 @@ else:
 
     def monitor_workarea(x: int, y: int):
         return None  # se usa el tamaño de pantalla que reporta Tk
+
+
+if not IS_LINUX:
+    def has_wayland_tools() -> tuple[bool, bool]:
+        return False, False
+
+
+def clipboard_copy(text: str) -> bool:
+    """Copia usando backend nativo Wayland si aplica; False indica usar pyperclip."""
+    if IS_LINUX:
+        return _wl_copy(text)
+    return False
+
+
+def clipboard_paste() -> str | None:
+    """Lee usando backend nativo Wayland si aplica; None indica usar pyperclip."""
+    if IS_LINUX:
+        return _wl_paste()
+    return None
 
 
 if not IS_WINDOWS:
@@ -465,6 +487,12 @@ def copy_rich_text(plain_text: str, html_text: str | None = None) -> bool:
         except Exception:
             pass
 
+    elif IS_LINUX and is_wayland():
+        if _wl_copy(plain_text, html_text=fragment):
+            return True
+
+    if clipboard_copy(plain_text):
+        return False
     import pyperclip
     pyperclip.copy(plain_text)
     return False

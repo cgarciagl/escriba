@@ -83,7 +83,7 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 * 🔗 **Encadenamiento de acciones**: botón **Encadenar** para pasar el resultado actual directamente como entrada a otra acción (por ejemplo, *Resumir → Traducir al inglés*).
 * 📋 **Pegado enriquecido opcional (`rich_paste`)**: convierte respuestas en Markdown a HTML (`CF_HTML` en Windows, `NSPasteboard` en macOS) para conservar negritas, listas y encabezados al pegar en correo o documentos.
 * ✨ **Ajuste iterativo multi-turno**: barra inferior **"Ajustar"** que mantiene el historial de refinamientos (y el *Original* intacto) y botones `◀`/`▶` para comparar iteraciones anteriores.
-* 🕘 **Historial en memoria**: últimas 10 respuestas de la sesión accesibles desde la bandeja, recordando el proveedor y modelo exactos que las generaron.
+* 🕘 **Historial persistente (opcional)**: últimas 10 respuestas accesibles desde la bandeja (guardadas opcionalmente en `history.json` con permisos `0600`), recordando el proveedor y modelo exactos que las generaron.
 
 ### Motores de IA y seguridad
 * 🤖 **Google Gemini oficial**: descarga dinámica de modelos compatibles (`gemini-3.5-flash-lite`, `2.5-flash`, `2.5-pro`, etc.) con detección real de errores de clave o red.

@@ -16,7 +16,7 @@ import ttkbootstrap as tb
 import pyperclip
 
 from actions import expand_prompt_vars
-from constants import APP_NAME, APP_VERSION, DEFAULT_REPEAT_HOTKEY
+from constants import APP_NAME, APP_VERSION, DEFAULT_REPEAT_HOTKEY, HISTORY_FILE
 from config import ConfigManager
 from ai_clients import is_ready
 from history import History
@@ -28,9 +28,9 @@ from ui_windows import (
 from tray import TrayIconManager
 from plataforma import (
     HotkeyManager, StartupManager, acquire_single_instance, active_hotkey_label,
-    clipboard_has_non_text, enable_dpi_awareness, format_hotkey_label,
-    get_foreground_app_name, get_foreground_window, init_app, is_wayland,
-    release_single_instance, send_copy,
+    clipboard_copy, clipboard_has_non_text, clipboard_paste, enable_dpi_awareness,
+    format_hotkey_label, get_foreground_app_name, get_foreground_window,
+    has_wayland_tools, init_app, is_wayland, release_single_instance, send_copy,
 )
 from updater import (
     ReleaseInfo, UpdateCancelled, apply_update_and_restart, can_self_update,
@@ -52,7 +52,8 @@ class EscribaApp:
         self.root.title(APP_NAME)
         self.root.withdraw()
 
-        self.history = History()
+        persist_hist = bool(ConfigManager.get("persist_history", True))
+        self.history = History(storage_path=HISTORY_FILE if persist_hist else None)
         self.config_window = ConfigWindow(self)
         self.about_window = AboutWindow(self.root)
         self.floating_menu = FloatingMenu(self)
@@ -92,9 +93,15 @@ class EscribaApp:
             self.repeat_hotkey.start(rep)
 
     def _notify_wayland(self):
+        has_wl_copy, has_wtype = has_wayland_tools()
+        if has_wl_copy and has_wtype:
+            return
+        missing = [
+            name for ok, name in ((has_wl_copy, "wl-clipboard"), (has_wtype, "wtype")) if not ok
+        ]
         self.tooltip.show(
             "⚠️ Sesión Wayland detectada.\n"
-            "Los atajos globales y el pegado automático requieren X11/XWayland o wtype.",
+            f"Instala {' y '.join(missing)} para portapapeles y pegado nativo en Wayland.",
             "warning", 8000,
         )
 
@@ -344,12 +351,17 @@ class EscribaApp:
 
     def _safe_paste(self) -> str:
         try:
+            native = clipboard_paste()
+            if native is not None:
+                return native
             return pyperclip.paste()
         except Exception:
             return ""
 
     def _safe_copy(self, text: str):
         try:
+            if clipboard_copy(text):
+                return
             pyperclip.copy(text)
         except Exception:
             pass
