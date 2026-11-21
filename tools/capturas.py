@@ -91,6 +91,9 @@ r.finish("Estimados colegas:\n\nLes informo que la reunión prevista para el jue
 shot(r.window, "6_resultado")
 r._toggle_view()
 shot(r.window, "7_resultado_original")
+r.view_var.set("diff")
+r._switch_view()
+shot(r.window, "7b_resultado_cambios")
 r.window.destroy()
 
 app.tooltip.show("Gemini HTTP 400: API key not valid. Please pass a valid API key.", "danger",
