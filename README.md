@@ -82,8 +82,6 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
   </tr>
 </table>
 
-> Las capturas de Windows se generan automáticamente con `tools/capturas.py` en cada ejecución de CI (artefacto `capturas`).
-
 ---
 
 ## 🎯 Características principales
