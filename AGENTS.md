@@ -112,3 +112,117 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 - Cambios visuales: revisar las capturas de `tools/capturas.py` (artefacto "capturas" de la CI) antes de dar el trabajo por terminado, y actualizar las del README en `docs/capturas/` si cambió lo que muestran.
 - Los hilos secundarios usan `app.schedule()` para actualizar la UI en el hilo principal de Tk.
 - El idioma del proyecto es español (nombres de variables, comentarios, prompts de IA, UI).
+
+---
+
+## Referencia técnica
+
+### Esquema de `actions.json`
+Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando directamente `actions.json` (`%APPDATA%\Escriba\actions.json` en Windows, `~/Library/Application Support/Escriba/actions.json` en macOS, `~/.config/Escriba/actions.json` en Linux):
+
+```json
+[
+  {
+    "label": "✎  Reescribir",
+    "prompt": "Reescribe el siguiente texto para mejorar su claridad y fluidez.",
+    "section": "Texto y Contenido",
+    "shortcut": "Ctrl+R",
+    "auto_replace": false
+  }
+]
+```
+
+* **Variables en prompts:** `{app}`, `{clipboard}`, `{lang}`, `{date}`, `{time}`, `{datetime}` y campos interactivos `{input:Etiqueta}`.
+* **`mode`:** `"selection"` (por defecto), `"compose"` (visible sin selección) o `"both"` (ambos).
+* **`apps`:** lista opcional de aplicaciones (ej. `["outlook", "code"]`) para mostrar y promover esa acción solo en ellas.
+* **`temperature` / `model`:** sobrescribe temperatura (`0.0–2.0`) o modelo para esa acción.
+* **`strip_markdown`:** si es `true`, elimina envoltorios ```` ```lang ... ``` ```` de la respuesta.
+* **`auto_replace`:** si es `true`, sustituye el texto en la aplicación de origen automáticamente al terminar la generación.
+
+### Claves de `config.json`
+Se almacena en `%APPDATA%\Escriba\config.json` (Windows), `~/Library/Application Support/Escriba/config.json` (macOS) o `~/.config/Escriba/config.json` (Linux, con permisos `0600`):
+
+| Clave | Tipo | Descripción |
+| --- | --- | --- |
+| `api_key_enc` / `api_key_keychain` | string / bool | API Key de Gemini (cifrada con DPAPI en Windows o marcada en Llavero en macOS) |
+| `model` | string | Modelo de Gemini seleccionado (por defecto: `gemini-3.5-flash-lite`) |
+| `provider` | string | Proveedor principal: `"gemini"` u `"openai"` |
+| `fallback_enabled` | boolean | Habilita respaldo automático al proveedor secundario |
+| `openai_base_url` / `openai_model` | string | URL base y modelo del proveedor alternativo |
+| `openai_api_key_enc` | string | API Key del proveedor alternativo (DPAPI / Llavero) |
+| `hotkey` | string | Atajo global personalizado (p. ej. `"Win+Alt+E"`, `"Ctrl+Alt+K"`) |
+| `repeat_hotkey` | string | Atajo secundario para repetir la última acción sin abrir menú |
+| `streaming` | boolean | Mostrar respuesta mientras se genera (por defecto: `true`) |
+| `rich_paste` | boolean | Copiar y pegar Markdown convertido a HTML (por defecto: `false`) |
+| `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
+| `action_usage` | object | Contadores de uso para promover acciones frecuentes |
+| `recent_prompts` | array | Últimas instrucciones libres ejecutadas en el menú |
+
+### Implementación por plataforma
+
+| Aspecto | Windows | macOS | Linux (X11) |
+| --- | --- | --- | --- |
+| Atajo global por defecto | `Win+Alt+E` | `⌃⌘E` (`Ctrl+Cmd+E`) | `Ctrl+Alt+E` |
+| Portapapeles / Pegado | WinAPI + `keyboard` | Quartz (`CGEvent`) | `pynput` + `xclip` (`wtype` en Wayland) |
+| Ventana activa | WinAPI (`AttachThreadInput`) | `NSWorkspace` / `NSRunningApplication` | `xdotool` |
+| Secretos | DPAPI (`crypt32.dll`) | Llavero (`security -i`) | `config.json` (`chmod 0600`) |
+| Inicio automático | Registro `HKCU\...\Run` | `~/Library/LaunchAgents/com.cgarciagl.escriba.plist` | `~/.config/autostart/escriba.desktop` |
+
+### Pruebas, compilación y publicación
+
+#### Requisitos de desarrollo
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+#### Ejecutar pruebas
+
+```bash
+# Tests de lógica (multiplataforma)
+python -m pytest -q -rf --ignore=tests/test_ui.py
+
+# Tests de interfaz (requiere Tk real; en Linux sin display usa xvfb-run -a)
+python -m pytest -q -rf tests/test_ui.py
+```
+
+#### Compilar ejecutable / bundle
+
+```bash
+pyinstaller Escriba.spec --clean --noconfirm
+```
+
+* En **Windows** genera `dist\Escriba.exe`.
+* En **macOS** genera `dist/Escriba.app`.
+* En **Linux** genera `dist/Escriba`.
+
+#### Publicar una nueva versión
+
+Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.6 && git push origin v0.0.6`), el workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) ejecuta todas las pruebas, compila los tres binarios y crea automáticamente la Release en GitHub con `Escriba.exe`, `Escriba-macos.zip` y `Escriba-linux.tar.gz`.
+
+### Estructura del proyecto
+
+```text
+escriba/
+├── escriba.py          # Orquestador principal: hotkey, tray, captura y ciclo de vida
+├── Escriba.spec        # Especificación PyInstaller (Windows .exe, macOS .app, Linux)
+├── constants.py        # Versión, rutas base, modelos y acciones predeterminadas
+├── config.py           # ConfigManager (thread-safe, escritura atómica, DPAPI/Llavero)
+├── actions.py          # Validación, guardado, filtrado y variables de actions.json
+├── history.py          # Historial en memoria acotado y seguro entre hilos
+├── ai_clients.py       # GeminiClient, OpenAICompatibleClient, SSE streaming y reintentos
+├── plataforma.py       # Capa de abstracción Windows / macOS / Linux
+├── hotkey.py           # Windows: RegisterHotKey configurable y helpers de teclado
+├── startup.py          # Windows: arranque automático en Registro HKCU
+├── macos.py            # macOS: pynput, Quartz, NSWorkspace, LaunchAgent y Llavero
+├── linux_platform.py   # Linux (X11): pynput, xdotool y autostart .desktop
+├── tray.py             # Ícono y menú dinámico en bandeja / barra de menús
+├── ui_windows.py       # Fachada de módulos de interfaz
+├── ui_common.py        # Paleta oscura, estilos ttk, DPI awareness y notificaciones
+├── ui_menu.py          # Paleta de comandos con scroll, modo redacción y frecuentes
+├── ui_result.py        # Ventana de resultados: streaming, diff, Markdown y ajuste
+├── ui_config.py        # Configuración por pestañas y editor visual de acciones
+├── tests/              # Suite automatizada con pytest (lógica + Tk)
+├── tools/capturas.py   # Generación automática de capturas para documentación
+└── .github/workflows/  # CI/CD: tests, builds y publicación de Releases
+```

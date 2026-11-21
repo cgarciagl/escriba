@@ -9,7 +9,7 @@
 ![Plataformas](https://img.shields.io/badge/Plataformas-Windows%20%7C%20macOS%20%7C%20Linux-1e2436?labelColor=0f1320)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 
-[Descargar última versión](https://github.com/cgarciagl/escriba/releases/latest) · [Capturas](#-capturas) · [Cómo usar](#%EF%B8%8F-cómo-usar) · [Configuración](#%EF%B8%8F-configuración-y-proveedores) · [Desarrollo](#%EF%B8%8F-compilar-y-probar)
+[Descargar última versión](https://github.com/cgarciagl/escriba/releases/latest) · [Capturas](#-capturas) · [Cómo usar](#%EF%B8%8F-cómo-usar) · [Configuración](#%EF%B8%8F-configuración-y-proveedores) · [Desarrollo](#%EF%B8%8F-desarrollo)
 
 </div>
 
@@ -86,29 +86,28 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
 
 ## 🎯 Características principales
 
-### Flujo de escritura y paleta de comandos
-* ⌨️ **Atajo global configurable + repetición rápida**: `Win+Alt+E` (Windows) / `⌃⌘E` (macOS) / `Ctrl+Alt+E` (Linux) por defecto; además puedes configurar un segundo atajo (**Repetir última**) para reejecutar al instante la última acción sobre nueva selección sin abrir el menú.
-* ✍️ **Modo con selección y modo redacción**: si hay texto seleccionado, ofrece acciones sobre él; si no hay selección, se abre en **modo redacción** (con acciones como **✉ Redactar correo** y **☑ Lista de tareas**) para generar contenido desde cero y pegarlo directamente en el cursor.
-* 🧩 **Conciencia de la app activa (`{app}` y `"apps"`)**: detecta la aplicación en primer plano, promueve arriba acciones específicas para ella y permite usar `{app}` en los prompts.
-* ★ **Acciones frecuentes, historial y guardado en 1 clic**: promueve arriba tus acciones más usadas, recuerda tus últimas instrucciones libres y te permite guardarlas en `actions.json` con **★ Guardar** (`Ctrl+S`/`⌘S`).
-* 🔎 **Búsqueda instantánea e instrucción libre**: filtra sin importar acentos ni mayúsculas o escribe cualquier instrucción ad hoc (`Shift+Enter` para multilínea).
-* ⚡ **Auto-sustitución (`auto_replace`)**: las acciones marcadas como automáticas pegan el resultado directamente en la app de origen al terminar, sin abrir ventana intermedia.
-* 📏 **Aviso de texto largo**: indica en el encabezado cuando el texto supera los 10 000 caracteres.
+### Flujo de escritura
+* ⌨️ **Atajo global configurable**: `Win+Alt+E` (Windows), `⌃⌘E` (macOS) o `Ctrl+Alt+E` (Linux), más un segundo atajo opcional para **repetir la última acción** sin abrir el menú.
+* ✍️ **Con selección o desde cero**: si seleccionas texto, Escriba lo transforma; si no, entra en **modo redacción** para escribir correos, listas de tareas o lo que le pidas, y lo pega donde está el cursor.
+* 🧩 **Se adapta a la app activa**: puedes tener acciones que solo aparecen (y suben al principio) en ciertas aplicaciones, como Outlook o VS Code.
+* ★ **Tus acciones favoritas primero**: las más usadas suben arriba, recuerda tus últimas instrucciones libres y puedes guardarlas como acción con **★ Guardar** (`Ctrl+S`/`⌘S`).
+* 🔎 **Búsqueda instantánea e instrucción libre**: filtra sin importar acentos ni mayúsculas, o escribe cualquier instrucción (`Shift+Enter` para varias líneas).
+* ⚡ **Sustitución automática**: las acciones que lo tengan activado pegan el resultado directamente, sin ventana intermedia.
 
-### Ventana de resultados e iteración
-* 📡 **Streaming en tiempo real** con botón **Detener** (conservando lo generado hasta ese momento) y cancelación limpia al cerrar la ventana.
-* 🔍 **Tres vistas y métricas**: **Resultado** (editable, con resaltado ligero de Markdown), **Original** y **Cambios** (*diff* línea a línea), más contador de palabras, diferencia respecto al texto original y **tiempo de generación** (p. ej. `142 → 96 palabras · 1.1 s`).
-* 🔗 **Encadenamiento de acciones**: botón **Encadenar** para pasar el resultado actual directamente como entrada a otra acción (por ejemplo, *Resumir → Traducir al inglés*).
-* 📋 **Pegado enriquecido opcional (`rich_paste`)**: convierte respuestas en Markdown a HTML (`CF_HTML` en Windows, `NSPasteboard` en macOS) para conservar negritas, listas y encabezados al pegar en correo o documentos.
-* ✨ **Ajuste iterativo multi-turno**: barra inferior **"Ajustar"** que mantiene el historial de refinamientos (y el *Original* intacto) y botones `◀`/`▶` para comparar iteraciones anteriores.
-* 🕘 **Historial persistente (opcional)**: últimas 10 respuestas accesibles desde la bandeja (guardadas opcionalmente en `history.json` con permisos `0600`), recordando el proveedor y modelo exactos que las generaron.
+### Ventana de resultados
+* 📡 **Respuesta en tiempo real**, con botón **Detener** que conserva lo generado hasta ese momento.
+* 🔍 **Tres vistas**: **Resultado** (editable), **Original** y **Cambios** (diferencias línea a línea), con contador de palabras y tiempo de generación.
+* ✨ **Ajuste iterativo**: pide cambios sobre el resultado ("más breve", "más formal"…) y vuelve a versiones anteriores con `◀`/`▶`.
+* 🔗 **Encadenar acciones**: pasa el resultado a otra acción (por ejemplo, *Resumir → Traducir al inglés*).
+* 📋 **Pegado con formato (opcional)**: conserva negritas, listas y encabezados al pegar en correos o documentos.
+* 🕘 **Historial**: tus últimas 10 respuestas, accesibles desde el ícono de la bandeja (y, si quieres, guardadas entre sesiones).
 
-### Motores de IA y seguridad
-* 🤖 **Google Gemini oficial**: descarga dinámica de modelos compatibles (`gemini-3.5-flash-lite`, `2.5-flash`, `2.5-pro`, etc.) con detección real de errores de clave o red.
-* 🔀 **Proveedor alternativo compatible con OpenAI**: soporte para **Ollama** (local, sin clave), **LM Studio**, **OpenAI**, **OpenRouter**, etc., como principal o como **fallback automático**.
-* 🔄 **Reintentos inteligentes**: retroceso exponencial con *jitter* ante saturación o límites de tasa (HTTP `429`, `500`, `502`, `503`, `504`).
-* 🔒 **Almacenamiento seguro de claves**: cifrado con **DPAPI** en Windows, **Llavero** en macOS (vía `security -i`) y `config.json` con permisos restringidos `0600` en Linux, más protección de **instancia única** y preservación de imágenes en el portapapeles.
-* 🧩 **Editor visual de acciones**: pestaña dedicada en *Configuración → Acciones* para crear, reordenar, editar, **importar/exportar** acciones JSON y configurar modo (`selection`/`compose`/`both`), `apps`, temperatura, modelo y limpieza de bloques Markdown (```` ``` ````).
+### IA y privacidad
+* 🤖 **Google Gemini** con la lista de modelos disponibles en tu cuenta.
+* 🔀 **Cualquier proveedor compatible con OpenAI**: **Ollama** (local, sin clave), **LM Studio**, **OpenAI**, **OpenRouter**…, como principal o como **respaldo automático** si el otro falla.
+* 🔄 **Reintentos automáticos** cuando el servicio está saturado.
+* 🔒 **Claves protegidas**: cifradas con tu cuenta de Windows, guardadas en el Llavero en macOS y en un archivo privado en Linux. Escriba también respeta lo que tengas en el portapapeles.
+* 🧩 **Editor de acciones**: crea, ordena, importa y exporta tus propias acciones desde *Configuración → Acciones*.
 
 ---
 
@@ -148,8 +147,8 @@ En el primer arranque, Escriba crea su carpeta de configuración, muestra el ban
 | | ⇲ Extender | `Ctrl+L` | Amplía el texto con coherencia sin inventar datos |
 | | ≡ Resumir | `Ctrl+B` | Resumen ejecutivo con puntos clave |
 | | ✉ Mejorar Correo | `Ctrl+M` | Optimiza tono profesional, cortesía y claridad |
-| **Redacción** *(sin selección)* | ✉ Redactar correo | `Ctrl+W` | Redacta un correo completo desde una idea breve |
-| | ☑ Lista de tareas | `Ctrl+T` | Crea una lista de pasos claros desde un objetivo |
+| **Redacción** *(sin selección)* | ✉ Redactar correo | `Ctrl+3` | Redacta un correo completo desde una idea breve |
+| | ☑ Lista de tareas | `Ctrl+4` | Crea una lista de pasos claros desde un objetivo |
 | **Idiomas** | ◐ Traducir al español | `Ctrl+1` | Traducción fiel al español sin comentarios |
 | | ◑ Traducir al inglés | `Ctrl+2` | Traducción fiel al inglés sin comentarios |
 | **Para Desarrolladores** | ▤ Fix SQL | `Ctrl+D` | Formatea consultas SQL con estructura compacta |
@@ -174,7 +173,7 @@ En el primer arranque, Escriba crea su carpeta de configuración, muestra el ban
 
 ## ⚙️ Configuración y Proveedores
 
-Abre **Configuración** haciendo clic derecho en el ícono de la bandeja → **Configuración** (o clic izquierdo por defecto).
+Abre **Configuración** desde el ícono de la bandeja (clic izquierdo, o clic derecho → **Configuración**).
 
 ### Google Gemini
 1. Obtén una API Key gratuita en [Google AI Studio](https://aistudio.google.com/apikey).
@@ -193,126 +192,25 @@ Configura cualquier servidor con `/chat/completions`:
 
 Activa **"Si el proveedor principal falla, usar el otro"** para habilitar el *fallback* automático (solo se activa si el primero falla antes de emitir texto).
 
-### Acciones personalizadas (`Acciones` / `actions.json`)
-Puedes gestionarlas desde la pestaña **Acciones** en Configuración o editando directamente `actions.json` (`%APPDATA%\Escriba\actions.json` en Windows, `~/Library/Application Support/Escriba/actions.json` en macOS, `~/.config/Escriba/actions.json` en Linux):
+### Acciones personalizadas
+En la pestaña **Acciones** puedes crear, editar, reordenar, importar y exportar acciones. Para cada una eliges su prompt, sección, atajo, si funciona con selección, sin ella o en ambos casos, en qué aplicaciones aparece y si debe sustituir el texto automáticamente.
 
-```json
-[
-  {
-    "label": "✎  Reescribir",
-    "prompt": "Reescribe el siguiente texto para mejorar su claridad y fluidez.",
-    "section": "Texto y Contenido",
-    "shortcut": "Ctrl+R",
-    "auto_replace": false
-  }
-]
-```
-
-* **Variables en prompts:** `{app}`, `{clipboard}`, `{lang}`, `{date}`, `{time}`, `{datetime}` y campos interactivos `{input:Etiqueta}`.
-* **`mode`:** `"selection"` (por defecto), `"compose"` (visible sin selección) o `"both"` (ambos).
-* **`apps`:** lista opcional de aplicaciones (ej. `["outlook", "code"]`) para mostrar y promover esa acción solo en ellas.
-* **`temperature` / `model`:** sobrescribe temperatura (`0.0–2.0`) o modelo para esa acción.
-* **`strip_markdown`:** si es `true`, elimina envoltorios ```` ```lang ... ``` ```` de la respuesta.
-* **`auto_replace`:** si es `true`, sustituye el texto en la aplicación de origen automáticamente al terminar la generación.
-
-### Configuración persistente (`config.json`)
-Se almacena en `%APPDATA%\Escriba\config.json` (Windows), `~/Library/Application Support/Escriba/config.json` (macOS) o `~/.config/Escriba/config.json` (Linux, con permisos `0600`):
-
-| Clave | Tipo | Descripción |
-| --- | --- | --- |
-| `api_key_enc` / `api_key_keychain` | string / bool | API Key de Gemini (cifrada con DPAPI en Windows o marcada en Llavero en macOS) |
-| `model` | string | Modelo de Gemini seleccionado (por defecto: `gemini-3.5-flash-lite`) |
-| `provider` | string | Proveedor principal: `"gemini"` u `"openai"` |
-| `fallback_enabled` | boolean | Habilita respaldo automático al proveedor secundario |
-| `openai_base_url` / `openai_model` | string | URL base y modelo del proveedor alternativo |
-| `openai_api_key_enc` | string | API Key del proveedor alternativo (DPAPI / Llavero) |
-| `hotkey` | string | Atajo global personalizado (p. ej. `"Win+Alt+E"`, `"Ctrl+Alt+K"`) |
-| `repeat_hotkey` | string | Atajo secundario para repetir la última acción sin abrir menú |
-| `streaming` | boolean | Mostrar respuesta mientras se genera (por defecto: `true`) |
-| `rich_paste` | boolean | Copiar y pegar Markdown convertido a HTML (por defecto: `false`) |
-| `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
-| `action_usage` | object | Contadores de uso para promover acciones frecuentes |
-| `recent_prompts` | array | Últimas instrucciones libres ejecutadas en el menú |
+Los prompts admiten variables que se rellenan al ejecutarlos: `{app}` (aplicación activa), `{clipboard}`, `{lang}`, `{date}`, `{time}`, `{datetime}` y `{input:Etiqueta}` (te pide un valor antes de ejecutar). Si prefieres editar el archivo a mano, usa **Abrir actions.json** en la pestaña **General**.
 
 ---
 
 ## 🍎 macOS y 🐧 Linux (experimental)
 
-Escriba es compatible con **macOS 11+** (Apple Silicon e Intel) y **Linux (X11)**. La CI ejecuta la suite de pruebas completa y compila los artefactos para Windows, macOS y Linux.
+Escriba funciona en **macOS 11+** (Apple Silicon e Intel) y **Linux (X11)**.
 
-| Aspecto | Windows | macOS | Linux (X11) |
-| --- | --- | --- | --- |
-| Atajo global por defecto | `Win+Alt+E` | `⌃⌘E` (`Ctrl+Cmd+E`) | `Ctrl+Alt+E` |
-| Portapapeles / Pegado | WinAPI + `keyboard` | Quartz (`CGEvent`) | `pynput` + `xclip` (`wtype` en Wayland) |
-| Ventana activa | WinAPI (`AttachThreadInput`) | `NSWorkspace` / `NSRunningApplication` | `xdotool` |
-| Secretos | DPAPI (`crypt32.dll`) | Llavero (`security -i`) | `config.json` (`chmod 0600`) |
-| Inicio automático | Registro `HKCU\...\Run` | `~/Library/LaunchAgents/com.cgarciagl.escriba.plist` | `~/.config/autostart/escriba.desktop` |
-
-* **macOS:** la primera vez solicitará permisos en **Ajustes del Sistema → Privacidad y seguridad** (**Accesibilidad** y **Monitorización de entrada**).
-* **Linux:** requiere una sesión **X11** para atajos globales y foco entre ventanas (si detecta **Wayland**, muestra un aviso al iniciar y usa `wtype` como respaldo cuando no hay `DISPLAY`) y tener instalados `xclip` y `xdotool` (en Debian/Ubuntu: `sudo apt install xclip xdotool python3-tk`).
+* **macOS:** la primera vez pedirá permisos en **Ajustes del Sistema → Privacidad y seguridad** (**Accesibilidad** y **Monitorización de entrada**).
+* **Linux:** necesita una sesión **X11** para el atajo global y el cambio de ventanas (en **Wayland** muestra un aviso y funciona de forma limitada) y los paquetes `xclip` y `xdotool` (en Debian/Ubuntu: `sudo apt install xclip xdotool python3-tk`).
 
 ---
 
-## 🛠️ Compilar y Probar
+## 🛠️ Desarrollo
 
-### Requisitos de desarrollo
-
-```bash
-pip install -r requirements-dev.txt
-```
-
-### Ejecutar pruebas
-
-```bash
-# Tests de lógica (multiplataforma)
-python -m pytest -q -rf --ignore=tests/test_ui.py
-
-# Tests de interfaz (requiere Tk real; en Linux sin display usa xvfb-run -a)
-python -m pytest -q -rf tests/test_ui.py
-```
-
-### Compilar ejecutable / bundle
-
-```bash
-pyinstaller Escriba.spec --clean --noconfirm
-```
-
-* En **Windows** genera `dist\Escriba.exe`.
-* En **macOS** genera `dist/Escriba.app`.
-* En **Linux** genera `dist/Escriba`.
-
-### Publicar una nueva versión
-
-Al subir un tag con prefijo `v*` (por ejemplo `git tag v0.0.6 && git push origin v0.0.6`), el workflow [`.github/workflows/tests.yml`](.github/workflows/tests.yml) ejecuta todas las pruebas, compila los tres binarios y crea automáticamente la Release en GitHub con `Escriba.exe`, `Escriba-macos.zip` y `Escriba-linux.tar.gz`.
-
----
-
-## 🗂️ Estructura del Proyecto
-
-```text
-escriba/
-├── escriba.py          # Orquestador principal: hotkey, tray, captura y ciclo de vida
-├── Escriba.spec        # Especificación PyInstaller (Windows .exe, macOS .app, Linux)
-├── constants.py        # Versión, rutas base, modelos y acciones predeterminadas
-├── config.py           # ConfigManager (thread-safe, escritura atómica, DPAPI/Llavero)
-├── actions.py          # Validación, guardado, filtrado y variables de actions.json
-├── history.py          # Historial en memoria acotado y seguro entre hilos
-├── ai_clients.py       # GeminiClient, OpenAICompatibleClient, SSE streaming y reintentos
-├── plataforma.py       # Capa de abstracción Windows / macOS / Linux
-├── hotkey.py           # Windows: RegisterHotKey configurable y helpers de teclado
-├── startup.py          # Windows: arranque automático en Registro HKCU
-├── macos.py            # macOS: pynput, Quartz, NSWorkspace, LaunchAgent y Llavero
-├── linux_platform.py   # Linux (X11): pynput, xdotool y autostart .desktop
-├── tray.py             # Ícono y menú dinámico en bandeja / barra de menús
-├── ui_windows.py       # Fachada de módulos de interfaz
-├── ui_common.py        # Paleta oscura, estilos ttk, DPI awareness y notificaciones
-├── ui_menu.py          # Paleta de comandos con scroll, modo redacción y frecuentes
-├── ui_result.py        # Ventana de resultados: streaming, diff, Markdown y ajuste
-├── ui_config.py        # Configuración por pestañas y editor visual de acciones
-├── tests/              # Suite automatizada con pytest (lógica + Tk)
-├── tools/capturas.py   # Generación automática de capturas para documentación
-└── .github/workflows/  # CI/CD: tests, builds y publicación de Releases
-```
+¿Quieres compilar, ejecutar las pruebas o contribuir? La arquitectura, los comandos de prueba y compilación, el proceso de publicación y las convenciones del proyecto están en [`AGENTS.md`](AGENTS.md).
 
 ---
 
