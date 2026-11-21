@@ -50,6 +50,16 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
   </tr>
   <tr>
     <td align="center" valign="top">
+      <img src="docs/capturas/menu-redaccion.png" alt="Menú en modo redacción, sin texto seleccionado, con acciones Redactar correo y Lista de tareas" width="360"><br>
+      <sub><b>Modo redacción</b>: sin selección, genera contenido desde cero y lo pega en el cursor</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/capturas/resultado-cambios.png" alt="Vista Cambios con las líneas eliminadas en rojo y las añadidas en verde" width="400"><br>
+      <sub><b>Vista Cambios</b>: diff línea a línea entre el original y el resultado</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
       <img src="docs/capturas/configuracion.png" alt="Ventana de configuración con mensaje de bienvenida en el primer arranque" width="360"><br>
       <sub><b>Primer arranque</b>: configuración guiada de Gemini</sub>
     </td>
@@ -58,6 +68,16 @@ Compatible de forma nativa con **Google Gemini** (`gemini-3.5-flash-lite`, `2.5-
       <sub><b>Proveedor alternativo</b>: Ollama, OpenAI, OpenRouter, LM Studio…</sub><br><br>
       <img src="docs/capturas/error.png" alt="Aviso de error con botón Abrir configuración" width="360"><br>
       <sub><b>Errores accionables</b>: botón directo para configurar o reintentar</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/capturas/configuracion-acciones.png" alt="Editor visual de acciones con lista, campos de etiqueta, atajo, modo, apps y prompt" width="360"><br>
+      <sub><b>Editor de acciones</b>: crea, reordena, importa y exporta acciones con modo, apps, temperatura y modelo</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/capturas/configuracion-general.png" alt="Pestaña General con atajo global, Repetir última, streaming, pegado enriquecido, historial y actualizaciones" width="360"><br>
+      <sub><b>Ajustes generales</b>: atajos, pegado enriquecido, historial persistente y actualizaciones</sub>
     </td>
   </tr>
 </table>
