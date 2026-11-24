@@ -219,4 +219,6 @@ Want to build, run tests, or contribute? Architecture details, test/build comman
 
 ## 📄 Credits
 
+Created by **Carlos García Trujillo**.
+
 Independent cross-platform project (Windows, macOS, and Linux) built with Python, [`ttkbootstrap`](https://ttkbootstrap.readthedocs.io/), [`pystray`](https://pystray.readthedocs.io/), [`Pillow`](https://python-pillow.org/), and the Google Gemini / OpenAI-compatible APIs.

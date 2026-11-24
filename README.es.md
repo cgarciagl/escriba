@@ -216,4 +216,6 @@ Escriba funciona en **macOS 11+** (Apple Silicon e Intel) y **Linux (X11)**.
 
 ## 📄 Créditos
 
+Creado por **Carlos García Trujillo**.
+
 Proyecto independiente multiplataforma (Windows, macOS y Linux) desarrollado con Python, [`ttkbootstrap`](https://ttkbootstrap.readthedocs.io/), [`pystray`](https://pystray.readthedocs.io/), [`Pillow`](https://python-pillow.org/) y las APIs de Google Gemini / OpenAI-compatible.
