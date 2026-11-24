@@ -109,9 +109,13 @@ pyinstaller Escriba.spec --clean --noconfirm && open dist/Escriba.app
 - Fuentes: usar `UI_FONT`, `MONO_FONT`, `EMOJI_FONT` de `ui_common.py` (Segoe UI no existe en macOS).
 - La UI usa `ttkbootstrap` con tema "vapor" como base, pero los colores salen de la paleta `_FM_*` de `ui_common.py`. Para botones secundarios, campos, combos, pestañas y scrollbars usar los estilos `Escriba.*` (no `bootstyle="secondary"`/`info`/`danger`, que el tema pinta de rosa/morado/cian). El único `bootstyle` permitido es `warning` (ámbar) para la acción principal y los indicadores de casillas.
 - Tamaños en píxeles: pasar por `scaled()`/`center_window()` para respetar el escalado de pantalla.
-- Cambios visuales: revisar las capturas de `tools/capturas.py` (artefacto "capturas" de la CI) antes de dar el trabajo por terminado, y actualizar las del README en `docs/capturas/` si cambió lo que muestran.
+- Cambios visuales: revisar las capturas de `tools/capturas.py` en ambos idiomas (`--lang es` y `--lang en`, o artefacto "capturas" de la CI) antes de dar el trabajo por terminado para confirmar que ningún texto se recorte, y actualizar `docs/capturas/` + `README.es.md` (español) y `docs/capturas/en/` + `README.md` (inglés) si cambió lo que muestran.
 - Los hilos secundarios usan `app.schedule()` para actualizar la UI en el hilo principal de Tk.
-- El idioma del proyecto es español (nombres de variables, comentarios, prompts de IA, UI).
+- **Soporte bilingüe obligatorio (español e inglés):** los nombres de variables, comentarios y docstrings del código se mantienen en español, pero **toda nueva funcionalidad o modificación visible debe funcionar en ambos idiomas**:
+  - Todo texto de la UI, bandeja, menús o notificaciones debe usar `tr(...)` (`config.py`) y agregarse tanto en `TRANSLATIONS["es"]` como en `TRANSLATIONS["en"]` (`constants.py`) con las mismas claves y placeholders.
+  - Si se añaden o modifican acciones predeterminadas, actualizar tanto `AI_ACTIONS` (español) como `AI_ACTIONS_EN` (inglés) en `constants.py` (usando `"preserve_target_language": True` solo en acciones de traducción explícita).
+  - Toda invocación a `generate_text()` debe respetar `apply_language` para que la IA responda siempre en el idioma seleccionado por el usuario.
+  - Si se documentan nuevas funcionalidades o cambios de uso, actualizar tanto `README.md` (inglés, por defecto) como `README.es.md` (español).
 
 ---
 
@@ -155,6 +159,7 @@ Se almacena en `%APPDATA%\Escriba\config.json` (Windows), `~/Library/Application
 | `streaming` | boolean | Mostrar respuesta mientras se genera (por defecto: `true`) |
 | `rich_paste` | boolean | Copiar y pegar Markdown convertido a HTML (por defecto: `false`) |
 | `autostart` | boolean | Inicio automático al iniciar sesión (por defecto: `false`) |
+| `language` | string | Idioma de la UI y respuestas de IA: `"es"` o `"en"` (auto-detectado al inicio) |
 | `action_usage` | object | Contadores de uso para promover acciones frecuentes |
 | `recent_prompts` | array | Últimas instrucciones libres ejecutadas en el menú |
 
