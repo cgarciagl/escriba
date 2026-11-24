@@ -4,7 +4,7 @@
 
 **Escriba** es una aplicación de escritorio multiplataforma (Windows, macOS y Linux X11) que actúa como asistente de texto con IA. El usuario selecciona texto en cualquier aplicación (o sitúa el cursor para redactar desde cero), pulsa **Win+Alt+E**, y aparece un menú flotante con acciones de IA (reescribir, traducir, resumir, formatear SQL, etc.). El resultado puede sustituir directamente el texto seleccionado.
 
-- **Versión:** `APP_VERSION` en `constants.py` (actualmente `1.0.4`)
+- **Versión:** `APP_VERSION` en `constants.py` (actualmente `1.0.5`)
 - **Plataformas:** Windows (`ctypes.windll`, `winreg`, `RegisterHotKey`), macOS (`pynput`, PyObjC) y Linux X11/Wayland (`pynput`, `xdotool`, `xclip`, respaldo `wtype`). Todo lo dependiente del sistema pasa por `plataforma.py`.
 - **Hotkey global:** Configurable desde Configuración (`Win+Alt+E` en Windows, `Ctrl+Cmd+E` en macOS, `Ctrl+Alt+E` en Linux) más atajo opcional de repetición (`repeat_hotkey`).
 
