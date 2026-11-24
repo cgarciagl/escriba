@@ -445,6 +445,13 @@ class UpdateDialog:
         scroll.pack(side=RIGHT, fill=Y)
         txt.pack(side=LEFT, fill=BOTH, expand=True)
 
+        if not (self.can_install and self.on_confirm):
+            tk.Label(
+                frame, text=tr("update.cannot_install", app=APP_NAME),
+                font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED,
+                wraplength=scaled(win, self.WIDTH - 40), justify=LEFT,
+            ).pack(anchor=W, pady=(0, 8))
+
         btns = tk.Frame(frame, bg=_FM_BG)
         btns.pack(fill=X)
 

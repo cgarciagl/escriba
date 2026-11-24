@@ -37,6 +37,9 @@ from updater import (
     check_for_update, download_and_prepare, should_auto_check,
 )
 
+# La app vive días en la bandeja: cada hora revisa si ya tocan las 24 h de la comprobación.
+_UPDATE_RECHECK_MS = 60 * 60 * 1000
+
 
 # ─────────────────────────────────────────────────────────────
 # Aplicación Principal
@@ -64,6 +67,7 @@ class EscribaApp:
         self.hotkey = HotkeyManager(self.root, self._on_hotkey)
         self.repeat_hotkey = HotkeyManager(self.root, self._on_repeat_hotkey, hotkey_id=2)
         self._last_action: dict | None = None
+        self.pending_update: ReleaseInfo | None = None
         self._lock = threading.Lock()
 
     def run(self):
@@ -105,7 +109,11 @@ class EscribaApp:
         )
 
     def _maybe_check_updates(self):
-        """Comprueba si hay una nueva versión en GitHub (como máximo cada 24 h)."""
+        """Comprueba si hay una nueva versión en GitHub (como máximo cada 24 h).
+
+        Se reprograma cada hora: la app suele pasar días en la bandeja sin reiniciarse.
+        """
+        self.root.after(_UPDATE_RECHECK_MS, self._maybe_check_updates)
         if not should_auto_check():
             return
 
@@ -116,24 +124,41 @@ class EscribaApp:
 
         threading.Thread(target=task, daemon=True).start()
 
+    def check_updates_now(self):
+        """Comprobación manual desde la bandeja: siempre informa del resultado."""
+        def task():
+            info, error = check_for_update()
+            if info:
+                self.schedule(self._notify_update, info)
+            elif error:
+                self.schedule(self.tooltip.show, tr("update.check_failed", error=error), "danger")
+            else:
+                self.schedule(self.tooltip.show, tr("update.up_to_date", app=APP_NAME, version=APP_VERSION), "success")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def show_update_dialog(self, info: ReleaseInfo | None = None):
+        """Abre el diálogo con las novedades y el botón de instalar."""
+        info = info or self.pending_update
+        if not info:
+            return
+        UpdateDialog(
+            self.root, info,
+            on_confirm=lambda: self.start_update(info),
+            can_install=can_self_update(),
+        ).show()
+
     def _notify_update(self, info: ReleaseInfo):
-        """Muestra una notificación discreta cuando hay una versión nueva."""
+        """Avisa de la versión nueva y deja la opción de instalarla en la bandeja."""
+        self.pending_update = info
+        self.tray.refresh()
         msg = tr("update.available_notify", app=APP_NAME, version=info.version, current=APP_VERSION)
-
-        def _open_dialog():
-            UpdateDialog(
-                self.root, info,
-                on_confirm=lambda: self.start_update(info),
-                can_install=can_self_update(),
-            ).show()
-
-        if info.release_notes:
-            action = (tr("update.view_notes"), _open_dialog)
-        elif can_self_update():
+        if can_self_update():
             action = (tr("update.now"), lambda: self.start_update(info))
         else:
-            action = (tr("update.view_release"), lambda: webbrowser.open(info.html_url))
-        self.tooltip.show(msg, "info", duration=15000, action=action)
+            action = (tr("update.view_notes"), lambda: self.show_update_dialog(info))
+        # Sin duración: el aviso se queda hasta que el usuario lo cierra o actúa.
+        self.tooltip.show(msg, "info", duration=None, action=action)
 
     def start_update(self, info: ReleaseInfo):
         """Descarga la actualización con barra de progreso y reinicia la app."""

@@ -70,12 +70,24 @@ class TrayIconManager:
     def _build_menu(self) -> pystray.Menu:
         return pystray.Menu(
             pystray.MenuItem(f"{APP_NAME} v{APP_VERSION}", None, enabled=False),
+            pystray.MenuItem(
+                lambda item: tr(
+                    "tray.install_update",
+                    version=self.app.pending_update.version if self.app.pending_update else "",
+                ),
+                lambda icon, item: self.app.schedule(self.app.show_update_dialog),
+                visible=lambda item: self.app.pending_update is not None,
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(tr("tray.history"), pystray.Menu(self._history_items)),
             pystray.MenuItem(
                 tr("tray.config"),
                 lambda icon, item: self.app.schedule(self.app.open_config),
                 default=True,
+            ),
+            pystray.MenuItem(
+                tr("tray.check_updates"),
+                lambda icon, item: self.app.schedule(self.app.check_updates_now),
             ),
             pystray.MenuItem(
                 tr("tray.about"),
