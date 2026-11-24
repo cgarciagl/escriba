@@ -40,6 +40,7 @@ def reset_config_cache(tmp_path, monkeypatch):
     monkeypatch.setattr("config._keychain_available", lambda: False)
     monkeypatch.setattr("config._dpapi_available", lambda: False)
     # Fijar idioma base en tests existentes (independiente del locale del runner).
+    monkeypatch.setattr("config._windows_ui_language", lambda: None)
     monkeypatch.setattr("config.locale.getlocale", lambda: ("es_ES", "UTF-8"))
     monkeypatch.setenv("LANG", "es_ES.UTF-8")
     monkeypatch.delenv("LC_ALL", raising=False)

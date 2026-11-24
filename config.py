@@ -76,18 +76,24 @@ def decrypt_secret(value: str) -> str:
     return _dpapi(base64.b64decode(value), protect=False).decode("utf-8")
 
 
+def _windows_ui_language() -> int | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        return ctypes.windll.kernel32.GetUserDefaultUILanguage()
+    except Exception:
+        return None
+
+
 def detect_system_language() -> str:
     """Detecta el idioma del sistema operativo ('es' o 'en'); fallback a DEFAULT_LANGUAGE."""
-    if sys.platform == "win32":
-        try:
-            lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
-            primary = lang_id & 0x3FF
-            if primary == 0x0A:
-                return "es"
-            if primary == 0x09:
-                return "en"
-        except Exception:
-            pass
+    lang_id = _windows_ui_language()
+    if lang_id is not None:
+        primary = lang_id & 0x3FF
+        if primary == 0x0A:
+            return "es"
+        if primary == 0x09:
+            return "en"
     candidates: list[str] = []
     try:
         loc = locale.getlocale()[0]
