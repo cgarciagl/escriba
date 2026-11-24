@@ -30,11 +30,12 @@ from ttkbootstrap.constants import *
 from actions import (
     expand_prompt_vars,
     extract_prompt_inputs,
+    is_translation_action,
     load_actions,
     strip_code_fences,
 )
 from ai_clients import PROVIDER_LABELS, CancelledByUser, generate_text, needs_configuration
-from config import ConfigManager
+from config import ConfigManager, tr
 from constants import APP_NAME, OPENAI_DEFAULT_MODEL
 from plataforma import (
     PRIMARY_MODIFIER_TK,
@@ -80,9 +81,10 @@ def _word_count_text(original: str, result: str, elapsed_s: float | None = None)
     res_words = len((result or "").split())
     if (original or "").strip():
         orig_words = len(original.split())
-        base = f"{orig_words} → {res_words} palabras"
+        base = tr("result.words_range", orig=orig_words, res=res_words)
     else:
-        base = f"{res_words} palabra{'s' if res_words != 1 else ''}"
+        word_lbl = tr("menu.word_singular") if res_words == 1 else tr("menu.word_plural")
+        base = tr("result.words_single", res=res_words, word=word_lbl)
     if elapsed_s is not None:
         return f"{base} · {elapsed_s:.1f} s"
     return base
@@ -103,9 +105,9 @@ def _paste_to_origin(app: EscribaApp, prev_hwnd, text: str):
         activate_window(prev_hwnd)
         send_paste()
         time.sleep(0.30)
-        app.schedule(app.tooltip.show, "Texto sustituido.", "success")
+        app.schedule(app.tooltip.show, tr("result.replaced"), "success")
     except Exception as e:
-        app.schedule(app.tooltip.show, f"No se pudo sustituir el texto: {e}", "danger")
+        app.schedule(app.tooltip.show, tr("result.replace_error", error=e), "danger")
     finally:
         try:
             pyperclip.copy(original_clip)
@@ -132,6 +134,7 @@ class _ResultSession:
         strip_markdown: bool = False,
         history_turns: list[tuple[str, str]] | None = None,
         user_input: str | None = None,
+        apply_language: bool = True,
     ):
         self.app = app
         self.prompt = prompt
@@ -145,6 +148,7 @@ class _ResultSession:
         self.temperature = temperature
         self.strip_markdown = strip_markdown
         self.history_turns = list(history_turns) if history_turns else []
+        self.apply_language = apply_language
         self.elapsed_s: float | None = None
         self.cancel_event = threading.Event()
         self.thinking: ThinkingWindow | None = None
@@ -174,6 +178,7 @@ class _ResultSession:
             label=self.label, streaming=True, on_stop=self.cancel,
             temperature=self.temperature, strip_markdown=self.strip_markdown,
             history_turns=self.history_turns, custom_model=self.custom_model,
+            apply_language=self.apply_language,
         )
 
     def _append(self, piece: str):
@@ -205,7 +210,7 @@ class _ResultSession:
                 label=self.label, provider=provider, model=self.model,
                 temperature=self.temperature, strip_markdown=self.strip_markdown,
                 history_turns=next_turns, custom_model=self.custom_model,
-                elapsed_s=self.elapsed_s,
+                elapsed_s=self.elapsed_s, apply_language=self.apply_language,
             )
 
     def fail(self, exc: Exception):
@@ -214,15 +219,15 @@ class _ResultSession:
             if self.window:
                 self.window.mark_stopped()
             else:
-                self.app.tooltip.show("Petición cancelada.", "info", 2500)
+                self.app.tooltip.show(tr("result.cancelled"), "info", 2500)
             return
 
         if self.window:
             self.window.mark_failed()
         if needs_configuration(exc):
-            action = ("Abrir configuración", self.app.open_config)
+            action = (tr("menu.open_config"), self.app.open_config)
         else:
-            action = ("Reintentar", lambda: start_ai_action(
+            action = (tr("result.retry"), lambda: start_ai_action(
                 self.app, self.prompt, self.text, self.prev_hwnd, self.label,
                 auto_replace=self.auto_replace,
                 model=self.custom_model,
@@ -230,6 +235,7 @@ class _ResultSession:
                 strip_markdown=self.strip_markdown,
                 history_turns=self.history_turns,
                 user_input=self.user_input,
+                apply_language=self.apply_language,
             ))
         self.app.tooltip.show(str(exc), "danger", action=action)
 
@@ -244,7 +250,9 @@ def run_ai_action(app: EscribaApp, session: _ResultSession):
     def on_retry(attempt, max_retries, delay, reason):
         sec = max(1, int(round(delay)))
         if thinking:
-            thinking.update_status(f"⏳ Modelo ocupado ({attempt}/{max_retries}). Reintentando en {sec} s…")
+            thinking.update_status(
+                tr("result.retrying", attempt=attempt, max_retries=max_retries, sec=sec)
+            )
 
     try:
         extra_kwargs = {}
@@ -254,6 +262,8 @@ def run_ai_action(app: EscribaApp, session: _ResultSession):
             extra_kwargs["temperature"] = session.temperature
         if session.history_turns:
             extra_kwargs["history"] = session.history_turns
+        if not session.apply_language:
+            extra_kwargs["apply_language"] = False
 
         t0 = time.monotonic()
         result, provider = generate_text(
@@ -287,6 +297,7 @@ def start_ai_action(
     strip_markdown: bool = False,
     history_turns: list[tuple[str, str]] | None = None,
     user_input: str | None = None,
+    apply_language: bool = True,
 ) -> _ResultSession:
     """Muestra el indicador de progreso y lanza la acción en un hilo."""
     session = _ResultSession(
@@ -297,6 +308,7 @@ def start_ai_action(
         strip_markdown=strip_markdown,
         history_turns=history_turns,
         user_input=user_input,
+        apply_language=apply_language,
     )
     session.thinking = ThinkingWindow(app.root, status or f"{label.strip()}…", on_cancel=session.cancel)
     threading.Thread(target=run_ai_action, args=(app, session), daemon=True).start()
@@ -317,7 +329,7 @@ class ResultWindow:
         prompt: str = "",
         selected_text: str = "",
         provider: str = "gemini",
-        label: str = CUSTOM_PROMPT_LABEL,
+        label: str | None = None,
         streaming: bool = False,
         on_stop=None,
         model: str = "",
@@ -326,7 +338,9 @@ class ResultWindow:
         history_turns: list[tuple[str, str]] | None = None,
         custom_model: str = "",
         elapsed_s: float | None = None,
+        apply_language: bool = True,
     ):
+        label = label or tr("result.custom_prompt")
         self.app = app
         self.result = result
         self.prev_hwnd = prev_hwnd
@@ -341,6 +355,7 @@ class ResultWindow:
         self.streaming = streaming
         self._on_stop = on_stop
         self.elapsed_s = elapsed_s
+        self.apply_language = apply_language
         self.can_replace = bool(prev_hwnd)
         self._turns: list[tuple[str, str]] = (
             list(history_turns)
@@ -355,7 +370,7 @@ class ResultWindow:
         win.resizable(True, True)
         apply_dark_style(win)
         self.window = win
-        center_window(win, 720, 460)
+        center_window(win, 750, 460)
 
         frame = tk.Frame(win, bg=_FM_BG, padx=16, pady=12)
         frame.pack(fill=BOTH, expand=True)
@@ -371,7 +386,7 @@ class ResultWindow:
         badge_f = tk.Frame(hdr, bg=_FM_ACCENT)
         badge_f.pack(side=RIGHT)
         self._badge = tk.Label(
-            badge_f, text="⏳ Generando…" if streaming else provider_badge(provider, model),
+            badge_f, text=tr("result.generating") if streaming else provider_badge(provider, model),
             font=(UI_FONT, 8, "bold"), bg=_FM_ACCENT, fg=_FM_BG, padx=7, pady=3,
         )
         self._badge.pack()
@@ -380,12 +395,12 @@ class ResultWindow:
         bar = tk.Frame(frame, bg=_FM_BG)
         bar.pack(fill=X, pady=(0, 6))
         self.view_var = tk.StringVar(value="result")
-        tb.Radiobutton(bar, text="Resultado", value="result", variable=self.view_var,
+        tb.Radiobutton(bar, text=tr("result.tab_result"), value="result", variable=self.view_var,
                        style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
-        tb.Radiobutton(bar, text="Original", value="original", variable=self.view_var,
+        tb.Radiobutton(bar, text=tr("result.tab_original"), value="original", variable=self.view_var,
                        style="Escriba.Toolbutton", command=self._switch_view).pack(side=LEFT)
         self._diff_rb = tb.Radiobutton(
-            bar, text="Cambios", value="diff", variable=self.view_var,
+            bar, text=tr("result.tab_diff"), value="diff", variable=self.view_var,
             style="Escriba.Toolbutton", command=self._switch_view,
         )
         if selected_text.strip():
@@ -393,7 +408,7 @@ class ResultWindow:
         tk.Label(bar, text=shortcut_label("Ctrl+O"), font=(UI_FONT, 8),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT, padx=(8, 0))
 
-        self._stop_btn = tb.Button(bar, text="⏹  Detener", style="Escriba.TButton",
+        self._stop_btn = tb.Button(bar, text=tr("result.stop"), style="Escriba.TButton",
                                    command=self._stop)
         if streaming and on_stop:
             self._stop_btn.pack(side=RIGHT)
@@ -424,28 +439,28 @@ class ResultWindow:
         self._refine_entry = tb.Entry(refine_row, textvariable=self._refine_var,
                                       font=(UI_FONT, 9), style="Escriba.TEntry")
         self._refine_entry.pack(side=LEFT, fill=X, expand=True, ipady=2, padx=(0, 6))
-        self._refine_btn = tb.Button(refine_row, text="✨  Ajustar", style="Escriba.TButton",
+        self._refine_btn = tb.Button(refine_row, text=tr("result.refine"), style="Escriba.TButton",
                                      command=self._refine)
         self._refine_btn.pack(side=LEFT)
         self._refine_entry.bind("<Return>", lambda e: self._refine())
 
         primary_is_replace = self.can_replace
-        replace_verb = "Sustituir texto" if selected_text.strip() else "Insertar texto"
+        replace_verb = tr("result.replace_verb") if selected_text.strip() else tr("result.insert_verb")
         self._replace_btn = tb.Button(
             btns, text=f"⬅  {replace_verb}   {shortcut_label('Ctrl+Enter')}",
             bootstyle="warning", command=self._replace,
         )
-        copy_text = f"📋  Copiar   {shortcut_label('Ctrl+Shift+C')}"
+        copy_text = f"{tr('result.copy')}   {shortcut_label('Ctrl+Shift+C')}"
         if primary_is_replace:
             self._copy_btn = tb.Button(btns, text=copy_text, style="Escriba.TButton", command=self._copy)
         else:
             self._copy_btn = tb.Button(btns, text=copy_text, bootstyle="warning", command=self._copy)
         self._regen_btn = tb.Button(
-            btns, text=f"🔄  Regenerar   {shortcut_label('Ctrl+R')}",
+            btns, text=f"{tr('result.regenerate')}   {shortcut_label('Ctrl+R')}",
             style="Escriba.TButton", command=self._regenerate,
         )
         self._chain_btn = tb.Button(
-            btns, text="🔗  Encadenar",
+            btns, text=tr("result.chain"),
             style="Escriba.TButton", command=self._open_chain_menu,
         )
 
@@ -456,7 +471,7 @@ class ResultWindow:
             self._copy_btn.pack(side=RIGHT, ipady=4)
         self._regen_btn.pack(side=LEFT, ipady=2, padx=(6, 0))
         self._chain_btn.pack(side=LEFT, ipady=2, padx=(6, 0))
-        tk.Label(btns, text="Esc cierra", font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED
+        tk.Label(btns, text=tr("result.esc_closes"), font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED
                  ).pack(side=LEFT, padx=(8, 0))
 
         # ── Área de texto: resultado, original y diff ────────
@@ -695,7 +710,7 @@ class ResultWindow:
             self.streaming = False
             return
         self._end_streaming()
-        self._badge.configure(text="⚠️ Respuesta interrumpida")
+        self._badge.configure(text=tr("result.interrupted"))
 
     def mark_stopped(self):
         if not self._alive():
@@ -704,10 +719,10 @@ class ResultWindow:
         self._end_streaming()
         current = self.text_widget.get("1.0", "end-1c")
         self._words_lbl.configure(text=_word_count_text(self.selected_text, current, self.elapsed_s))
-        self._badge.configure(text="⏹ Detenido")
+        self._badge.configure(text=tr("result.stopped"))
 
     def _stop(self):
-        self._stop_btn.configure(state="disabled", text="Deteniendo…")
+        self._stop_btn.configure(state="disabled", text=tr("result.stopping"))
         if self._on_stop:
             self._on_stop()
 
@@ -736,7 +751,7 @@ class ResultWindow:
             copy_rich_text(text)
         else:
             pyperclip.copy(text)
-        self.app.tooltip.show("Copiado al portapapeles.", "success", 2000)
+        self.app.tooltip.show(tr("result.copied"), "success", 2000)
 
     def _replace(self):
         text = self.text_widget.get("1.0", "end-1c")
@@ -781,7 +796,8 @@ class ResultWindow:
             return
         app_name = get_foreground_app_name(self.prev_hwnd) if self.prev_hwnd else ""
         expanded = expand_prompt_vars(action["prompt"], extra_vars={"app": app_name})
-        kwargs = {}
+        apply_language = not is_translation_action(action)
+        kwargs = {"apply_language": apply_language}
         if action.get("model"):
             kwargs["model"] = action["model"]
         if action.get("temperature") is not None:
@@ -818,23 +834,21 @@ class ResultWindow:
             turns[-1] = (turns[-1][0], current)
         else:
             turns = [(self.selected_text or self.prompt, current)]
-        sys_prompt = self.prompt or (
-            "Refina el texto según las indicaciones del usuario manteniendo fidelidad al original. "
-            "Devuelve únicamente el resultado."
-        )
+        sys_prompt = self.prompt or tr("result.refine_prompt")
         self.window.destroy()
         start_ai_action(
             self.app,
             sys_prompt,
             self.selected_text,
             self.prev_hwnd,
-            "✨  Ajustar",
-            status="✨  Ajustando resultado…",
+            tr("result.refine"),
+            status=tr("result.refining"),
             model=self.custom_model,
             temperature=self.temperature,
             strip_markdown=self.strip_markdown,
             history_turns=turns,
             user_input=instruction,
+            apply_language=self.apply_language,
         )
 
     def _regenerate(self):
@@ -845,8 +859,9 @@ class ResultWindow:
             self.selected_text,
             self.prev_hwnd,
             self.label,
-            status="🔄  Volviendo a generar…",
+            status=tr("result.regenerating"),
             model=self.custom_model,
             temperature=self.temperature,
             strip_markdown=self.strip_markdown,
+            apply_language=self.apply_language,
         )

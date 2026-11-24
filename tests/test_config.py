@@ -12,7 +12,12 @@ class TestConfigManagerLoad:
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": False}
+        assert data == {
+            "api_key": "",
+            "model": "gemini-3.5-flash-lite",
+            "autostart": False,
+            "language": "es",
+        }
         assert config_file.exists()
         assert json.loads(config_file.read_text(encoding="utf-8")) == data
 
@@ -34,7 +39,12 @@ class TestConfigManagerLoad:
 
         data = ConfigManager.load()
 
-        assert data == {"api_key": "", "model": "gemini-3.5-flash-lite", "autostart": False}
+        assert data == {
+            "api_key": "",
+            "model": "gemini-3.5-flash-lite",
+            "autostart": False,
+            "language": "es",
+        }
 
     def test_cache_avoids_reload(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.json"
@@ -281,3 +291,38 @@ class TestKeychainSecrets:
         on_disk = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
         assert "api_key_keychain" not in on_disk
         assert ConfigManager.get_api_key() == ""
+
+
+class TestLanguageConfig:
+    def test_get_and_set_language(self):
+        assert ConfigManager.get_language() == "es"
+        ConfigManager.set_language("en")
+        assert ConfigManager.get_language() == "en"
+        # Idioma no soportado vuelve a DEFAULT_LANGUAGE ("es")
+        ConfigManager.set_language("fr")
+        assert ConfigManager.get_language() == "es"
+
+    def test_tr_switches_between_es_and_en(self):
+        from config import tr
+
+        ConfigManager.set_language("es")
+        assert tr("tray.config") == "⚙️  Configuración"
+        ConfigManager.set_language("en")
+        assert tr("tray.config") == "⚙️  Settings"
+
+    def test_detect_system_language_from_locale(self, monkeypatch):
+        import config as cfg
+
+        monkeypatch.setattr("config.sys.platform", "linux")
+        monkeypatch.setattr("config.locale.getlocale", lambda: ("en_US", "UTF-8"))
+        assert cfg.detect_system_language() == "en"
+
+        monkeypatch.setattr("config.locale.getlocale", lambda: ("es_MX", "UTF-8"))
+        assert cfg.detect_system_language() == "es"
+
+        monkeypatch.setattr("config.locale.getlocale", lambda: ("fr_FR", "UTF-8"))
+        monkeypatch.delenv("LC_ALL", raising=False)
+        monkeypatch.delenv("LC_MESSAGES", raising=False)
+        monkeypatch.delenv("LANG", raising=False)
+        assert cfg.detect_system_language() == "es"
+

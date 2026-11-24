@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import pystray
 from PIL import Image, ImageDraw
 
+from config import tr
 from constants import APP_NAME, APP_VERSION, BASE_DIR
 from plataforma import IS_MAC, active_hotkey_label
 
@@ -51,7 +52,7 @@ class TrayIconManager:
         """Genera el submenú de historial cada vez que se abre el menú."""
         entries = self.app.history.entries()
         if not entries:
-            yield pystray.MenuItem("(sin respuestas todavía)", None, enabled=False)
+            yield pystray.MenuItem(tr("tray.no_history"), None, enabled=False)
             return
         def _make_action(entry):
             return lambda icon, item: self.app.schedule(self.app.open_history_entry, entry)
@@ -63,34 +64,36 @@ class TrayIconManager:
             )
         yield pystray.Menu.SEPARATOR
         yield pystray.MenuItem(
-            "🗑️  Borrar historial", lambda icon, item: self.app.history.clear()
+            tr("tray.clear_history"), lambda icon, item: self.app.history.clear()
         )
 
-    def start(self):
-        image = self._build_image()
-        menu = pystray.Menu(
+    def _build_menu(self) -> pystray.Menu:
+        return pystray.Menu(
             pystray.MenuItem(f"{APP_NAME} v{APP_VERSION}", None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("🕘  Historial", pystray.Menu(self._history_items)),
+            pystray.MenuItem(tr("tray.history"), pystray.Menu(self._history_items)),
             pystray.MenuItem(
-                "⚙️  Configuración",
+                tr("tray.config"),
                 lambda icon, item: self.app.schedule(self.app.open_config),
                 default=True,
             ),
             pystray.MenuItem(
-                "ℹ️  Acerca de",
+                tr("tray.about"),
                 lambda icon, item: self.app.schedule(self.app.open_about),
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
-                "❌  Salir",
+                tr("tray.quit"),
                 lambda icon, item: self.app.schedule(self.app.quit_app),
             ),
         )
+
+    def start(self):
+        image = self._build_image()
         self.icon = pystray.Icon(
             APP_NAME, image,
-            f"{APP_NAME} - {active_hotkey_label()} para activar",
-            menu,
+            tr("tray.tooltip", app=APP_NAME, hotkey=active_hotkey_label()),
+            self._build_menu(),
         )
         if IS_MAC:
             # En macOS el ícono debe vivir en el hilo principal; run_detached lo
@@ -103,7 +106,17 @@ class TrayIconManager:
         """Actualiza el tooltip del ícono cuando cambia el atajo global."""
         if self.icon:
             try:
-                self.icon.title = f"{APP_NAME} - {active_hotkey_label()} para activar"
+                self.icon.title = tr("tray.tooltip", app=APP_NAME, hotkey=active_hotkey_label())
+            except Exception:
+                pass
+
+    def update_language(self):
+        """Reconstruye el menú y el tooltip cuando cambia el idioma."""
+        if self.icon:
+            try:
+                self.icon.menu = self._build_menu()
+                self.update_hotkey()
+                self.refresh()
             except Exception:
                 pass
 

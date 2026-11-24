@@ -26,7 +26,8 @@ import unicodedata
 from datetime import datetime
 
 import constants
-from constants import AI_ACTIONS
+from config import ConfigManager, tr
+from constants import AI_ACTIONS, AI_ACTIONS_EN
 
 ACTIONS_FILE = os.path.join(constants.CONFIG_DIR, "actions.json")
 
@@ -117,7 +118,7 @@ def _normalize(raw: list) -> tuple[list[dict], list[str]]:
         action = {
             "label": label,
             "prompt": prompt,
-            "section": str(item.get("section") or DEFAULT_SECTION).strip(),
+            "section": str(item.get("section") or tr("actions.default_section")).strip(),
             "bootstyle": str(item.get("bootstyle") or DEFAULT_BOOTSTYLE).strip(),
             "shortcut": "",
             "shortcut_key": None,
@@ -126,6 +127,8 @@ def _normalize(raw: list) -> tuple[list[dict], list[str]]:
             action["auto_replace"] = True
         if item.get("strip_markdown"):
             action["strip_markdown"] = True
+        if item.get("preserve_target_language"):
+            action["preserve_target_language"] = True
 
         mode = str(item.get("mode") or "").strip().lower()
         if mode and mode != "selection":
@@ -178,8 +181,22 @@ def _normalize(raw: list) -> tuple[list[dict], list[str]]:
 
 
 def default_actions() -> list[dict]:
-    actions, _ = _normalize(copy.deepcopy(AI_ACTIONS))
+    base = AI_ACTIONS_EN if ConfigManager.get_language() == "en" else AI_ACTIONS
+    actions, _ = _normalize(copy.deepcopy(base))
     return actions
+
+
+def is_translation_action(action_or_prompt) -> bool:
+    """Indica si la acción traduce explícitamente a un idioma destino."""
+    if isinstance(action_or_prompt, dict):
+        if action_or_prompt.get("preserve_target_language"):
+            return True
+        haystack = f"{action_or_prompt.get('label', '')} {action_or_prompt.get('prompt', '')}".lower()
+    else:
+        haystack = str(action_or_prompt or "").lower()
+    return bool(
+        re.search(r"\b(traducir|traduce|translate)\s+(?:[\wáéíóúüñ]+\s+)?(al?|to|into)\b", haystack)
+    )
 
 
 def load_actions() -> tuple[list[dict], list[str]]:
@@ -209,6 +226,8 @@ def _serializable(actions: list[dict]) -> list[dict]:
             item["auto_replace"] = True
         if a.get("strip_markdown"):
             item["strip_markdown"] = True
+        if a.get("preserve_target_language"):
+            item["preserve_target_language"] = True
         if a.get("temperature") is not None:
             item["temperature"] = a["temperature"]
         out.append(item)
@@ -228,7 +247,7 @@ def add_custom_action(
     label: str,
     prompt: str,
     mode: str = "both",
-    section: str = "Personalizadas",
+    section: str | None = None,
 ) -> list[str]:
     """Añade una nueva acción personalizada y la guarda en actions.json."""
     existing, _ = load_actions()
@@ -244,7 +263,7 @@ def add_custom_action(
     new_action = {
         "label": final_label,
         "prompt": prompt.strip(),
-        "section": section,
+        "section": section or tr("actions.custom_section"),
         "bootstyle": DEFAULT_BOOTSTYLE,
         "mode": mode,
     }
@@ -307,9 +326,7 @@ def expand_prompt_vars(prompt: str, extra_vars: dict[str, str] | None = None) ->
             clip = ""
         prompt = prompt.replace("{clipboard}", clip)
     if "{lang}" in prompt:
-        import locale
-        lang = (locale.getlocale()[0] or "es").split("_")[0]
-        prompt = prompt.replace("{lang}", lang)
+        prompt = prompt.replace("{lang}", ConfigManager.get_language())
     if "{app}" in prompt:
         app_val = (extra_vars or {}).get("app")
         if app_val is None:

@@ -17,7 +17,7 @@ import pyperclip
 
 from actions import expand_prompt_vars
 from constants import APP_NAME, APP_VERSION, DEFAULT_REPEAT_HOTKEY, HISTORY_FILE
-from config import ConfigManager
+from config import ConfigManager, tr
 from ai_clients import is_ready
 from history import History
 from ui_common import configure_styles
@@ -100,8 +100,7 @@ class EscribaApp:
             name for ok, name in ((has_wl_copy, "wl-clipboard"), (has_wtype, "wtype")) if not ok
         ]
         self.tooltip.show(
-            "⚠️ Sesión Wayland detectada.\n"
-            f"Instala {' y '.join(missing)} para portapapeles y pegado nativo en Wayland.",
+            tr("wayland.warning", missing=tr("wayland.and").join(missing)),
             "warning", 8000,
         )
 
@@ -119,10 +118,7 @@ class EscribaApp:
 
     def _notify_update(self, info: ReleaseInfo):
         """Muestra una notificación discreta cuando hay una versión nueva."""
-        msg = (
-            f"🚀 Nueva versión disponible: Escriba v{info.version}\n"
-            f"Estás usando la v{APP_VERSION}."
-        )
+        msg = tr("update.available_notify", app=APP_NAME, version=info.version, current=APP_VERSION)
 
         def _open_dialog():
             UpdateDialog(
@@ -132,11 +128,11 @@ class EscribaApp:
             ).show()
 
         if info.release_notes:
-            action = ("Ver novedades", _open_dialog)
+            action = (tr("update.view_notes"), _open_dialog)
         elif can_self_update():
-            action = ("Actualizar ahora", lambda: self.start_update(info))
+            action = (tr("update.now"), lambda: self.start_update(info))
         else:
-            action = ("Ver release", lambda: webbrowser.open(info.html_url))
+            action = (tr("update.view_release"), lambda: webbrowser.open(info.html_url))
         self.tooltip.show(msg, "info", duration=15000, action=action)
 
     def start_update(self, info: ReleaseInfo):
@@ -147,12 +143,14 @@ class EscribaApp:
 
         cancel_event = threading.Event()
         thinking = ThinkingWindow(
-            self.root, f"Descargando Escriba v{info.version}…", on_cancel=cancel_event.set
+            self.root, tr("update.downloading", app=APP_NAME, version=info.version), on_cancel=cancel_event.set
         )
 
         def on_progress(pct: int | None):
             if pct is not None:
-                thinking.update_status(f"Descargando Escriba v{info.version}… {pct} %")
+                thinking.update_status(
+                    tr("update.downloading_pct", app=APP_NAME, version=info.version, pct=pct)
+                )
 
         def task():
             try:
@@ -181,9 +179,9 @@ class EscribaApp:
         if thinking:
             thinking.close()
         self.tooltip.show(
-            f"❌ No se pudo completar la actualización:\n{error}",
+            tr("update.error", error=error),
             "danger",
-            action=("Abrir descarga", lambda: webbrowser.open(info.html_url)),
+            action=(tr("update.open_download"), lambda: webbrowser.open(info.html_url)),
         )
 
     def reload_hotkey(self, hotkey: str | None = None, repeat_hotkey: str | None = None):
@@ -204,6 +202,10 @@ class EscribaApp:
 
         self.root.after(120, _restart)
 
+    def on_language_changed(self):
+        """Actualiza el menú de la bandeja y su tooltip tras cambiar el idioma."""
+        self.tray.update_language()
+
     def remember_last_action(
         self,
         prompt: str,
@@ -212,6 +214,7 @@ class EscribaApp:
         model: str = "",
         temperature: float | None = None,
         strip_markdown: bool = False,
+        apply_language: bool = True,
     ):
         """Guarda la última acción ejecutada para el atajo de repetición rápida."""
         self._last_action = {
@@ -221,6 +224,7 @@ class EscribaApp:
             "model": model,
             "temperature": temperature,
             "strip_markdown": strip_markdown,
+            "apply_language": apply_language,
         }
 
     def open_config(self):
@@ -277,6 +281,8 @@ class EscribaApp:
             kwargs["temperature"] = last["temperature"]
         if last.get("strip_markdown"):
             kwargs["strip_markdown"] = True
+        if "apply_language" in last:
+            kwargs["apply_language"] = last["apply_language"]
         start_ai_action(
             self, prompt, selected, hwnd, last["label"],
             auto_replace=bool(last.get("auto_replace")),
@@ -287,10 +293,9 @@ class EscribaApp:
         """Reejecuta la última acción sobre la selección actual sin abrir el menú."""
         if error:
             rep = ConfigManager.get("repeat_hotkey", DEFAULT_REPEAT_HOTKEY) or ""
-            lbl = format_hotkey_label(rep) if rep else "repetir"
+            lbl = format_hotkey_label(rep) if rep else tr("hotkey.repeat_fallback")
             self.tooltip.show(
-                f"❌ Error: No se pudo registrar el atajo {lbl}.\n"
-                "Es posible que otra aplicación lo esté usando.",
+                tr("hotkey.error", hotkey=lbl),
                 "danger", 6000,
             )
             return
@@ -313,8 +318,7 @@ class EscribaApp:
     def _notify_hotkey_error(self):
         hk = active_hotkey_label()
         self.tooltip.show(
-            f"❌ Error: No se pudo registrar el atajo {hk}.\n"
-            "Es posible que otra aplicación lo esté usando.",
+            tr("hotkey.error", hotkey=hk),
             "danger", 6000
         )
 
@@ -380,7 +384,7 @@ def main():
             tmp = tk.Tk()
             tmp.withdraw()
             messagebox.showinfo(
-                APP_NAME, f"{APP_NAME} ya está ejecutándose en la bandeja del sistema."
+                APP_NAME, tr("app.already_running", app=APP_NAME)
             )
             tmp.destroy()
         except Exception:

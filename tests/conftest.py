@@ -39,6 +39,11 @@ def reset_config_cache(tmp_path, monkeypatch):
     # Nunca tocar el Llavero ni DPAPI reales; los tests que lo necesitan lo simulan.
     monkeypatch.setattr("config._keychain_available", lambda: False)
     monkeypatch.setattr("config._dpapi_available", lambda: False)
+    # Fijar idioma base en tests existentes (independiente del locale del runner).
+    monkeypatch.setattr("config.locale.getlocale", lambda: ("es_ES", "UTF-8"))
+    monkeypatch.setenv("LANG", "es_ES.UTF-8")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
     ConfigManager._cache = None
     yield
     ConfigManager._cache = None

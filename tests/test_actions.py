@@ -294,3 +294,41 @@ class TestAppsAndCustomSave:
         assert added["section"] == "Personalizadas"
         assert added["mode"] == "both"
 
+
+class TestBilingualActions:
+    def test_default_actions_follow_configured_language(self, actions_file):
+        from config import ConfigManager
+
+        ConfigManager.set_language("en")
+        en_actions, _ = load_actions()
+        assert en_actions[0]["label"] == "✎  Rewrite"
+        assert en_actions[0]["section"] == "Text & Content"
+
+        ConfigManager.set_language("es")
+        es_actions, _ = load_actions()
+        assert es_actions[0]["label"] == "✎  Reescribir"
+        assert es_actions[0]["section"] == "Texto y Contenido"
+
+    def test_custom_actions_file_is_preserved_across_language_change(self, actions_file):
+        from actions import save_actions
+        from config import ConfigManager
+
+        save_actions([{"label": "★  Custom", "prompt": "My prompt"}])
+        ConfigManager.set_language("en")
+        loaded, _ = load_actions()
+        assert [a["label"] for a in loaded] == ["★  Custom"]
+
+    def test_is_translation_action(self):
+        from actions import is_translation_action
+
+        assert is_translation_action({"label": "◐  Traducir al español", "prompt": "..."}) is True
+        assert is_translation_action({"label": "Custom", "prompt": "Translate to French"}) is True
+        assert is_translation_action({"label": "✎  Rewrite", "prompt": "Rewrite text"}) is False
+
+    def test_expand_lang_uses_configured_language(self):
+        from config import ConfigManager
+
+        ConfigManager.set_language("en")
+        assert expand_prompt_vars("Respond in {lang}") == "Respond in en"
+
+

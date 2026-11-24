@@ -13,6 +13,7 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 import os
+from config import tr
 from constants import APP_NAME, APP_VERSION, BASE_DIR, GITHUB_REPO
 from plataforma import IS_LINUX, IS_MAC, active_hotkey_label, clamp_to_area, monitor_workarea
 
@@ -222,7 +223,7 @@ class ThinkingWindow:
         tk.Label(hdr, text=APP_NAME, font=(UI_FONT, 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
         if self._on_cancel:
-            cancel = tk.Label(hdr, text="Cancelar", font=(UI_FONT, 9, "underline"),
+            cancel = tk.Label(hdr, text=tr("common.cancel"), font=(UI_FONT, 9, "underline"),
                               bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
             cancel.pack(side=RIGHT)
             cancel.bind("<Button-1>", lambda e: self.cancel())
@@ -249,7 +250,7 @@ class ThinkingWindow:
 
     def cancel(self):
         if self._label and self.window and self.window.winfo_exists():
-            self._label.config(text="Cancelando…")
+            self._label.config(text=tr("common.cancelling"))
         if self._on_cancel:
             self._on_cancel()
 
@@ -300,14 +301,14 @@ class SplashBanner:
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
                  font=(UI_FONT, 16, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
-        tk.Label(title_col, text="Asistente de Texto con IA",
+        tk.Label(title_col, text=tr("app.subtitle"),
                  font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         tk.Frame(inner, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 10))
 
         hint_row = tk.Frame(inner, bg=_FM_BG)
         hint_row.pack(fill=X)
-        tk.Label(hint_row, text="Atajo: ", font=(UI_FONT, 9),
+        tk.Label(hint_row, text=tr("common.shortcut_label"), font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         tk.Label(hint_row, text=active_hotkey_label(),
                  font=(MONO_FONT, 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
@@ -335,7 +336,7 @@ class AboutWindow:
             return
 
         win = tb.Toplevel(self.root)
-        win.title(f"Acerca de {APP_NAME}")
+        win.title(tr("about.title", app=APP_NAME))
         win.resizable(False, False)
         win.attributes("-topmost", True)
         apply_dark_style(win)
@@ -355,26 +356,25 @@ class AboutWindow:
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME, font=(UI_FONT, 16, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
-        tk.Label(title_col, text=f"Versión {APP_VERSION}", font=(UI_FONT, 9),
+        tk.Label(title_col, text=tr("about.version", version=APP_VERSION), font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         tk.Frame(frame, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 12))
 
-        tk.Label(frame, text="Asistente de texto con IA: selecciona texto en cualquier "
-                 "aplicación y pulsa el atajo para reescribir, traducir, resumir y más.",
+        tk.Label(frame, text=tr("about.desc"),
                  font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_TEXT,
                  wraplength=scaled(win, 320), justify=LEFT).pack(anchor=W, pady=(0, 10))
 
         author = tk.Frame(frame, bg=_FM_BG)
         author.pack(anchor=W, pady=(0, 6))
-        tk.Label(author, text="Autor: ", font=(UI_FONT, 9),
+        tk.Label(author, text=tr("about.author"), font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         tk.Label(author, text="Carlos García Trujillo", font=(UI_FONT, 9, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
 
         row = tk.Frame(frame, bg=_FM_BG)
         row.pack(anchor=W, pady=(0, 6))
-        tk.Label(row, text="Atajo: ", font=(UI_FONT, 9),
+        tk.Label(row, text=tr("common.shortcut_label"), font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         tk.Label(row, text=active_hotkey_label(), font=(MONO_FONT, 9, "bold"),
                  bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
@@ -384,7 +384,7 @@ class AboutWindow:
         link.pack(anchor=W)
         link.bind("<Button-1>", lambda e: self._open_repo())
 
-        tb.Button(frame, text="Cerrar", style="Escriba.TButton",
+        tb.Button(frame, text=tr("common.close"), style="Escriba.TButton",
                   command=win.destroy).pack(side=BOTTOM, anchor=E)
         win.bind("<Escape>", lambda e: win.destroy())
         win.focus_force()
@@ -410,7 +410,7 @@ class UpdateDialog:
         import webbrowser
 
         win = tb.Toplevel(self.root)
-        win.title(f"{APP_NAME} — Nueva versión v{self.info.version}")
+        win.title(tr("update.dialog_title", app=APP_NAME, version=self.info.version))
         win.resizable(False, False)
         win.attributes("-topmost", True)
         apply_dark_style(win)
@@ -422,12 +422,12 @@ class UpdateDialog:
 
         tk.Label(
             frame,
-            text=f"🚀 Escriba v{self.info.version} disponible",
+            text=tr("update.dialog_header", app=APP_NAME, version=self.info.version),
             font=(UI_FONT, 13, "bold"), bg=_FM_BG, fg=_FM_TEXT,
         ).pack(anchor=W)
         tk.Label(
             frame,
-            text=f"Versión instalada: v{APP_VERSION}",
+            text=tr("update.installed_version", version=APP_VERSION),
             font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED,
         ).pack(anchor=W, pady=(2, 10))
 
@@ -437,7 +437,7 @@ class UpdateDialog:
             notes_box, wrap=tk.WORD, font=(UI_FONT, 9), relief="flat",
             bg=_FM_CARD, fg=_FM_TEXT, padx=10, pady=8,
         )
-        txt.insert("1.0", self.info.release_notes or "Sin notas de publicación.")
+        txt.insert("1.0", self.info.release_notes or tr("update.no_notes"))
         txt.configure(state="disabled")
         scroll = tb.Scrollbar(notes_box, orient="vertical", command=txt.yview,
                               style="Escriba.Vertical.TScrollbar")
@@ -457,12 +457,12 @@ class UpdateDialog:
             win.destroy()
             webbrowser.open(self.info.html_url)
 
-        tb.Button(btns, text="Más tarde", style="Escriba.TButton",
+        tb.Button(btns, text=tr("update.later"), style="Escriba.TButton",
                   command=win.destroy).pack(side=LEFT)
-        tb.Button(btns, text="🌐 Ver en GitHub", style="Escriba.TButton",
+        tb.Button(btns, text=tr("update.view_github"), style="Escriba.TButton",
                   command=_open_web).pack(side=LEFT, padx=(6, 0))
         if self.can_install and self.on_confirm:
-            tb.Button(btns, text="⬇  Instalar y reiniciar", bootstyle="warning",
+            tb.Button(btns, text=tr("update.install_restart"), bootstyle="warning",
                       command=_install).pack(side=RIGHT, ipady=2)
 
         win.bind("<Escape>", lambda e: win.destroy())

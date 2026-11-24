@@ -19,17 +19,17 @@ from ttkbootstrap.constants import *
 
 from actions import (
     action_icon, action_matches_app, action_name, add_custom_action, display_shortcut,
-    expand_prompt_vars, extract_prompt_inputs, filter_actions, load_actions,
+    expand_prompt_vars, extract_prompt_inputs, filter_actions, is_translation_action, load_actions,
 )
 from ai_clients import is_ready
-from config import ConfigManager
+from config import ConfigManager, tr
 from constants import APP_NAME
 from plataforma import bring_app_to_front, get_foreground_app_name, get_foreground_window, tk_shortcut
 from ui_common import (
     _FM_ACCENT, _FM_BADGE, _FM_BG, _FM_BORDER, _FM_CARD, _FM_HOVER, _FM_MUTED, _FM_SEP, _FM_TEXT,
     MONO_FONT, UI_FONT, apply_dark_style, center_window, fade_window, place_near_pointer, scaled,
 )
-from ui_result import CUSTOM_PROMPT_LABEL, start_ai_action
+from ui_result import start_ai_action
 
 if TYPE_CHECKING:
     from escriba import EscribaApp
@@ -78,7 +78,7 @@ def build_items(
     if app_name and not query.strip():
         app_specific = [a for a in eligible if a.get("apps")]
         if app_specific:
-            promoted = [{**a, "section": f"★ Para {app_name}"} for a in app_specific]
+            promoted = [{**a, "section": tr("menu.section_for_app", app=app_name)} for a in app_specific]
             app_labels = {a["label"] for a in app_specific}
             eligible = promoted + [a for a in eligible if a["label"] not in app_labels]
 
@@ -105,7 +105,7 @@ def _with_frequent_first(actions: list[dict]) -> list[dict]:
     if not ranked:
         return actions
     top_labels = {a["label"] for a in ranked}
-    promoted = [{**a, "section": "★ Frecuentes"} for a in ranked]
+    promoted = [{**a, "section": tr("menu.section_frequent")} for a in ranked]
     rest = [a for a in actions if a["label"] not in top_labels]
     return promoted + rest
 
@@ -162,9 +162,9 @@ class FloatingMenu:
         self.hide()
         if not is_ready():
             self.app.tooltip.show(
-                "Configura un proveedor de IA antes de usar Escriba.",
+                tr("menu.not_configured"),
                 "warning", duration=None,
-                action=("Abrir configuración", self.app.open_config),
+                action=(tr("menu.open_config"), self.app.open_config),
             )
             return
 
@@ -196,13 +196,14 @@ class FloatingMenu:
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
         if self._has_selection:
             words = len(selected_text.split())
-            tk.Label(hdr, text=f"  ·  {words} palabra{'s' if words != 1 else ''}",
+            word_lbl = tr("menu.word_singular") if words == 1 else tr("menu.word_plural")
+            tk.Label(hdr, text=f"  ·  {words} {word_lbl}",
                      font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
             if len(selected_text) > LONG_TEXT_CHARS:
-                tk.Label(hdr, text="  ·  Texto largo",
+                tk.Label(hdr, text=tr("menu.long_text"),
                          font=(UI_FONT, 8, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
         else:
-            tk.Label(hdr, text="  ·  Modo redacción (sin selección)",
+            tk.Label(hdr, text=tr("menu.compose_mode"),
                      font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
         if self._app_name:
             tk.Label(hdr, text=f"  ·  {self._app_name}",
@@ -228,7 +229,7 @@ class FloatingMenu:
                              bg=_FM_CARD, fg=_FM_TEXT, insertbackground=_FM_ACCENT,
                              relief="flat", borderwidth=0, padx=8, pady=6, undo=True)
         self.input.pack(fill=X)
-        ph_text = PLACEHOLDER if self._has_selection else PLACEHOLDER_COMPOSE
+        ph_text = tr("menu.placeholder") if self._has_selection else tr("menu.placeholder_compose")
         self._placeholder = tk.Label(box, text=ph_text, font=(UI_FONT, 10),
                                      bg=_FM_CARD, fg=_FM_MUTED, bd=0, padx=0, pady=0)
         self._placeholder.place(x=scaled(win, 10), rely=0.5, anchor=W)
@@ -258,7 +259,7 @@ class FloatingMenu:
 
         # ── Pie con ayudas de teclado ───────────────────────
         tk.Frame(inner, bg=_FM_SEP, height=1).pack(fill=X, pady=(8, 6))
-        tk.Label(inner, text="↑↓ navegar   ·   Enter ejecutar   ·   Shift+Enter nueva línea   ·   Esc cerrar",
+        tk.Label(inner, text=tr("menu.footer"),
                  font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         self._bind_keys(win)
@@ -276,7 +277,7 @@ class FloatingMenu:
         self.input.focus_set()
 
         if warnings:
-            self.app.tooltip.show("actions.json tiene avisos:\n" + "\n".join(warnings[:4]),
+            self.app.tooltip.show(tr("menu.warnings", warnings="\n".join(warnings[:4])),
                                   "warning", 8000)
 
     def _on_mousewheel(self, event):
@@ -375,7 +376,7 @@ class FloatingMenu:
                 if item["kind"] == "action":
                     section = item["action"].get("section", "")
                 elif item["kind"] == "recent":
-                    section = "🕘 Instrucciones recientes"
+                    section = tr("menu.section_recent")
                 else:
                     section = None
                 if section and section != last_section:
@@ -400,7 +401,7 @@ class FloatingMenu:
         elif kind == "recent":
             icon, text, key = "🕘", _truncate(item["prompt"], 42), "Enter"
         else:
-            verb = "Usar como instrucción" if self._has_selection else "Generar"
+            verb = tr("menu.verb_use") if self._has_selection else tr("menu.verb_generate")
             icon, text, key = "✏", f"{verb}: “{_truncate(item['prompt'], 34)}”", "Enter"
 
         icon_lbl = tk.Label(row, text=icon, width=2, font=(UI_FONT, 11), bg=_FM_BG, fg=_FM_ACCENT)
@@ -415,7 +416,7 @@ class FloatingMenu:
             widgets.append(badge)
         if kind in ("custom", "recent"):
             save_lbl = tk.Label(
-                row, text="★ Guardar", font=(UI_FONT, 8), bg=_FM_BADGE, fg=_FM_ACCENT,
+                row, text=tr("menu.save_badge"), font=(UI_FONT, 8), bg=_FM_BADGE, fg=_FM_ACCENT,
                 padx=6, pady=1, cursor="hand2",
             )
             save_lbl.pack(side=RIGHT, padx=(0, 4))
@@ -443,9 +444,9 @@ class FloatingMenu:
             )
             if self.window and self.window.winfo_exists():
                 self._render()
-            self.app.tooltip.show(f"Acción «{label}» guardada en actions.json.", "success", 2500)
+            self.app.tooltip.show(tr("menu.saved_ok", label=label), "success", 2500)
         except Exception as exc:
-            self.app.tooltip.show(f"No se pudo guardar la acción: {exc}", "danger", 4000)
+            self.app.tooltip.show(tr("menu.saved_err", error=exc), "danger", 4000)
 
     def _highlight(self):
         for i, widgets in enumerate(self._rows):
@@ -553,9 +554,9 @@ class FloatingMenu:
             result = {k: v.get().strip() for k, v in vars_map.items()}
             dlg.destroy()
 
-        tb.Button(btns, text="Cancelar", style="Escriba.TButton",
+        tb.Button(btns, text=tr("common.cancel"), style="Escriba.TButton",
                   command=dlg.destroy).pack(side=LEFT)
-        tb.Button(btns, text="Ejecutar", bootstyle="warning",
+        tb.Button(btns, text=tr("menu.run"), bootstyle="warning",
                   command=_submit).pack(side=RIGHT)
         dlg.bind("<Return>", _submit)
         dlg.bind("<Escape>", lambda e: dlg.destroy())
@@ -576,7 +577,8 @@ class FloatingMenu:
         self._record_usage(action["label"])
         all_vars = {"app": self._app_name, **(extra or {})}
         prompt = expand_prompt_vars(action["prompt"], extra_vars=all_vars)
-        kwargs = {}
+        apply_language = not is_translation_action(action)
+        kwargs = {"apply_language": apply_language}
         if action.get("model"):
             kwargs["model"] = action["model"]
         if action.get("temperature") is not None:
@@ -602,11 +604,18 @@ class FloatingMenu:
         inputs = extract_prompt_inputs(prompt)
         extra = None
         if inputs:
-            extra = self._ask_prompt_inputs("Instrucción libre", inputs)
+            extra = self._ask_prompt_inputs(tr("menu.free_instruction"), inputs)
             if extra is None:
                 return
         all_vars = {"app": self._app_name, **(extra or {})}
         expanded = expand_prompt_vars(prompt, extra_vars=all_vars)
+        apply_language = not is_translation_action(expanded)
+        custom_label = tr("result.custom_prompt")
         if hasattr(self.app, "remember_last_action"):
-            self.app.remember_last_action(prompt=prompt, label=CUSTOM_PROMPT_LABEL)
-        start_ai_action(self.app, expanded, self._text, self._prev_hwnd, CUSTOM_PROMPT_LABEL)
+            self.app.remember_last_action(
+                prompt=prompt, label=custom_label, apply_language=apply_language
+            )
+        start_ai_action(
+            self.app, expanded, self._text, self._prev_hwnd, custom_label,
+            apply_language=apply_language,
+        )

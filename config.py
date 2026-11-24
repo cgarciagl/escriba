@@ -12,6 +12,7 @@ Escriba — Persistencia de configuración (config.json).
 import base64
 import ctypes
 import json
+import locale
 import os
 import shutil
 import sys
@@ -19,7 +20,7 @@ import tempfile
 import threading
 
 import constants
-from constants import GEMINI_DEFAULT_MODEL
+from constants import DEFAULT_LANGUAGE, GEMINI_DEFAULT_MODEL, SUPPORTED_LANGUAGES
 
 # Alias a nivel de módulo (los tests los sustituyen con monkeypatch).
 CONFIG_FILE = constants.CONFIG_FILE
@@ -75,6 +76,36 @@ def decrypt_secret(value: str) -> str:
     return _dpapi(base64.b64decode(value), protect=False).decode("utf-8")
 
 
+def detect_system_language() -> str:
+    """Detecta el idioma del sistema operativo ('es' o 'en'); fallback a DEFAULT_LANGUAGE."""
+    if sys.platform == "win32":
+        try:
+            lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            primary = lang_id & 0x3FF
+            if primary == 0x0A:
+                return "es"
+            if primary == 0x09:
+                return "en"
+        except Exception:
+            pass
+    candidates: list[str] = []
+    try:
+        loc = locale.getlocale()[0]
+        if loc:
+            candidates.append(loc)
+    except Exception:
+        pass
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        val = os.environ.get(var)
+        if val:
+            candidates.append(val)
+    for raw in candidates:
+        code = raw.split(".", 1)[0].split("_", 1)[0].split("-", 1)[0].strip().lower()
+        if code in SUPPORTED_LANGUAGES:
+            return code
+    return DEFAULT_LANGUAGE
+
+
 # ─────────────────────────────────────────────────────────────
 # ConfigManager
 # ─────────────────────────────────────────────────────────────
@@ -117,6 +148,7 @@ class ConfigManager:
                 "api_key": "",
                 "model": GEMINI_DEFAULT_MODEL,
                 "autostart": False,
+                "language": detect_system_language(),
             }
             cls.save(default_config)
             return dict(default_config)
@@ -230,3 +262,19 @@ class ConfigManager:
     @classmethod
     def set_model(cls, model_name: str):
         cls.set("model", model_name)
+
+    @classmethod
+    def get_language(cls) -> str:
+        lang = str(cls.get("language", "") or "").strip().lower()
+        return lang if lang in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
+
+    @classmethod
+    def set_language(cls, lang: str):
+        clean = str(lang or "").strip().lower()
+        cls.set("language", clean if clean in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE)
+
+
+def tr(key: str, **kwargs) -> str:
+    """Devuelve la cadena traducida según el idioma activo en ConfigManager."""
+    return constants.translate(key, lang=ConfigManager.get_language(), **kwargs)
+

@@ -27,13 +27,14 @@ from typing import Callable, Iterator
 import requests
 
 from constants import (
+    AI_LANGUAGE_INSTRUCTIONS,
     GEMINI_BASE,
     GEMINI_DEFAULT_MODEL,
     GEMINI_FALLBACK_MODELS,
     OPENAI_DEFAULT_BASE_URL,
     OPENAI_DEFAULT_MODEL,
 )
-from config import ConfigManager
+from config import ConfigManager, tr
 
 RetryCallback = Callable[[int, int, float, str], None]
 ChunkCallback = Callable[[str], None]
@@ -557,6 +558,20 @@ def provider_order() -> list[str]:
     return order
 
 
+def apply_language_instruction(prompt: str, lang: str | None = None) -> str:
+    """Añade la instrucción de idioma al system prompt si no está ya presente."""
+    selected = lang or ConfigManager.get_language()
+    instr = AI_LANGUAGE_INSTRUCTIONS.get(selected)
+    if not instr:
+        return prompt
+    base = (prompt or "").rstrip()
+    if not base:
+        return instr
+    if instr in base:
+        return prompt
+    return f"{base}\n\n{instr}"
+
+
 def generate_text(
     prompt: str,
     text: str,
@@ -567,6 +582,7 @@ def generate_text(
     model: str | None = None,
     temperature: float | None = None,
     history: list[tuple[str, str]] | None = None,
+    apply_language: bool = True,
 ) -> tuple[str, str]:
     """Genera la respuesta con el proveedor configurado (y el alternativo si falla).
 
@@ -576,6 +592,7 @@ def generate_text(
     Returns:
         (resultado, proveedor)  donde proveedor es "gemini" u "openai".
     """
+    effective_prompt = apply_language_instruction(prompt) if apply_language else prompt
     order = provider_order()
     emitted = False
 
@@ -595,7 +612,7 @@ def generate_text(
                 kwargs["temperature"] = temperature
             if history:
                 kwargs["history"] = history
-            result = PROVIDERS[name].generate(prompt, text, **kwargs)
+            result = PROVIDERS[name].generate(effective_prompt, text, **kwargs)
             return result, name
         except CancelledByUser:
             raise
@@ -604,9 +621,13 @@ def generate_text(
                 raise
             if on_status:
                 on_status(
-                    f"↪ {PROVIDER_LABELS[name]} falló; probando {PROVIDER_LABELS[order[i + 1]]}…"
+                    tr(
+                        "ai.fallback_status",
+                        primary=PROVIDER_LABELS[name],
+                        secondary=PROVIDER_LABELS[order[i + 1]],
+                    )
                 )
-    raise RuntimeError("No hay proveedores de IA configurados.")
+    raise RuntimeError(tr("ai.no_providers"))
 
 
 def needs_configuration(exc: Exception) -> bool:

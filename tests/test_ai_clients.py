@@ -304,7 +304,38 @@ class TestGenerateText:
 
             assert result == "gemini result"
             assert provider == "gemini"
-            mock_gemini.assert_called_once_with("prompt", "text", on_retry=callback, on_chunk=None)
+            mock_gemini.assert_called_once_with(
+                "prompt\n\nIMPORTANTE: Responde siempre en español.",
+                "text",
+                on_retry=callback,
+                on_chunk=None,
+            )
+
+    def test_injects_english_instruction_when_language_is_en(self):
+        from config import ConfigManager
+
+        ConfigManager.set_language("en")
+        with patch("ai_clients.GeminiClient.generate", return_value="ok") as mock_gemini:
+            generate_text("Rewrite this", "hola")
+            mock_gemini.assert_called_once_with(
+                "Rewrite this\n\nIMPORTANT: Always respond in English.",
+                "hola",
+                on_retry=None,
+                on_chunk=None,
+            )
+
+    def test_skips_language_instruction_when_apply_language_false(self):
+        from config import ConfigManager
+
+        ConfigManager.set_language("en")
+        with patch("ai_clients.GeminiClient.generate", return_value="ok") as mock_gemini:
+            generate_text("Translate to Spanish", "hello", apply_language=False)
+            mock_gemini.assert_called_once_with(
+                "Translate to Spanish",
+                "hello",
+                on_retry=None,
+                on_chunk=None,
+            )
 
 
 class TestErrorMessages:

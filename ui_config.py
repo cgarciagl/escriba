@@ -18,7 +18,7 @@ from ttkbootstrap.constants import *
 
 from actions import export_actions, import_actions, load_actions, save_actions, write_defaults
 from ai_clients import GeminiClient, OpenAICompatibleClient
-from config import ConfigManager
+from config import ConfigManager, tr
 from constants import (
     APP_NAME,
     APP_VERSION,
@@ -28,9 +28,11 @@ from constants import (
     GEMINI_FALLBACK_MODELS,
     HISTORY_FILE,
     HOTKEY_PRESETS,
+    LANGUAGE_LABELS,
     OPENAI_DEFAULT_BASE_URL,
     OPENAI_DEFAULT_MODEL,
     REPEAT_HOTKEY_PRESETS,
+    SUPPORTED_LANGUAGES,
 )
 from plataforma import IS_MAC, StartupManager
 from updater import check_for_update
@@ -43,12 +45,15 @@ if TYPE_CHECKING:
     from escriba import EscribaApp
 
 _WARN = "#f59e0b"
-_MODE_LABELS = {
-    "selection": "Solo selección",
-    "compose": "Solo redacción",
-    "both": "Ambos",
-}
-_LABEL_TO_MODE = {v: k for k, v in _MODE_LABELS.items()}
+_LABEL_TO_LANG = {v: k for k, v in LANGUAGE_LABELS.items()}
+
+
+def _mode_labels() -> dict[str, str]:
+    return {
+        "selection": tr("config.mode_selection"),
+        "compose": tr("config.mode_compose"),
+        "both": tr("config.mode_both"),
+    }
 
 
 def open_in_editor(path: str):
@@ -64,7 +69,7 @@ def open_in_editor(path: str):
 class ConfigWindow:
     """Formulario de proveedores de IA, acciones, streaming y arranque."""
 
-    WIDTH, HEIGHT = 560, 690
+    WIDTH, HEIGHT = 600, 690
 
     def __init__(self, app: EscribaApp):
         self.app = app
@@ -98,7 +103,7 @@ class ConfigWindow:
             return
 
         win = tb.Toplevel(self.app.root)
-        win.title(f"{APP_NAME} — Configuración")
+        win.title(tr("config.title", app=APP_NAME))
         win.resizable(False, False)
         win.attributes("-topmost", True)
         apply_dark_style(win)
@@ -119,7 +124,7 @@ class ConfigWindow:
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
                  font=(UI_FONT, 14, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(anchor=W)
-        tk.Label(title_col, text="Configuración",
+        tk.Label(title_col, text=tr("config.subtitle"),
                  font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(anchor=W)
 
         # ── Pie: estado + guardar (se empaqueta antes para que siempre se vea) ──
@@ -130,16 +135,16 @@ class ConfigWindow:
                                    font=(UI_FONT, 9), wraplength=480,
                                    bg=_FM_BG, fg=_FM_MUTED)
         self.status_lbl.pack(anchor=W, pady=(0, 8))
-        tb.Button(footer, text="💾  Guardar y Cerrar", bootstyle="warning",
+        tb.Button(footer, text=tr("config.save_close"), bootstyle="warning",
                   width=26, command=self._save).pack()
 
         notebook = tb.Notebook(frame, style="Escriba.TNotebook")
         notebook.pack(fill=BOTH, expand=True)
 
-        self._build_gemini_tab(self._tab(notebook, "Gemini"))
-        self._build_alt_tab(self._tab(notebook, "Proveedor alternativo"))
-        self._build_actions_tab(self._tab(notebook, "Acciones"))
-        self._build_general_tab(self._tab(notebook, "General"))
+        self._build_gemini_tab(self._tab(notebook, tr("config.tab_gemini")))
+        self._build_alt_tab(self._tab(notebook, tr("config.tab_alt")))
+        self._build_actions_tab(self._tab(notebook, tr("config.tab_actions")))
+        self._build_general_tab(self._tab(notebook, tr("config.tab_general")))
 
         # Indicadores ámbar sobre el fondo de Escriba (no el del tema)
         style = tb.Style()
@@ -149,9 +154,7 @@ class ConfigWindow:
 
         self.key_entry.focus_set()
         if welcome:
-            self._status(
-                "👋 Te damos la bienvenida a Escriba. Pega tu API Key de Gemini (es gratuita) "
-                "o configura un proveedor alternativo, y pulsa Guardar.", _FM_ACCENT)
+            self._status(tr("config.welcome"), _FM_ACCENT)
         def _on_return(event):
             wclass = event.widget.winfo_class() if event and event.widget else ""
             if wclass not in ("TButton", "Button", "TCombobox", "Text"):
@@ -183,18 +186,17 @@ class ConfigWindow:
         return entry
 
     def _build_gemini_tab(self, tab):
-        self._title(tab, "API Key de Google Gemini")
+        self._title(tab, tr("config.gemini_key"))
         self.api_key_var = tk.StringVar(value=ConfigManager.get_api_key())
         self.key_entry = self._secret_row(tab, self.api_key_var, font_size=11)
 
-        url_label = tk.Label(tab, text="Obtén tu clave en → https://aistudio.google.com/apikey",
+        url_label = tk.Label(tab, text=tr("config.gemini_get_key"),
                              font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED, cursor="hand2")
         url_label.pack(anchor=W, pady=(0, 4))
         url_label.bind("<Button-1>", lambda e: webbrowser.open("https://aistudio.google.com/apikey"))
-        self._hint(tab, "Se guarda en el Llavero de macOS." if IS_MAC
-                   else "Se guarda cifrada con tu cuenta de Windows (DPAPI).")
+        self._hint(tab, tr("config.key_mac") if IS_MAC else tr("config.key_win"))
 
-        self._title(tab, "Modelo de Gemini")
+        self._title(tab, tr("config.gemini_model"))
         current_model = ConfigManager.get("model", GEMINI_DEFAULT_MODEL)
         self.model_var = tk.StringVar(value=current_model)
 
@@ -208,34 +210,33 @@ class ConfigWindow:
                                     state="readonly", style="Escriba.TCombobox", font=(MONO_FONT, 10))
         self.model_cb.pack(side=LEFT, fill=X, expand=True, ipady=4, padx=(0, 8))
 
-        self.refresh_btn = tb.Button(model_row, text="🔄 Actualizar",
+        self.refresh_btn = tb.Button(model_row, text=tr("config.refresh"),
                                      style="Escriba.TButton", command=self._refresh_models)
         self.refresh_btn.pack(side=LEFT, ipady=2)
-        self._hint(tab, f"Predeterminado: {GEMINI_DEFAULT_MODEL} (rápido y eficiente)")
+        self._hint(tab, tr("config.gemini_default_hint", model=GEMINI_DEFAULT_MODEL))
 
     def _build_alt_tab(self, tab):
-        self._hint(tab, "Cualquier servidor compatible con la API de OpenAI: Ollama (local, sin clave), "
-                        "OpenAI, OpenRouter, LM Studio…", pady=(0, 12))
+        self._hint(tab, tr("config.alt_hint"), pady=(0, 12))
 
-        self._title(tab, "Proveedor principal")
+        self._title(tab, tr("config.primary_provider"))
         self.provider_var = tk.StringVar(value=ConfigManager.get("provider", "gemini"))
         prov_row = tk.Frame(tab, bg=_FM_BG)
         prov_row.pack(fill=X, pady=(0, 12))
         tb.Radiobutton(prov_row, text="Google Gemini", value="gemini",
                        variable=self.provider_var, bootstyle="warning").pack(side=LEFT, padx=(0, 18))
-        tb.Radiobutton(prov_row, text="Compatible con OpenAI", value="openai",
+        tb.Radiobutton(prov_row, text=tr("config.openai_compatible"), value="openai",
                        variable=self.provider_var, bootstyle="warning").pack(side=LEFT)
 
-        self._title(tab, "URL base")
+        self._title(tab, tr("config.base_url"))
         self.alt_url_var = tk.StringVar(value=ConfigManager.get("openai_base_url", OPENAI_DEFAULT_BASE_URL))
         tb.Entry(tab, textvariable=self.alt_url_var, font=(MONO_FONT, 10),
                  style="Escriba.TEntry").pack(fill=X, ipady=4, pady=(0, 10))
 
-        self._title(tab, "API Key (opcional)")
+        self._title(tab, tr("config.api_key_opt"))
         self.alt_key_var = tk.StringVar(value=ConfigManager.get_openai_api_key())
         self._secret_row(tab, self.alt_key_var, font_size=10)
 
-        self._title(tab, "Modelo")
+        self._title(tab, tr("config.model"))
         alt_row = tk.Frame(tab, bg=_FM_BG)
         alt_row.pack(fill=X, pady=(0, 10))
         self.alt_model_var = tk.StringVar(value=ConfigManager.get("openai_model", OPENAI_DEFAULT_MODEL))
@@ -243,12 +244,12 @@ class ConfigWindow:
                                         values=[self.alt_model_var.get()],
                                         style="Escriba.TCombobox", font=(MONO_FONT, 10))
         self.alt_model_cb.pack(side=LEFT, fill=X, expand=True, ipady=3, padx=(0, 8))
-        self.alt_refresh_btn = tb.Button(alt_row, text="🔄 Listar", style="Escriba.TButton",
+        self.alt_refresh_btn = tb.Button(alt_row, text=tr("config.list"), style="Escriba.TButton",
                                          command=self._refresh_alt_models)
         self.alt_refresh_btn.pack(side=LEFT, ipady=2)
 
         self.fallback_var = tk.BooleanVar(value=bool(ConfigManager.get("fallback_enabled", False)))
-        tb.Checkbutton(tab, text="  Si el proveedor principal falla, usar el otro",
+        tb.Checkbutton(tab, text=tr("config.fallback_chk"),
                        variable=self.fallback_var,
                        bootstyle="warning").pack(anchor=W, pady=(4, 0))
 
@@ -260,7 +261,7 @@ class ConfigWindow:
         cols = tk.Frame(tab, bg=_FM_BG)
         cols.pack(fill=BOTH, expand=True)
 
-        left = tk.Frame(cols, bg=_FM_BG, width=170)
+        left = tk.Frame(cols, bg=_FM_BG, width=180)
         left.pack(side=LEFT, fill=Y, padx=(0, 12))
         left.pack_propagate(False)
 
@@ -276,23 +277,24 @@ class ConfigWindow:
         lbtns.pack(fill=X)
         for txt, cmd in (("+", self._act_add), ("▲", lambda: self._act_move(-1)),
                          ("▼", lambda: self._act_move(1)), ("🗑", self._act_delete)):
-            tb.Button(lbtns, text=txt, style="Escriba.TButton", width=3,
+            tb.Button(lbtns, text=txt, style="Escriba.TButton", width=2,
                       command=cmd).pack(side=LEFT, expand=True, fill=X, padx=1)
 
         right = tk.Frame(cols, bg=_FM_BG)
         right.pack(side=LEFT, fill=BOTH, expand=True)
 
+        mode_labels = _mode_labels()
         self._act_label_var = tk.StringVar()
         self._act_section_var = tk.StringVar()
         self._act_shortcut_var = tk.StringVar()
-        self._act_mode_var = tk.StringVar(value=_MODE_LABELS["selection"])
+        self._act_mode_var = tk.StringVar(value=mode_labels["selection"])
         self._act_temp_var = tk.StringVar()
         self._act_model_var = tk.StringVar()
         self._act_apps_var = tk.StringVar()
         self._act_auto_var = tk.BooleanVar()
         self._act_strip_md_var = tk.BooleanVar()
 
-        self._title(right, "Etiqueta (ej. ✎  Reescribir)", pady=(0, 2))
+        self._title(right, tr("config.act_label"), pady=(0, 2))
         tb.Entry(right, textvariable=self._act_label_var, font=(UI_FONT, 9),
                  style="Escriba.TEntry").pack(fill=X, pady=(0, 6))
 
@@ -300,45 +302,45 @@ class ConfigWindow:
         meta.pack(fill=X, pady=(0, 6))
         c1 = tk.Frame(meta, bg=_FM_BG)
         c1.pack(side=LEFT, fill=X, expand=True, padx=(0, 6))
-        self._title(c1, "Sección", pady=(0, 2))
+        self._title(c1, tr("config.act_section"), pady=(0, 2))
         tb.Entry(c1, textvariable=self._act_section_var, font=(UI_FONT, 9),
-                 style="Escriba.TEntry").pack(fill=X)
+                 style="Escriba.TEntry", width=14).pack(fill=X)
         c2 = tk.Frame(meta, bg=_FM_BG)
         c2.pack(side=LEFT, fill=X, expand=True)
-        self._title(c2, "Atajo (ej. Ctrl+R)", pady=(0, 2))
+        self._title(c2, tr("config.act_shortcut"), pady=(0, 2))
         tb.Entry(c2, textvariable=self._act_shortcut_var, font=(MONO_FONT, 9),
-                 style="Escriba.TEntry").pack(fill=X)
+                 style="Escriba.TEntry", width=12).pack(fill=X)
 
         adv = tk.Frame(right, bg=_FM_BG)
         adv.pack(fill=X, pady=(0, 6))
         a1 = tk.Frame(adv, bg=_FM_BG)
         a1.pack(side=LEFT, fill=X, expand=True, padx=(0, 6))
-        self._title(a1, "Modo", pady=(0, 2))
+        self._title(a1, tr("config.act_mode"), pady=(0, 2))
         tb.Combobox(
-            a1, textvariable=self._act_mode_var, values=list(_MODE_LABELS.values()),
+            a1, textvariable=self._act_mode_var, values=list(mode_labels.values()),
             state="readonly", style="Escriba.TCombobox", font=(UI_FONT, 8), width=14,
         ).pack(fill=X)
         a2 = tk.Frame(adv, bg=_FM_BG)
         a2.pack(side=LEFT, padx=(0, 6))
-        self._title(a2, "Temp.", pady=(0, 2))
+        self._title(a2, tr("config.act_temp"), pady=(0, 2))
         tb.Entry(a2, textvariable=self._act_temp_var, font=(MONO_FONT, 8),
                  style="Escriba.TEntry", width=6).pack(fill=X)
         a3 = tk.Frame(adv, bg=_FM_BG)
         a3.pack(side=LEFT, fill=X, expand=True)
-        self._title(a3, "Modelo (opc.)", pady=(0, 2))
+        self._title(a3, tr("config.act_model"), pady=(0, 2))
         tb.Entry(a3, textvariable=self._act_model_var, font=(MONO_FONT, 8),
                  style="Escriba.TEntry").pack(fill=X)
 
-        self._title(right, "Apps (opc., ej. outlook, code)", pady=(0, 2))
+        self._title(right, tr("config.act_apps"), pady=(0, 2))
         tb.Entry(right, textvariable=self._act_apps_var, font=(MONO_FONT, 8),
                  style="Escriba.TEntry").pack(fill=X, pady=(0, 6))
 
-        tb.Checkbutton(right, text="  Sustituir automáticamente sin abrir ventana",
+        tb.Checkbutton(right, text=tr("config.act_auto"),
                        variable=self._act_auto_var, bootstyle="warning").pack(anchor=W, pady=(0, 3))
-        tb.Checkbutton(right, text="  Limpiar bloques Markdown (```)",
+        tb.Checkbutton(right, text=tr("config.act_strip_md"),
                        variable=self._act_strip_md_var, bootstyle="warning").pack(anchor=W, pady=(0, 6))
 
-        self._title(right, "Prompt ({app}, {clipboard}, {lang}, {date}, {input:Campo})", pady=(0, 2))
+        self._title(right, tr("config.act_prompt"), pady=(0, 2))
         self._act_prompt_txt = tk.Text(
             right, height=3, wrap=tk.WORD, font=(UI_FONT, 9),
             bg=_FM_CARD, fg=_FM_TEXT, insertbackground=_FM_ACCENT,
@@ -348,11 +350,11 @@ class ConfigWindow:
 
         act_btns = tk.Frame(right, bg=_FM_BG)
         act_btns.pack(fill=X)
-        tb.Button(act_btns, text="📥 Importar", style="Escriba.TButton",
+        tb.Button(act_btns, text=tr("config.act_import"), style="Escriba.TButton",
                   command=self._import_actions).pack(side=LEFT, padx=(0, 4))
-        tb.Button(act_btns, text="📤 Exportar", style="Escriba.TButton",
+        tb.Button(act_btns, text=tr("config.act_export"), style="Escriba.TButton",
                   command=self._export_actions).pack(side=LEFT)
-        tb.Button(act_btns, text="💾  Guardar acciones", style="Escriba.TButton",
+        tb.Button(act_btns, text=tr("config.act_save"), style="Escriba.TButton",
                   command=self._save_visual_actions).pack(side=RIGHT)
 
         self._refresh_actions_listbox()
@@ -369,11 +371,12 @@ class ConfigWindow:
         if not (0 <= idx < len(self._edited_actions)):
             return
         a = self._edited_actions[idx]
+        mode_labels = _mode_labels()
         self._act_label_var.set(a.get("label", ""))
         self._act_section_var.set(a.get("section", ""))
         self._act_shortcut_var.set(a.get("shortcut", ""))
         mode_key = a.get("mode", "selection") or "selection"
-        self._act_mode_var.set(_MODE_LABELS.get(mode_key, _MODE_LABELS["selection"]))
+        self._act_mode_var.set(mode_labels.get(mode_key, mode_labels["selection"]))
         temp = a.get("temperature")
         self._act_temp_var.set("" if temp is None else str(temp))
         self._act_model_var.set(a.get("model", ""))
@@ -391,7 +394,7 @@ class ConfigWindow:
         before = dict(cur)
 
         cur["label"] = self._act_label_var.get().strip() or cur["label"]
-        cur["section"] = self._act_section_var.get().strip() or "Texto y Contenido"
+        cur["section"] = self._act_section_var.get().strip() or tr("actions.default_section")
         cur["shortcut"] = self._act_shortcut_var.get().strip()
         if self._act_auto_var.get():
             cur["auto_replace"] = True
@@ -403,7 +406,8 @@ class ConfigWindow:
             cur.pop("strip_markdown", None)
         cur["prompt"] = self._act_prompt_txt.get("1.0", "end-1c").strip() or cur["prompt"]
 
-        mode = _LABEL_TO_MODE.get(self._act_mode_var.get(), "selection")
+        label_to_mode = {v: k for k, v in _mode_labels().items()}
+        mode = label_to_mode.get(self._act_mode_var.get(), "selection")
         if mode == "selection":
             cur.pop("mode", None)
         else:
@@ -446,9 +450,9 @@ class ConfigWindow:
     def _act_add(self):
         self._commit_current_action()
         self._edited_actions.append({
-            "label": "✨  Nueva acción",
-            "prompt": "Procesa el siguiente texto:",
-            "section": "Personalizadas",
+            "label": tr("config.act_new_label"),
+            "prompt": tr("config.act_new_prompt"),
+            "section": tr("actions.custom_section"),
             "bootstyle": "info-outline",
             "shortcut": "",
             "auto_replace": False,
@@ -472,7 +476,7 @@ class ConfigWindow:
 
     def _act_delete(self):
         if len(self._edited_actions) <= 1:
-            self._status("⚠️ Debe quedar al menos una acción.", _WARN)
+            self._status(tr("config.act_min_one"), _WARN)
             return
         idx = self._selected_action_idx
         if 0 <= idx < len(self._edited_actions):
@@ -484,8 +488,8 @@ class ConfigWindow:
     def _import_actions(self):
         path = filedialog.askopenfilename(
             parent=self.window,
-            title="Importar acciones (JSON)",
-            filetypes=[("JSON", "*.json"), ("Todos", "*.*")],
+            title=tr("config.act_import_title"),
+            filetypes=[("JSON", "*.json"), (tr("config.all_files"), "*.*")],
         )
         if not path:
             return
@@ -495,17 +499,17 @@ class ConfigWindow:
             self._selected_action_idx = 0
             self._actions_dirty = True
             self._refresh_actions_listbox()
-            msg = f"📥 {len(imported)} acciones importadas (pulsa Guardar para aplicar)."
+            msg = tr("config.act_imported", count=len(imported))
             self._status(msg if not warnings else f"⚠️ {msg} ({warnings[0]})",
                          _WARN if warnings else _FM_ACCENT)
         except Exception as e:
-            self._status(f"❌ No se pudo importar: {e}", "#ef4444")
+            self._status(tr("config.act_import_err", error=e), "#ef4444")
 
     def _export_actions(self):
         self._commit_current_action()
         path = filedialog.asksaveasfilename(
             parent=self.window,
-            title="Exportar acciones (JSON)",
+            title=tr("config.act_export_title"),
             defaultextension=".json",
             initialfile="escriba-acciones.json",
             filetypes=[("JSON", "*.json")],
@@ -514,9 +518,9 @@ class ConfigWindow:
             return
         try:
             export_actions(path, self._edited_actions)
-            self._status(f"📤 Acciones exportadas a {os.path.basename(path)}.", _FM_ACCENT)
+            self._status(tr("config.act_exported", file=os.path.basename(path)), _FM_ACCENT)
         except Exception as e:
-            self._status(f"❌ No se pudo exportar: {e}", "#ef4444")
+            self._status(tr("config.act_export_err", error=e), "#ef4444")
 
     def _save_visual_actions(self):
         self._commit_current_action()
@@ -526,16 +530,32 @@ class ConfigWindow:
             self._actions_dirty = False
             self._refresh_actions_listbox()
             if warnings:
-                self._status(f"⚠️ Acciones guardadas con avisos: {warnings[0]}", _WARN)
+                self._status(tr("config.act_saved_warn", warning=warnings[0]), _WARN)
             else:
-                self._status("✅ Acciones guardadas en actions.json.", _FM_ACCENT)
+                self._status(tr("config.act_saved"), _FM_ACCENT)
         except Exception as e:
-            self._status(f"❌ Error al guardar acciones: {e}", "#ef4444")
+            self._status(tr("config.act_save_err", error=e), "#ef4444")
 
     def _build_general_tab(self, tab):
+        lang_row = tk.Frame(tab, bg=_FM_BG)
+        lang_row.pack(fill=X, pady=(0, 8))
+        tk.Label(lang_row, text=tr("config.language"), width=18, anchor=W,
+                 font=(UI_FONT, 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
+        current_lang = ConfigManager.get_language()
+        self.language_var = tk.StringVar(value=LANGUAGE_LABELS.get(current_lang, LANGUAGE_LABELS["es"]))
+        tb.Combobox(
+            lang_row,
+            textvariable=self.language_var,
+            values=[LANGUAGE_LABELS[k] for k in SUPPORTED_LANGUAGES],
+            state="readonly",
+            style="Escriba.TCombobox",
+            font=(UI_FONT, 9),
+            width=18,
+        ).pack(side=LEFT)
+
         hotkey_row = tk.Frame(tab, bg=_FM_BG)
         hotkey_row.pack(fill=X, pady=(0, 8))
-        tk.Label(hotkey_row, text="Atajo global:  ", width=16, anchor=W,
+        tk.Label(hotkey_row, text=tr("config.hotkey"), width=18, anchor=W,
                  font=(UI_FONT, 10, "bold"), bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
         current_hk = ConfigManager.get("hotkey") or DEFAULT_HOTKEY
         self.hotkey_var = tk.StringVar(value=current_hk)
@@ -546,8 +566,8 @@ class ConfigWindow:
                     style="Escriba.TCombobox", font=(MONO_FONT, 9), width=18).pack(side=LEFT)
 
         repeat_row = tk.Frame(tab, bg=_FM_BG)
-        repeat_row.pack(fill=X, pady=(0, 12))
-        tk.Label(repeat_row, text="Repetir última:  ", width=16, anchor=W,
+        repeat_row.pack(fill=X, pady=(0, 10))
+        tk.Label(repeat_row, text=tr("config.repeat_hotkey"), width=18, anchor=W,
                  font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         current_rep = ConfigManager.get("repeat_hotkey", DEFAULT_REPEAT_HOTKEY) or ""
         self.repeat_hotkey_var = tk.StringVar(value=current_rep)
@@ -558,49 +578,48 @@ class ConfigWindow:
                     style="Escriba.TCombobox", font=(MONO_FONT, 9), width=18).pack(side=LEFT)
 
         self.streaming_var = tk.BooleanVar(value=bool(ConfigManager.get("streaming", True)))
-        tb.Checkbutton(tab, text="  Mostrar la respuesta mientras se genera (streaming)",
+        tb.Checkbutton(tab, text=tr("config.streaming"),
                        variable=self.streaming_var,
-                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 8))
 
         self.rich_paste_var = tk.BooleanVar(value=bool(ConfigManager.get("rich_paste", False)))
-        tb.Checkbutton(tab, text="  Pegar con formato enriquecido (Markdown → HTML)",
+        tb.Checkbutton(tab, text=tr("config.rich_paste"),
                        variable=self.rich_paste_var,
-                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 8))
 
         self.persist_history_var = tk.BooleanVar(value=bool(ConfigManager.get("persist_history", True)))
-        tb.Checkbutton(tab, text="  Guardar historial de respuestas entre sesiones",
+        tb.Checkbutton(tab, text=tr("config.persist_history"),
                        variable=self.persist_history_var,
-                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 8))
 
         self.autostart_var = tk.BooleanVar(value=StartupManager.is_enabled())
-        tb.Checkbutton(tab, text="  Iniciar automáticamente al iniciar sesión",
+        tb.Checkbutton(tab, text=tr("config.autostart"),
                        variable=self.autostart_var,
-                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 8))
 
         self.auto_update_var = tk.BooleanVar(value=bool(ConfigManager.get("auto_update_check", True)))
-        tb.Checkbutton(tab, text="  Buscar actualizaciones automáticamente al iniciar",
+        tb.Checkbutton(tab, text=tr("config.auto_update"),
                        variable=self.auto_update_var,
-                       bootstyle="warning").pack(anchor=W, pady=(0, 12))
+                       bootstyle="warning").pack(anchor=W, pady=(0, 10))
 
         upd_row = tk.Frame(tab, bg=_FM_BG)
-        upd_row.pack(fill=X, pady=(0, 14))
-        tk.Label(upd_row, text=f"Versión actual: v{APP_VERSION}",
+        upd_row.pack(fill=X, pady=(0, 12))
+        tk.Label(upd_row, text=tr("config.current_version", version=APP_VERSION),
                  font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         self.check_update_btn = tb.Button(
-            upd_row, text="🔄  Buscar actualizaciones", style="Escriba.TButton",
+            upd_row, text=tr("config.check_updates"), style="Escriba.TButton",
             command=self._check_updates,
         )
         self.check_update_btn.pack(side=RIGHT, ipady=2)
 
-        tk.Frame(tab, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 14))
-        self._title(tab, "Acciones del menú")
-        self._hint(tab, "Puedes editar las acciones en la pestaña 'Acciones' o abrir actions.json "
-                        "directamente. Los cambios se aplican al abrir el menú.", pady=(0, 10))
+        tk.Frame(tab, bg=_FM_SEP, height=1).pack(fill=X, pady=(0, 10))
+        self._title(tab, tr("config.menu_actions"))
+        self._hint(tab, tr("config.menu_actions_hint"), pady=(0, 8))
         act_row = tk.Frame(tab, bg=_FM_BG)
         act_row.pack(fill=X)
-        tb.Button(act_row, text="📝  Abrir actions.json", style="Escriba.TButton",
+        tb.Button(act_row, text=tr("config.open_actions"), style="Escriba.TButton",
                   command=self._edit_actions).pack(side=LEFT, expand=True, fill=X, padx=(0, 6), ipady=3)
-        tb.Button(act_row, text="↺  Restaurar predeterminadas", style="Escriba.TButton",
+        tb.Button(act_row, text=tr("config.reset_actions"), style="Escriba.TButton",
                   command=self._reset_actions).pack(side=LEFT, expand=True, fill=X, ipady=3)
 
     # ── Estado ──────────────────────────────────────────────
@@ -621,9 +640,9 @@ class ConfigWindow:
     def _refresh_models(self):
         key = self.api_key_var.get().strip()
         if not key:
-            self._status("⚠️ Introduce tu API Key de Gemini para descargar los modelos.", _WARN)
+            self._status(tr("config.need_gemini_key"), _WARN)
             return
-        self._status("⏳ Consultando modelos disponibles...")
+        self._status(tr("config.fetching_models"))
         self.refresh_btn.configure(state="disabled")
 
         def task():
@@ -638,9 +657,9 @@ class ConfigWindow:
         self.refresh_btn.configure(state="normal")
         self._update_model_combobox(models)
         if error:
-            self._status(f"⚠️ No se pudieron consultar los modelos ({error}). Se muestran los predeterminados.", _WARN)
+            self._status(tr("config.models_err", error=error), _WARN)
         else:
-            self._status(f"✅ Se encontraron {len(models)} modelos de Gemini.", _FM_ACCENT)
+            self._status(tr("config.models_ok", count=len(models)), _FM_ACCENT)
 
     def _update_model_combobox(self, models: list[str]):
         if not self._alive():
@@ -654,9 +673,9 @@ class ConfigWindow:
         base = self.alt_url_var.get().strip()
         key = self.alt_key_var.get().strip()
         if not base:
-            self._status("⚠️ Escribe la URL base del proveedor alternativo.", _WARN)
+            self._status(tr("config.need_alt_url"), _WARN)
             return
-        self._status(f"⏳ Consultando modelos en {base}…")
+        self._status(tr("config.fetching_alt_models", base=base))
         self.alt_refresh_btn.configure(state="disabled")
 
         def task():
@@ -670,26 +689,25 @@ class ConfigWindow:
             return
         self.alt_refresh_btn.configure(state="normal")
         if not models:
-            self._status("⚠️ No se pudieron listar modelos. Revisa la URL, la clave o escribe el modelo a mano.", _WARN)
+            self._status(tr("config.alt_models_err"), _WARN)
             return
         self.alt_model_cb["values"] = models
         if self.alt_model_var.get() not in models:
             self.alt_model_var.set(models[0])
-        self._status(f"✅ Se encontraron {len(models)} modelos.", _FM_ACCENT)
+        self._status(tr("config.alt_models_ok", count=len(models)), _FM_ACCENT)
 
     # ── Acciones ────────────────────────────────────────────
     def _edit_actions(self):
         try:
             path = write_defaults()
             open_in_editor(path)
-            self._status(f"📝 Editando {path}", _FM_ACCENT)
+            self._status(tr("config.editing_actions", path=path), _FM_ACCENT)
         except Exception as e:
-            self._status(f"❌ No se pudo abrir actions.json: {e}", "#ef4444")
+            self._status(tr("config.open_actions_err", error=e), "#ef4444")
 
     def _reset_actions(self):
         if not messagebox.askyesno(
-            APP_NAME, "¿Reemplazar actions.json con las acciones predeterminadas?\n"
-                      "Se perderán tus acciones personalizadas.", parent=self.window):
+            APP_NAME, tr("config.reset_confirm"), parent=self.window):
             return
         try:
             write_defaults(overwrite=True)
@@ -697,13 +715,13 @@ class ConfigWindow:
             self._actions_dirty = False
             self._selected_action_idx = 0 if self._edited_actions else -1
             self._refresh_actions_listbox()
-            self._status("✅ Acciones restauradas a las predeterminadas.", _FM_ACCENT)
+            self._status(tr("config.reset_ok"), _FM_ACCENT)
         except Exception as e:
-            self._status(f"❌ No se pudo restaurar: {e}", "#ef4444")
+            self._status(tr("config.reset_err", error=e), "#ef4444")
 
     # ── Actualizaciones ─────────────────────────────────────
     def _check_updates(self):
-        self._status("⏳ Buscando actualizaciones…")
+        self._status(tr("config.checking_updates"))
         self.check_update_btn.configure(state="disabled")
 
         def task():
@@ -717,13 +735,13 @@ class ConfigWindow:
             return
         self.check_update_btn.configure(state="normal")
         if error:
-            self._status(f"⚠️ No se pudo comprobar actualizaciones ({error}).", _WARN)
+            self._status(tr("config.updates_err", error=error), _WARN)
         elif info:
-            self._status(f"🚀 Nueva versión disponible: v{info.version}.", _FM_ACCENT)
+            self._status(tr("config.updates_new", version=info.version), _FM_ACCENT)
             if hasattr(self.app, "_notify_update"):
                 self.app._notify_update(info)
         else:
-            self._status(f"✅ Estás al día (v{APP_VERSION}).", _FM_ACCENT)
+            self._status(tr("config.updates_ok", version=APP_VERSION), _FM_ACCENT)
 
     # ── Guardar ─────────────────────────────────────────────
     def _save(self):
@@ -733,11 +751,11 @@ class ConfigWindow:
         gemini_key = self.api_key_var.get().strip()
 
         if provider == "openai" and not (alt_url and alt_model):
-            self._status("⚠️ Para usar el proveedor alternativo indica la URL base y el modelo.", _WARN)
+            self._status(tr("config.need_alt_fields"), _WARN)
             return
         note = ""
         if provider == "gemini" and not gemini_key and not self.fallback_var.get():
-            note = "\n⚠️ Sin API Key de Gemini no se podrán procesar solicitudes."
+            note = tr("config.no_gemini_warn")
 
         if self._commit_current_action() or self._actions_dirty:
             try:
@@ -747,10 +765,16 @@ class ConfigWindow:
                 if self._alive():
                     self._refresh_actions_listbox()
                 if warnings:
-                    note += f"\n⚠️ Avisos en acciones: {warnings[0]}"
+                    note += tr("config.actions_warn", warning=warnings[0])
             except Exception as e:
-                self._status(f"❌ Error al guardar acciones: {e}", "#ef4444")
+                self._status(tr("config.act_save_err", error=e), "#ef4444")
                 return
+
+        prev_lang = ConfigManager.get_language()
+        new_lang = _LABEL_TO_LANG.get(self.language_var.get(), prev_lang)
+        ConfigManager.set_language(new_lang)
+        if new_lang != prev_lang and hasattr(self.app, "on_language_changed"):
+            self.app.on_language_changed()
 
         prev_hotkey = ConfigManager.get("hotkey") or DEFAULT_HOTKEY
         new_hotkey = self.hotkey_var.get().strip() or DEFAULT_HOTKEY
@@ -758,7 +782,7 @@ class ConfigWindow:
         new_repeat = self.repeat_hotkey_var.get().strip()
         if new_repeat and new_repeat.lower() == new_hotkey.lower():
             new_repeat = ""
-            note += "\n⚠️ El atajo para repetir la última acción no puede coincidir con el atajo principal."
+            note += tr("config.repeat_conflict")
 
         ConfigManager.set_api_key(gemini_key)
         ConfigManager.set("model", self.model_var.get().strip() or GEMINI_DEFAULT_MODEL)
@@ -786,13 +810,13 @@ class ConfigWindow:
                 StartupManager.disable()
             ConfigManager.set("autostart", bool(self.autostart_var.get()))
         except OSError as e:
-            self._status(f"⚠️ No se pudo cambiar el inicio automático: {e}", _WARN)
+            self._status(tr("config.autostart_err", error=e), _WARN)
             return
 
         if note:
-            self._status("✅  Configuración guardada." + note, _WARN)
+            self._status(tr("config.saved_warn") + note, _WARN)
             return  # se deja abierta para que el aviso se pueda leer
-        self._status("✅  Configuración guardada correctamente.", _FM_ACCENT)
+        self._status(tr("config.saved_ok"), _FM_ACCENT)
         self.window.after(900, self._close)
 
     def _close(self):
