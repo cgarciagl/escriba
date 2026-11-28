@@ -27,21 +27,31 @@ else:
 
 
 # ─────────────────────────────────────────────────────────────
-# Paleta FloatingMenu
+# Paleta "Forja" (PyroStudio — grafito oscuro con acento de fuego)
 # ─────────────────────────────────────────────────────────────
-_FM_BG     = "#151a26"   # fondo principal
-_FM_CARD   = "#1e2436"   # fondo botón/card
-_FM_HOVER  = "#28304a"   # hover de botón
-_FM_ACCENT = "#f59e0b"   # ámbar acento
-_FM_TEXT   = "#e2e8f0"   # texto principal (blanco)
-_FM_MUTED  = "#94a3b8"   # texto secundario (contraste ≈ 7:1 sobre _FM_BG)
-_FM_BADGE  = "#0f1320"   # fondo badge de atajo
-_FM_SEP    = "#252d42"   # línea separadora
-_FM_BORDER = "#2a3350"   # borde de ventanas y controles
-_FM_DANGER = "#ef4444"
-_FM_SUCCESS = "#22c55e"
+_FM_BG           = "#1b1e24"   # superficie principal (--pyro-surface)
+_FM_CARD         = "#21252c"   # fondo botón/card (--pyro-raised)
+_FM_HOVER        = "#272b34"   # hover de botón/fila (--pyro-hover)
+_FM_ACCENT       = "#ff5c16"   # naranja fuego acento (--pyro-accent)
+_FM_ACCENT_HOVER = "#ff7433"   # hover de acento (--pyro-accent-hover)
+_FM_ACCENT_FG    = "#ffffff"   # texto sobre fondo acento (--pyro-accent-fg)
+_FM_ACCENT_TEXT  = "#ff8a4c"   # acento legible en texto/enlaces (--pyro-accent-text)
+_FM_TEXT         = "#e2e5ea"   # texto principal (--pyro-fg)
+_FM_MUTED        = "#aab1bd"   # texto secundario (--pyro-fg-muted)
+_FM_BADGE        = "#16181d"   # fondo profundo/badge (--pyro-canvas)
+_FM_SEP          = "#2e333d"   # línea separadora (--pyro-line)
+_FM_BORDER       = "#3c424e"   # borde de ventanas y controles (--pyro-line-strong)
+_FM_DANGER       = "#f43f5e"   # peligro/error (--pyro-danger)
+_FM_SUCCESS      = "#34d399"   # éxito (--pyro-success)
+_FM_WARNING      = "#fbbf24"   # aviso (--pyro-warning)
+_FM_INFO         = "#38bdf8"   # informativo (--pyro-info)
 
-_STYLE_COLORS = {"info": _FM_ACCENT, "warning": _FM_ACCENT, "danger": _FM_DANGER, "success": _FM_SUCCESS}
+_STYLE_COLORS = {
+    "info": _FM_INFO,
+    "warning": _FM_WARNING,
+    "danger": _FM_DANGER,
+    "success": _FM_SUCCESS,
+}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -219,7 +229,7 @@ class ThinkingWindow:
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=6, pady=4)
         badge.pack(side=LEFT, padx=(0, 8))
         tk.Label(badge, text="⚡︎", font=(UI_FONT, 10, "bold"),
-                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+                 bg=_FM_ACCENT, fg=_FM_ACCENT_FG).pack()
         tk.Label(hdr, text=APP_NAME, font=(UI_FONT, 10, "bold"),
                  bg=_FM_BG, fg=_FM_TEXT).pack(side=LEFT)
         if self._on_cancel:
@@ -296,7 +306,7 @@ class SplashBanner:
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=12, pady=10)
         badge.pack(side=LEFT, padx=(0, 12))
         tk.Label(badge, text="⚡", font=(EMOJI_FONT, 18),
-                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+                 bg=_FM_ACCENT, fg=_FM_ACCENT_FG).pack()
         title_col = tk.Frame(hdr, bg=_FM_BG)
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
@@ -311,7 +321,7 @@ class SplashBanner:
         tk.Label(hint_row, text=tr("common.shortcut_label"), font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         tk.Label(hint_row, text=active_hotkey_label(),
-                 font=(MONO_FONT, 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+                 font=(MONO_FONT, 9, "bold"), bg=_FM_BG, fg=_FM_ACCENT_TEXT).pack(side=LEFT)
 
         position_bottom_right(win)
         fade_window(win, 0.95, 0.12)
@@ -351,7 +361,7 @@ class AboutWindow:
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=12, pady=10)
         badge.pack(side=LEFT, padx=(0, 14))
         tk.Label(badge, text="⚡︎", font=(UI_FONT, 18, "bold"),
-                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+                 bg=_FM_ACCENT, fg=_FM_ACCENT_FG).pack()
         title_col = tk.Frame(hdr, bg=_FM_BG)
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME, font=(UI_FONT, 16, "bold"),
@@ -377,10 +387,10 @@ class AboutWindow:
         tk.Label(row, text=tr("common.shortcut_label"), font=(UI_FONT, 9),
                  bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
         tk.Label(row, text=active_hotkey_label(), font=(MONO_FONT, 9, "bold"),
-                 bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+                 bg=_FM_BG, fg=_FM_ACCENT_TEXT).pack(side=LEFT)
 
         link = tk.Label(frame, text=self.REPO_URL, font=(UI_FONT, 9, "underline"),
-                        bg=_FM_BG, fg=_FM_ACCENT, cursor="hand2")
+                        bg=_FM_BG, fg=_FM_ACCENT_TEXT, cursor="hand2")
         link.pack(anchor=W)
         link.bind("<Button-1>", lambda e: self._open_repo())
 
@@ -477,15 +487,39 @@ class UpdateDialog:
 
 
 # ─────────────────────────────────────────────────────────────
-# Estilos ttk con la paleta de Escriba
-# (el tema "vapor" pinta campos y botones secundarios en morado/rosa/cian)
+# Estilos ttk con la paleta "Forja" (PyroStudio)
 # ─────────────────────────────────────────────────────────────
-_FM_DISABLED = "#4b5563"
+_FM_DISABLED = "#6b7280"
+
+_FORJA_THEME_COLORS = {
+    "primary": _FM_ACCENT,
+    "secondary": _FM_BORDER,
+    "success": _FM_SUCCESS,
+    "info": _FM_INFO,
+    "warning": _FM_ACCENT,
+    "danger": _FM_DANGER,
+    "light": _FM_TEXT,
+    "dark": _FM_BADGE,
+    "bg": _FM_BG,
+    "fg": _FM_TEXT,
+    "selectbg": _FM_BORDER,
+    "selectfg": _FM_ACCENT_FG,
+    "border": _FM_BORDER,
+    "inputfg": _FM_TEXT,
+    "inputbg": _FM_CARD,
+    "active": _FM_HOVER,
+}
 
 
 def configure_styles(root):
-    """Registra los estilos "Escriba.*". Llamar una vez tras crear la ventana raíz."""
+    """Registra el tema 'forja' y los estilos 'Escriba.*'. Llamar una vez tras crear la raíz."""
+    from ttkbootstrap.style import ThemeDefinition
+
     style = tb.Style()
+    if "forja" not in style.theme_names():
+        style.register_theme(ThemeDefinition("forja", _FORJA_THEME_COLORS, "dark"))
+    style.theme_use("forja")
+
     flat = dict(bordercolor=_FM_BORDER, darkcolor=_FM_CARD, lightcolor=_FM_CARD, relief="flat")
 
     # Botón secundario
@@ -501,7 +535,7 @@ def configure_styles(root):
                     padding=(12, 4), font=(UI_FONT, 9), **flat)
     style.map("Escriba.Toolbutton",
               background=[("selected", _FM_ACCENT), ("active", _FM_HOVER)],
-              foreground=[("selected", _FM_BG), ("active", _FM_TEXT)])
+              foreground=[("selected", _FM_ACCENT_FG), ("active", _FM_TEXT)])
 
     # Campos de texto y listas desplegables
     style.configure("Escriba.TEntry", fieldbackground=_FM_CARD, foreground=_FM_TEXT,
@@ -518,7 +552,7 @@ def configure_styles(root):
     root.option_add("*TCombobox*Listbox.background", _FM_CARD)
     root.option_add("*TCombobox*Listbox.foreground", _FM_TEXT)
     root.option_add("*TCombobox*Listbox.selectBackground", _FM_HOVER)
-    root.option_add("*TCombobox*Listbox.selectForeground", _FM_ACCENT)
+    root.option_add("*TCombobox*Listbox.selectForeground", _FM_ACCENT_TEXT)
 
     # Pestañas
     style.configure("Escriba.TNotebook", background=_FM_BG, bordercolor=_FM_BORDER,
@@ -528,7 +562,7 @@ def configure_styles(root):
                     padding=(14, 6), font=(UI_FONT, 9))
     style.map("Escriba.TNotebook.Tab",
               background=[("selected", _FM_CARD), ("active", _FM_HOVER)],
-              foreground=[("selected", _FM_ACCENT), ("active", _FM_TEXT)])
+              foreground=[("selected", _FM_ACCENT_TEXT), ("active", _FM_TEXT)])
 
     # Barra de desplazamiento
     style.configure("Escriba.Vertical.TScrollbar", troughcolor=_FM_CARD, background=_FM_BORDER,

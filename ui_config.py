@@ -37,14 +37,15 @@ from constants import (
 from plataforma import IS_MAC, StartupManager
 from updater import check_for_update
 from ui_common import (
-    _FM_ACCENT, _FM_BG, _FM_BORDER, _FM_CARD, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
+    _FM_ACCENT, _FM_ACCENT_FG, _FM_ACCENT_TEXT, _FM_BG, _FM_BORDER, _FM_CARD, _FM_DANGER,
+    _FM_MUTED, _FM_SEP, _FM_TEXT, _FM_WARNING, MONO_FONT, UI_FONT,
     apply_dark_style, center_window,
 )
 
 if TYPE_CHECKING:
     from escriba import EscribaApp
 
-_WARN = "#f59e0b"
+_WARN = _FM_WARNING
 _LABEL_TO_LANG = {v: k for k, v in LANGUAGE_LABELS.items()}
 
 
@@ -119,7 +120,7 @@ class ConfigWindow:
         badge = tk.Frame(hdr, bg=_FM_ACCENT, padx=10, pady=8)
         badge.pack(side=LEFT, padx=(0, 12))
         tk.Label(badge, text="⚡︎", font=(UI_FONT, 16, "bold"),
-                 bg=_FM_ACCENT, fg=_FM_BG).pack()
+                 bg=_FM_ACCENT, fg=_FM_ACCENT_FG).pack()
         title_col = tk.Frame(hdr, bg=_FM_BG)
         title_col.pack(side=LEFT)
         tk.Label(title_col, text=APP_NAME,
@@ -146,7 +147,7 @@ class ConfigWindow:
         self._build_actions_tab(self._tab(notebook, tr("config.tab_actions")))
         self._build_general_tab(self._tab(notebook, tr("config.tab_general")))
 
-        # Indicadores ámbar sobre el fondo de Escriba (no el del tema)
+        # Indicadores acento sobre el fondo de Escriba (no el del tema)
         style = tb.Style()
         for name in ("warning.TCheckbutton", "warning.TRadiobutton"):
             style.configure(name, background=_FM_BG, foreground=_FM_TEXT, font=(UI_FONT, 9))
@@ -154,7 +155,7 @@ class ConfigWindow:
 
         self.key_entry.focus_set()
         if welcome:
-            self._status(tr("config.welcome"), _FM_ACCENT)
+            self._status(tr("config.welcome"), _FM_ACCENT_TEXT)
         def _on_return(event):
             wclass = event.widget.winfo_class() if event and event.widget else ""
             if wclass not in ("TButton", "Button", "TCombobox", "Text"):
@@ -267,7 +268,7 @@ class ConfigWindow:
 
         self._act_listbox = tk.Listbox(
             left, bg=_FM_CARD, fg=_FM_TEXT, selectbackground=_FM_ACCENT,
-            selectforeground=_FM_BG, relief="flat", highlightthickness=1,
+            selectforeground=_FM_ACCENT_FG, relief="flat", highlightthickness=1,
             highlightbackground=_FM_BORDER, font=(UI_FONT, 9), exportselection=False,
         )
         self._act_listbox.pack(fill=BOTH, expand=True, pady=(0, 6))
@@ -501,9 +502,9 @@ class ConfigWindow:
             self._refresh_actions_listbox()
             msg = tr("config.act_imported", count=len(imported))
             self._status(msg if not warnings else f"⚠️ {msg} ({warnings[0]})",
-                         _WARN if warnings else _FM_ACCENT)
+                         _WARN if warnings else _FM_ACCENT_TEXT)
         except Exception as e:
-            self._status(tr("config.act_import_err", error=e), "#ef4444")
+            self._status(tr("config.act_import_err", error=e), _FM_DANGER)
 
     def _export_actions(self):
         self._commit_current_action()
@@ -518,9 +519,9 @@ class ConfigWindow:
             return
         try:
             export_actions(path, self._edited_actions)
-            self._status(tr("config.act_exported", file=os.path.basename(path)), _FM_ACCENT)
+            self._status(tr("config.act_exported", file=os.path.basename(path)), _FM_ACCENT_TEXT)
         except Exception as e:
-            self._status(tr("config.act_export_err", error=e), "#ef4444")
+            self._status(tr("config.act_export_err", error=e), _FM_DANGER)
 
     def _save_visual_actions(self):
         self._commit_current_action()
@@ -532,9 +533,9 @@ class ConfigWindow:
             if warnings:
                 self._status(tr("config.act_saved_warn", warning=warnings[0]), _WARN)
             else:
-                self._status(tr("config.act_saved"), _FM_ACCENT)
+                self._status(tr("config.act_saved"), _FM_ACCENT_TEXT)
         except Exception as e:
-            self._status(tr("config.act_save_err", error=e), "#ef4444")
+            self._status(tr("config.act_save_err", error=e), _FM_DANGER)
 
     def _build_general_tab(self, tab):
         lang_row = tk.Frame(tab, bg=_FM_BG)
@@ -659,7 +660,7 @@ class ConfigWindow:
         if error:
             self._status(tr("config.models_err", error=error), _WARN)
         else:
-            self._status(tr("config.models_ok", count=len(models)), _FM_ACCENT)
+            self._status(tr("config.models_ok", count=len(models)), _FM_ACCENT_TEXT)
 
     def _update_model_combobox(self, models: list[str]):
         if not self._alive():
@@ -694,16 +695,16 @@ class ConfigWindow:
         self.alt_model_cb["values"] = models
         if self.alt_model_var.get() not in models:
             self.alt_model_var.set(models[0])
-        self._status(tr("config.alt_models_ok", count=len(models)), _FM_ACCENT)
+        self._status(tr("config.alt_models_ok", count=len(models)), _FM_ACCENT_TEXT)
 
     # ── Acciones ────────────────────────────────────────────
     def _edit_actions(self):
         try:
             path = write_defaults()
             open_in_editor(path)
-            self._status(tr("config.editing_actions", path=path), _FM_ACCENT)
+            self._status(tr("config.editing_actions", path=path), _FM_ACCENT_TEXT)
         except Exception as e:
-            self._status(tr("config.open_actions_err", error=e), "#ef4444")
+            self._status(tr("config.open_actions_err", error=e), _FM_DANGER)
 
     def _reset_actions(self):
         if not messagebox.askyesno(
@@ -715,9 +716,9 @@ class ConfigWindow:
             self._actions_dirty = False
             self._selected_action_idx = 0 if self._edited_actions else -1
             self._refresh_actions_listbox()
-            self._status(tr("config.reset_ok"), _FM_ACCENT)
+            self._status(tr("config.reset_ok"), _FM_ACCENT_TEXT)
         except Exception as e:
-            self._status(tr("config.reset_err", error=e), "#ef4444")
+            self._status(tr("config.reset_err", error=e), _FM_DANGER)
 
     # ── Actualizaciones ─────────────────────────────────────
     def _check_updates(self):
@@ -737,11 +738,11 @@ class ConfigWindow:
         if error:
             self._status(tr("config.updates_err", error=error), _WARN)
         elif info:
-            self._status(tr("config.updates_new", version=info.version), _FM_ACCENT)
+            self._status(tr("config.updates_new", version=info.version), _FM_ACCENT_TEXT)
             if hasattr(self.app, "_notify_update"):
                 self.app._notify_update(info)
         else:
-            self._status(tr("config.updates_ok", version=APP_VERSION), _FM_ACCENT)
+            self._status(tr("config.updates_ok", version=APP_VERSION), _FM_ACCENT_TEXT)
 
     # ── Guardar ─────────────────────────────────────────────
     def _save(self):
@@ -767,7 +768,7 @@ class ConfigWindow:
                 if warnings:
                     note += tr("config.actions_warn", warning=warnings[0])
             except Exception as e:
-                self._status(tr("config.act_save_err", error=e), "#ef4444")
+                self._status(tr("config.act_save_err", error=e), _FM_DANGER)
                 return
 
         prev_lang = ConfigManager.get_language()
@@ -816,7 +817,7 @@ class ConfigWindow:
         if note:
             self._status(tr("config.saved_warn") + note, _WARN)
             return  # se deja abierta para que el aviso se pueda leer
-        self._status(tr("config.saved_ok"), _FM_ACCENT)
+        self._status(tr("config.saved_ok"), _FM_ACCENT_TEXT)
         self.window.after(900, self._close)
 
     def _close(self):

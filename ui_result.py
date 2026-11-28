@@ -46,8 +46,8 @@ from plataforma import (
     shortcut_label,
 )
 from ui_common import (
-    _FM_ACCENT, _FM_BG, _FM_CARD, _FM_HOVER, _FM_MUTED, _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT,
-    ThinkingWindow, apply_dark_style, center_window,
+    _FM_ACCENT, _FM_ACCENT_FG, _FM_ACCENT_TEXT, _FM_BADGE, _FM_BG, _FM_CARD, _FM_HOVER, _FM_MUTED,
+    _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT, ThinkingWindow, apply_dark_style, center_window,
 )
 
 if TYPE_CHECKING:
@@ -387,7 +387,7 @@ class ResultWindow:
         badge_f.pack(side=RIGHT)
         self._badge = tk.Label(
             badge_f, text=tr("result.generating") if streaming else provider_badge(provider, model),
-            font=(UI_FONT, 8, "bold"), bg=_FM_ACCENT, fg=_FM_BG, padx=7, pady=3,
+            font=(UI_FONT, 8, "bold"), bg=_FM_ACCENT, fg=_FM_ACCENT_FG, padx=7, pady=3,
         )
         self._badge.pack()
 
@@ -481,8 +481,8 @@ class ResultWindow:
         self.original_widget = self._make_text(self.txt_frame, selected_text)
         self.original_widget.configure(state="disabled", fg=_FM_MUTED)
         self.diff_widget = self._make_text(self.txt_frame, "")
-        self.diff_widget.tag_configure("diff_add", background="#14532d", foreground="#86efac")
-        self.diff_widget.tag_configure("diff_del", background="#7f1d1d", foreground="#fca5a5")
+        self.diff_widget.tag_configure("diff_add", background="#14332a", foreground="#6ee7b7")
+        self.diff_widget.tag_configure("diff_del", background="#3b1923", foreground="#fda4af")
         self.diff_widget.tag_configure("diff_ctx", foreground=_FM_MUTED)
         self.diff_widget.configure(state="disabled")
         self._configure_markdown_tags(self.text_widget)
@@ -574,9 +574,9 @@ class ResultWindow:
 
     @staticmethod
     def _configure_markdown_tags(widget: tk.Text):
-        widget.tag_configure("md_bold", font=(UI_FONT, 10, "bold"), foreground="#f8fafc")
-        widget.tag_configure("md_heading", font=(UI_FONT, 11, "bold"), foreground=_FM_ACCENT)
-        widget.tag_configure("md_code", font=(MONO_FONT, 9), background="#0f1320", foreground="#fcd34d")
+        widget.tag_configure("md_bold", font=(UI_FONT, 10, "bold"), foreground="#ffffff")
+        widget.tag_configure("md_heading", font=(UI_FONT, 11, "bold"), foreground=_FM_ACCENT_TEXT)
+        widget.tag_configure("md_code", font=(MONO_FONT, 9), background=_FM_BADGE, foreground=_FM_ACCENT_TEXT)
 
     def _apply_markdown_tags(self):
         w = self.text_widget

@@ -26,8 +26,9 @@ from config import ConfigManager, tr
 from constants import APP_NAME
 from plataforma import bring_app_to_front, get_foreground_app_name, get_foreground_window, tk_shortcut
 from ui_common import (
-    _FM_ACCENT, _FM_BADGE, _FM_BG, _FM_BORDER, _FM_CARD, _FM_HOVER, _FM_MUTED, _FM_SEP, _FM_TEXT,
-    MONO_FONT, UI_FONT, apply_dark_style, center_window, fade_window, place_near_pointer, scaled,
+    _FM_ACCENT, _FM_ACCENT_TEXT, _FM_BADGE, _FM_BG, _FM_BORDER, _FM_CARD, _FM_HOVER, _FM_MUTED,
+    _FM_SEP, _FM_TEXT, MONO_FONT, UI_FONT, apply_dark_style, center_window, fade_window,
+    place_near_pointer, scaled,
 )
 from ui_result import start_ai_action
 
@@ -201,10 +202,10 @@ class FloatingMenu:
                      font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
             if len(selected_text) > LONG_TEXT_CHARS:
                 tk.Label(hdr, text=tr("menu.long_text"),
-                         font=(UI_FONT, 8, "bold"), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+                         font=(UI_FONT, 8, "bold"), bg=_FM_BG, fg=_FM_ACCENT_TEXT).pack(side=LEFT)
         else:
             tk.Label(hdr, text=tr("menu.compose_mode"),
-                     font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_ACCENT).pack(side=LEFT)
+                     font=(UI_FONT, 9), bg=_FM_BG, fg=_FM_ACCENT_TEXT).pack(side=LEFT)
         if self._app_name:
             tk.Label(hdr, text=f"  ·  {self._app_name}",
                      font=(UI_FONT, 8), bg=_FM_BG, fg=_FM_MUTED).pack(side=LEFT)
@@ -416,7 +417,7 @@ class FloatingMenu:
             widgets.append(badge)
         if kind in ("custom", "recent"):
             save_lbl = tk.Label(
-                row, text=tr("menu.save_badge"), font=(UI_FONT, 8), bg=_FM_BADGE, fg=_FM_ACCENT,
+                row, text=tr("menu.save_badge"), font=(UI_FONT, 8), bg=_FM_BADGE, fg=_FM_ACCENT_TEXT,
                 padx=6, pady=1, cursor="hand2",
             )
             save_lbl.pack(side=RIGHT, padx=(0, 4))

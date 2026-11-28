@@ -42,10 +42,10 @@ class TrayIconManager:
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle(
             [4, 4, 60, 60], radius=14,
-            fill=(18, 16, 32, 255),
-            outline=(0, 210, 180, 255), width=3,
+            fill=(27, 30, 36, 255),
+            outline=(255, 92, 22, 255), width=3,
         )
-        draw.ellipse([20, 20, 44, 44], fill=(0, 210, 180, 200))
+        draw.ellipse([20, 20, 44, 44], fill=(255, 92, 22, 230))
         return img
 
     def _history_items(self):
